@@ -64,10 +64,12 @@
   # '';
   #
   # # https://devenv.sh/tasks/
-  # # tasks = {
-  # #   "myproj:setup".exec = "mytool build";
-  # #   "devenv:enterShell".after = [ "myproj:setup" ];
-  # # };
+  tasks = {
+    "quikscore:check".exec = "cargo check";
+    "quikscore:lint".exec = "cargo clippy -- -Dwarnings";
+    "quikscore:test".exec = "cargo test";
+    # "quikscore:coverage".exec = "${pkgs.cargo-tarpaulin}/bin/cargo-tarpaulin --color always --verbose --all-features --workspace --timeout 120 --out xml";
+  };
   #
   # # https://devenv.sh/tests/
   # enterTest = ''
