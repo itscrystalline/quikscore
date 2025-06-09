@@ -6,7 +6,8 @@
   ...
 }: {
   # # https://devenv.sh/basics/
-  # env.GREET = "devenv";
+  # fix not opening on gtk
+  env.WEBKIT_DISABLE_COMPOSITING_MODE = 1;
   #
   # # https://devenv.sh/packages/
   packages = with pkgs; [
