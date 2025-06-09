@@ -9,13 +9,36 @@
   # env.GREET = "devenv";
   #
   # # https://devenv.sh/packages/
-  # packages = [ pkgs.git ];
+  packages = with pkgs; [
+    pkg-config
+    gobject-introspection
+    cargo-tauri
+    at-spi2-atk
+    atkmm
+    cairo
+    gdk-pixbuf
+    glib
+    gtk3
+    harfbuzz
+    librsvg
+    libsoup_3
+    pango
+    webkitgtk_4_1
+    openssl
+  ];
   #
   # # https://devenv.sh/languages/
   languages.rust = {
-    components = ["rustc" "cargo" "clippy" "rustfmt" "rust-analyzer" "rust-src"];
+    enable = true;
   };
-  languages.cplusplus.enable = true;
+  languages.javascript = {
+    enable = true;
+    yarn = {
+      enable = true;
+      install.enable = true;
+    };
+  };
+
   #
   # # https://devenv.sh/processes/
   # # processes.cargo-watch.exec = "cargo-watch";
