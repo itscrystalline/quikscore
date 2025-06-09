@@ -8,6 +8,7 @@
   # # https://devenv.sh/basics/
   # fix not opening on gtk
   env.WEBKIT_DISABLE_COMPOSITING_MODE = 1;
+  env.LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
   #
   # # https://devenv.sh/packages/
   packages = with pkgs; [
@@ -26,9 +27,14 @@
     pango
     webkitgtk_4_1
     openssl
+    libllvm
+    libclang
+    opencv
   ];
   #
   # # https://devenv.sh/languages/
+  # opencv headers
+  languages.cplusplus.enable = true;
   languages.rust = {
     enable = true;
   };
