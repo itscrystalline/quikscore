@@ -39,7 +39,8 @@
   languages.cplusplus.enable = true;
   languages.rust = {
     enable = true;
-    channel = "stable";
+    channel = "nightly";
+    components = ["rustc" "cargo" "clippy" "rustfmt" "rust-analyzer"];
   };
   languages.javascript = {
     enable = true;
@@ -69,7 +70,7 @@
   # # https://devenv.sh/tasks/
   tasks = {
     "quikscore:check".exec = "cd $DEVENV_ROOT/src-tauri; cargo check";
-    "quikscore:lint".exec = "cd $DEVENV_ROOT/src-tauri; cargo clippy -- -Dwarnings";
+    "quikscore:lint".exec = "cd $DEVENV_ROOT/src-tauri; RUSTFLAGS=\"-Dwarnings\" cargo-clippy";
     "quikscore:test".exec = "cd $DEVENV_ROOT/src-tauri; cargo test";
     "quikscore:coverage".exec = "cd $DEVENV_ROOT/src-tauri; ${pkgs.cargo-tarpaulin}/bin/cargo-tarpaulin --color always --verbose --all-features --workspace --timeout 120 --out xml";
   };
