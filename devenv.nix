@@ -30,6 +30,8 @@
     libllvm
     libclang
     opencv
+
+    cargo-tarpaulin
   ];
   #
   # # https://devenv.sh/languages/
@@ -66,17 +68,18 @@
   #
   # # https://devenv.sh/tasks/
   tasks = {
-    "quikscore:check".exec = "cargo check";
-    "quikscore:lint".exec = "cargo clippy -- -Dwarnings";
-    "quikscore:test".exec = "cargo test";
-    # "quikscore:coverage".exec = "${pkgs.cargo-tarpaulin}/bin/cargo-tarpaulin --color always --verbose --all-features --workspace --timeout 120 --out xml";
+    "quikscore:check".exec = "cd $DEVENV_ROOT/src-tauri; cargo check";
+    "quikscore:lint".exec = "cd $DEVENV_ROOT/src-tauri; cargo clippy -- -Dwarnings";
+    "quikscore:test".exec = "cd $DEVENV_ROOT/src-tauri; cargo test";
+    "quikscore:coverage".exec = "cd $DEVENV_ROOT/src-tauri; ${pkgs.cargo-tarpaulin}/bin/cargo-tarpaulin --color always --verbose --all-features --workspace --timeout 120 --out xml";
   };
   #
   # # https://devenv.sh/tests/
-  # enterTest = ''
-  #   echo "Running tests"
-  #   git --version | grep --color=auto "${pkgs.git.version}"
-  # '';
+  enterTest = ''
+    echo "Running tests"
+    cd $DEVENV_ROOT/src-tauri
+    cargo tarpaulin --color always --skip-clean
+  '';
   #
   # # https://devenv.sh/git-hooks/
   # # git-hooks.hooks.shellcheck.enable = true;

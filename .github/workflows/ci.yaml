@@ -20,7 +20,7 @@ jobs:
         run: nix profile install nixpkgs#devenv
 
       - name: Check code
-        run: devenv tasks run occasion:check
+        run: devenv tasks run quikscore:check
 
   lint:
     runs-on: ubuntu-latest
@@ -34,23 +34,23 @@ jobs:
         run: nix profile install nixpkgs#devenv
 
       - name: Lint code
-        run: devenv tasks run occasion:lint
+        run: devenv tasks run quikscore:lint
 
-  # test_coverage:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - uses: cachix/install-nix-action@v26
-  #     - uses: cachix/cachix-action@v14
-  #       with:
-  #         name: devenv
-  #     - name: Install devenv.sh
-  #       run: nix profile install nixpkgs#devenv
-  #
-  #     - name: Test
-  #       run: devenv tasks run occasion:test
-  #     - name: Generate coverage report
-  #       run: devenv tasks run occasion:coverage
-  #
-  #     - name: Upload coverage report
-  #       uses: coverallsapp/github-action@v2
+  test_coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v26
+      - uses: cachix/cachix-action@v14
+        with:
+          name: devenv
+      - name: Install devenv.sh
+        run: nix profile install nixpkgs#devenv
+
+      - name: Test
+        run: devenv tasks run quikscore:test
+      - name: Generate coverage report
+        run: devenv tasks run quikscore:coverage
+
+      - name: Upload coverage report
+        uses: coverallsapp/github-action@v2
