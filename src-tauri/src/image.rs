@@ -109,3 +109,38 @@ fn read_from_path(file_path: FilePath) -> Result<Mat, UploadError> {
         .map_err(|_| UploadError::NotImage)?;
     Ok(mat)
 }
+
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+    use base64::prelude::*;
+    use opencv::{core, imgcodecs, prelude::*};
+
+    #[test]
+    fn test_basic_functionality() {
+        // Create a 2x2 black image (3 channels, 8-bit)
+        let mat =
+            Mat::new_rows_cols_with_default(2, 2, core::CV_8UC3, core::Scalar::all(0.0)).unwrap();
+
+        let result = mat_to_base64_png(&mat);
+        assert!(result.is_ok());
+
+        let data_url = result.unwrap();
+        assert!(data_url.starts_with("data:image/png;base64,"));
+
+        // Check PNG signature after decoding base64
+        let b64_data = data_url.strip_prefix("data:image/png;base64,").unwrap();
+        let decoded_bytes = BASE64_STANDARD.decode(b64_data).unwrap();
+        // PNG signature bytes
+        let png_signature = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
+        assert_eq!(&decoded_bytes[0..8], &png_signature);
+    }
+
+    #[test]
+    fn test_empty_mat_should_fail() {
+        // Create an empty Mat
+        let mat = Mat::default();
+        let result = mat_to_base64_png(&mat);
+        assert!(result.is_err());
+    }
+}
