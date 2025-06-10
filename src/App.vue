@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 const keyImage = ref("");
-const keyStatus = ref("Upload aan image of the answer key...");
+const keyStatus = ref("Upload an image of the answer key...");
 
 async function uploadKey() {
   await invoke("upload_key_image");
@@ -25,6 +25,7 @@ listen<string>('key-upload', (event) => {
     <p>Upload your key sheet and some answer sheets!</p>
 
     <button @click="uploadKey">Upload Key</button>
+    <p>{{ keyStatus }}</p>
     <img v-bind:src="keyImage"></img>
   </main>
 </template>
