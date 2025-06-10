@@ -13,7 +13,12 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![image::upload_key_image])
+        .invoke_handler(tauri::generate_handler![
+            image::upload_key_image,
+            image::clear_key_image,
+            image::upload_sheet_images,
+            image::clear_sheet_images
+        ])
         .setup(|app| {
             app.manage(Mutex::new(AppState::Init));
             Ok(())

@@ -1,21 +1,41 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { Ref, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 const keyImage = ref("");
-const keyStatus = ref("Upload an image of the answer key...");
+const keyStatus = ref("");
+
+const answerImages: Ref<string[], string[]> = ref([]);
+const answerStatus = ref("");
 
 async function uploadKey() {
   await invoke("upload_key_image");
+}
+async function clearKey() {
+  await invoke("clear_key_image");
+}
+
+async function uploadSheets() {
+  await invoke("upload_sheet_images");
+}
+async function clearSheets() {
+  await invoke("clear_sheet_images");
 }
 
 
 listen<string>('key-status', (event) => {
   keyStatus.value = event.payload;
 });
-listen<string>('key-upload', (event) => {
+listen<string>('key-image', (event) => {
   keyImage.value = event.payload;
+});
+
+listen<string>('sheet-status', (event) => {
+  answerStatus.value = event.payload;
+});
+listen<string[]>('sheet-images', (event) => {
+  answerImages.value = event.payload;
 });
 </script>
 
@@ -24,9 +44,19 @@ listen<string>('key-upload', (event) => {
     <h1>Quikscore</h1>
     <p>Upload your key sheet and some answer sheets!</p>
 
-    <button @click="uploadKey">Upload Key</button>
-    <p>{{ keyStatus }}</p>
-    <img v-bind:src="keyImage"></img>
+    <button @click="uploadKey" :disabled="answerImages.length !== 0">{{ keyImage === "" ? "Upload Answer Key..." :
+      "Change Answer Key" }}</button>
+    <button @click="clearKey" :disabled="answerImages.length !== 0" v-if="keyImage !== ''">Clear Answer Key</button>
+    <p :style="keyStatus == '' ? 'display: none;' : ''">{{ keyStatus }}</p>
+    <img v-bind:src="keyImage" :style="keyImage == '' ? 'display: none;' : ''"></img>
+
+    <button @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ? "Upload Answer Sheets..." :
+      "Change Answer Sheets"
+      }}</button>
+    <button @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">Clear Answer
+      Sheets</button>
+    <p :style="answerStatus == '' ? 'display: none;' : ''">{{ answerStatus }}</p>
+    <img v-for="source in answerImages" :src="source"></img>
   </main>
 </template>
 

@@ -11,4 +11,8 @@ pub enum AppState {
     WithKeyImage {
         key: Mat,
     },
+    WithKeyAndSheets {
+        key: Mat,
+        sheets: Vec<Mat>,
+    },
 }
