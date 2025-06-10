@@ -7,6 +7,10 @@ on:
     branches:
       - main
 
+defaults:
+  run:
+    shell: devenv shell bash -- -e {0}
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -18,6 +22,7 @@ jobs:
           name: devenv
       - name: Install devenv.sh
         run: nix profile install nixpkgs#devenv
+        shell: bash
 
       - name: Check code
         run: devenv tasks run quikscore:check
@@ -32,6 +37,7 @@ jobs:
           name: devenv
       - name: Install devenv.sh
         run: nix profile install nixpkgs#devenv
+        shell: bash
 
       - name: Lint code
         run: devenv tasks run quikscore:lint
@@ -46,6 +52,7 @@ jobs:
           name: devenv
       - name: Install devenv.sh
         run: nix profile install nixpkgs#devenv
+        shell: bash
 
       - name: Test
         run: devenv tasks run quikscore:test

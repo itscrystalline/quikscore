@@ -78,8 +78,7 @@
   # # https://devenv.sh/tests/
   enterTest = ''
     echo "Running tests"
-    cd $DEVENV_ROOT/src-tauri
-    cargo tarpaulin --color always --skip-clean
+    devenv tasks run quikscore:test
   '';
   #
   # # https://devenv.sh/git-hooks/
