@@ -37,6 +37,7 @@
   languages.cplusplus.enable = true;
   languages.rust = {
     enable = true;
+    channel = "stable";
   };
   languages.javascript = {
     enable = true;
