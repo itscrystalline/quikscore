@@ -62,10 +62,9 @@
   #   echo hello from $GREET
   # '';
   #
-  # enterShell = ''
-  #   hello
-  #   git --version
-  # '';
+  enterShell = ''
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${pkgs.libclang.lib}/lib
+  '';
   #
   # # https://devenv.sh/tasks/
   tasks = {
