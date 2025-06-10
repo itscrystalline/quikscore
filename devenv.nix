@@ -32,6 +32,7 @@
     opencv
 
     cargo-tarpaulin
+    bacon
   ];
   #
   # # https://devenv.sh/languages/
