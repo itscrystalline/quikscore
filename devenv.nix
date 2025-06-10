@@ -4,7 +4,13 @@
   config,
   inputs,
   ...
-}: {
+}: let
+  libs = with pkgs; [
+    opencv
+    libclang.lib
+  ];
+  lib-path = lib.makeLibraryPath libs;
+in {
   # # https://devenv.sh/basics/
   # fix not opening on gtk
   env.WEBKIT_DISABLE_COMPOSITING_MODE = 1;
@@ -32,6 +38,7 @@
     opencv
 
     cargo-tarpaulin
+    bacon
   ];
   #
   # # https://devenv.sh/languages/
@@ -63,7 +70,7 @@
   # '';
   #
   enterShell = ''
-    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${pkgs.libclang.lib}/lib
+    export LD_LIBRARY_PATH=${lib-path}:$LD_LIBRARY_PATH
   '';
   #
   # # https://devenv.sh/tasks/
@@ -71,7 +78,7 @@
     "quikscore:check".exec = "cd $DEVENV_ROOT/src-tauri; cargo check";
     "quikscore:lint".exec = "cd $DEVENV_ROOT/src-tauri; RUSTFLAGS=\"-Dwarnings\" cargo-clippy";
     "quikscore:test".exec = "cd $DEVENV_ROOT/src-tauri; cargo test";
-    "quikscore:coverage".exec = "cd $DEVENV_ROOT/src-tauri; ${pkgs.cargo-tarpaulin}/bin/cargo-tarpaulin --color always --verbose --all-features --workspace --timeout 120 --out xml";
+    "quikscore:coverage".exec = "cd $DEVENV_ROOT/src-tauri; ${pkgs.cargo-tarpaulin}/bin/cargo-tarpaulin --color always --verbose --all-features --workspace --timeout 120 --out xml --no-dead-code --engine llvm";
   };
   #
   # # https://devenv.sh/tests/

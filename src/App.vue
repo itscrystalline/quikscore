@@ -1,38 +1,62 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { Ref, ref } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
-const greetMsg = ref("");
-const name = ref("");
+const keyImage = ref("");
+const keyStatus = ref("");
 
-async function greet() {
-  // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-  greetMsg.value = await invoke("greet", { name: name.value });
+const answerImages: Ref<string[], string[]> = ref([]);
+const answerStatus = ref("");
+
+async function uploadKey() {
+  await invoke("upload_key_image");
 }
+async function clearKey() {
+  await invoke("clear_key_image");
+}
+
+async function uploadSheets() {
+  await invoke("upload_sheet_images");
+}
+async function clearSheets() {
+  await invoke("clear_sheet_images");
+}
+
+
+listen<string>('key-status', (event) => {
+  keyStatus.value = event.payload;
+});
+listen<string>('key-image', (event) => {
+  keyImage.value = event.payload;
+});
+
+listen<string>('sheet-status', (event) => {
+  answerStatus.value = event.payload;
+});
+listen<string[]>('sheet-images', (event) => {
+  answerImages.value = event.payload;
+});
 </script>
 
 <template>
   <main class="container">
-    <h1>Welcome to Tauri + Vue</h1>
+    <h1>Quikscore</h1>
+    <p>Upload your key sheet and some answer sheets!</p>
 
-    <div class="row">
-      <a href="https://vitejs.dev" target="_blank">
-        <img src="../vite.svg" class="logo vite" alt="Vite logo" />
-      </a>
-      <a href="https://tauri.app" target="_blank">
-        <img src="../tauri.svg" class="logo tauri" alt="Tauri logo" />
-      </a>
-      <a href="https://vuejs.org/" target="_blank">
-        <img src="./assets/vue.svg" class="logo vue" alt="Vue logo" />
-      </a>
-    </div>
-    <p>Click on the Tauri, Vite, and Vue logos to learn more.</p>
+    <button @click="uploadKey" :disabled="answerImages.length !== 0">{{ keyImage === "" ? "Upload Answer Key..." :
+      "Change Answer Key" }}</button>
+    <button @click="clearKey" :disabled="answerImages.length !== 0" v-if="keyImage !== ''">Clear Answer Key</button>
+    <p :style="keyStatus == '' ? 'display: none;' : ''">{{ keyStatus }}</p>
+    <img v-bind:src="keyImage" :style="keyImage == '' ? 'display: none;' : ''"></img>
 
-    <form class="row" @submit.prevent="greet">
-      <input id="greet-input" v-model="name" placeholder="Enter a name..." />
-      <button type="submit">Greet</button>
-    </form>
-    <p>{{ greetMsg }}</p>
+    <button @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ? "Upload Answer Sheets..." :
+      "Change Answer Sheets"
+      }}</button>
+    <button @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">Clear Answer
+      Sheets</button>
+    <p :style="answerStatus == '' ? 'display: none;' : ''">{{ answerStatus }}</p>
+    <img v-for="source in answerImages" :src="source"></img>
   </main>
 </template>
 
@@ -44,7 +68,6 @@ async function greet() {
 .logo.vue:hover {
   filter: drop-shadow(0 0 2em #249b73);
 }
-
 </style>
 <style>
 :root {
@@ -53,8 +76,8 @@ async function greet() {
   line-height: 24px;
   font-weight: 400;
 
-  color: #0f0f0f;
-  background-color: #f6f6f6;
+  color: #cdd6f4;
+  background-color: #11111b;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -102,7 +125,6 @@ h1 {
   text-align: center;
 }
 
-input,
 button {
   border-radius: 8px;
   border: 1px solid transparent;
@@ -110,8 +132,8 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  color: #0f0f0f;
-  background-color: #ffffff;
+  background-color: #313244;
+  color: #cdd6f4;
   transition: border-color 0.25s;
   box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
 }
@@ -121,14 +143,14 @@ button {
 }
 
 button:hover {
-  border-color: #396cd8;
-}
-button:active {
-  border-color: #396cd8;
-  background-color: #e8e8e8;
+  border-color: #45475a;
 }
 
-input,
+button:active {
+  border-color: #45475a;
+  background-color: #585b70;
+}
+
 button {
   outline: none;
 }
@@ -136,25 +158,4 @@ button {
 #greet-input {
   margin-right: 5px;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    color: #f6f6f6;
-    background-color: #2f2f2f;
-  }
-
-  a:hover {
-    color: #24c8db;
-  }
-
-  input,
-  button {
-    color: #ffffff;
-    background-color: #0f0f0f98;
-  }
-  button:active {
-    background-color: #0f0f0f69;
-  }
-}
-
 </style>
