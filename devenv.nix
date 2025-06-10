@@ -30,6 +30,8 @@
     libllvm
     libclang
     opencv
+
+    cargo-tarpaulin
   ];
   #
   # # https://devenv.sh/languages/
@@ -37,6 +39,8 @@
   languages.cplusplus.enable = true;
   languages.rust = {
     enable = true;
+    channel = "nightly";
+    components = ["rustc" "cargo" "clippy" "rustfmt" "rust-analyzer"];
   };
   languages.javascript = {
     enable = true;
@@ -58,22 +62,23 @@
   #   echo hello from $GREET
   # '';
   #
-  # enterShell = ''
-  #   hello
-  #   git --version
-  # '';
+  enterShell = ''
+    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${pkgs.libclang.lib}/lib
+  '';
   #
   # # https://devenv.sh/tasks/
-  # # tasks = {
-  # #   "myproj:setup".exec = "mytool build";
-  # #   "devenv:enterShell".after = [ "myproj:setup" ];
-  # # };
+  tasks = {
+    "quikscore:check".exec = "cd $DEVENV_ROOT/src-tauri; cargo check";
+    "quikscore:lint".exec = "cd $DEVENV_ROOT/src-tauri; RUSTFLAGS=\"-Dwarnings\" cargo-clippy";
+    "quikscore:test".exec = "cd $DEVENV_ROOT/src-tauri; cargo test";
+    "quikscore:coverage".exec = "cd $DEVENV_ROOT/src-tauri; ${pkgs.cargo-tarpaulin}/bin/cargo-tarpaulin --color always --verbose --all-features --workspace --timeout 120 --out xml";
+  };
   #
   # # https://devenv.sh/tests/
-  # enterTest = ''
-  #   echo "Running tests"
-  #   git --version | grep --color=auto "${pkgs.git.version}"
-  # '';
+  enterTest = ''
+    echo "Running tests"
+    devenv tasks run quikscore:test
+  '';
   #
   # # https://devenv.sh/git-hooks/
   # # git-hooks.hooks.shellcheck.enable = true;
