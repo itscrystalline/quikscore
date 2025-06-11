@@ -22,22 +22,26 @@ pub fn upload_key_image(app: AppHandle) {
             );
             return;
         };
-        match handle_upload(file_path) {
-            Ok((base64_image, mat)) => {
-                let mutex = app.state::<StateMutex>();
-                let mut state = mutex.lock().unwrap();
-                match *state {
-                    AppState::Init | AppState::WithKeyImage { .. } => {
-                        *state = AppState::WithKeyImage { key: mat };
-                        signal!(app, SignalKeys::KeyImage, base64_image);
-                        signal!(app, SignalKeys::KeyStatus, "");
-                    }
-                    _ => (),
-                }
-            }
-            Err(e) => signal!(app, SignalKeys::KeyStatus, format!("{e}")),
-        }
+        upload_key_image_impl(app, file_path);
     });
+}
+
+fn upload_key_image_impl(app: AppHandle, path: FilePath) {
+    match handle_upload(path) {
+        Ok((base64_image, mat)) => {
+            let mutex = app.state::<StateMutex>();
+            let mut state = mutex.lock().unwrap();
+            match *state {
+                AppState::Init | AppState::WithKeyImage { .. } => {
+                    *state = AppState::WithKeyImage { key: mat };
+                    signal!(app, SignalKeys::KeyImage, base64_image);
+                    signal!(app, SignalKeys::KeyStatus, "");
+                }
+                _ => (),
+            }
+        }
+        Err(e) => signal!(app, SignalKeys::KeyStatus, format!("{e}")),
+    }
 }
 
 #[tauri::command]
@@ -55,44 +59,50 @@ pub fn clear_key_image(app: AppHandle) {
 pub fn upload_sheet_images(app: AppHandle) {
     println!("uploading sheet images");
     app.dialog().file().pick_files(move |file_paths| {
-        let mutex = app.state::<StateMutex>();
-        let mut state = mutex.lock().unwrap();
-        match *state {
-            AppState::WithKeyImage { ref key } | AppState::WithKeyAndSheets { ref key, .. } => {
-                match file_paths.ok_or(UploadError::Canceled) {
-                    Ok(file_paths) => {
-                        let base64_list: Result<Vec<(String, Mat)>, UploadError> = file_paths
-                            .into_iter()
-                            .enumerate()
-                            .map(|(idx, file_path)| {
-                                signal!(
-                                    app,
-                                    SignalKeys::SheetStatus,
-                                    format!("Processing image #{}", idx + 1)
-                                );
-                                handle_upload(file_path)
-                            })
-                            .collect();
-                        match base64_list {
-                            Ok(vec) => {
-                                let (vec_base64, vec_mat): (Vec<String>, Vec<Mat>) =
-                                    vec.into_iter().unzip();
-                                *state = AppState::WithKeyAndSheets {
-                                    key: key.clone(),
-                                    _sheets: vec_mat,
-                                };
-                                signal!(app, SignalKeys::SheetImages, vec_base64);
-                                signal!(app, SignalKeys::SheetStatus, "");
-                            }
-                            Err(e) => signal!(app, SignalKeys::SheetStatus, format!("{e}")),
-                        }
-                    }
-                    Err(e) => signal!(app, SignalKeys::SheetStatus, format!("{e}")),
-                }
-            }
-            _ => (),
-        }
+        let Some(file_paths) = file_paths else {
+            signal!(
+                app,
+                SignalKeys::SheetStatus,
+                format!("{}", UploadError::Canceled)
+            );
+            return;
+        };
+        upload_sheet_images_impl(app, file_paths);
     });
+}
+
+fn upload_sheet_images_impl(app: AppHandle, paths: Vec<FilePath>) {
+    let mutex = app.state::<StateMutex>();
+    let mut state = mutex.lock().unwrap();
+    match *state {
+        AppState::WithKeyImage { ref key } | AppState::WithKeyAndSheets { ref key, .. } => {
+            let base64_list: Result<Vec<(String, Mat)>, UploadError> = paths
+                .into_iter()
+                .enumerate()
+                .map(|(idx, file_path)| {
+                    signal!(
+                        app,
+                        SignalKeys::SheetStatus,
+                        format!("Processing image #{}", idx + 1)
+                    );
+                    handle_upload(file_path)
+                })
+                .collect();
+            match base64_list {
+                Ok(vec) => {
+                    let (vec_base64, vec_mat): (Vec<String>, Vec<Mat>) = vec.into_iter().unzip();
+                    *state = AppState::WithKeyAndSheets {
+                        key: key.clone(),
+                        _sheets: vec_mat,
+                    };
+                    signal!(app, SignalKeys::SheetImages, vec_base64);
+                    signal!(app, SignalKeys::SheetStatus, "");
+                }
+                Err(e) => signal!(app, SignalKeys::SheetStatus, format!("{e}")),
+            }
+        }
+        _ => (),
+    }
 }
 
 #[tauri::command]
