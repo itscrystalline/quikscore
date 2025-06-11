@@ -20,6 +20,7 @@ pub enum AppState {
     },
     WithKeyAndSheets {
         key: Mat,
+        _sheets: Vec<Mat>,
     },
 }
 
