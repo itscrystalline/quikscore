@@ -119,8 +119,8 @@ fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
     Ok(format!("data:image/png;base64,{base64}"))
 }
 
-fn read_from_path(file_path: FilePath) -> Result<Mat, UploadError> {
-    let path = file_path.into_path()?;
+fn read_from_path(path: FilePath) -> Result<Mat, UploadError> {
+    let path = path.into_path()?;
     let path_str = path.to_str().ok_or(UploadError::NonUtfPath)?;
     let mat = imread(path_str, ImreadModes::IMREAD_GRAYSCALE.into())
         .map_err(|_| UploadError::NotImage)?;
