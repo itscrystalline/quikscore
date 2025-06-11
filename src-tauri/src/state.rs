@@ -7,7 +7,9 @@ pub type StateMutex = Mutex<AppState>;
 #[macro_export]
 macro_rules! signal {
     ($app: ident, $message_key: expr, $message: expr) => {
-        _ = $app.emit($message_key.into(), $message)
+        if let Err(e) = $app.emit($message_key.into(), $message) {
+            println!("Signal emission failed: {e}");
+        }
     };
 }
 
