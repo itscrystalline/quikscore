@@ -7,31 +7,35 @@ use tauri_plugin_dialog::{DialogExt, FilePath};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::errors::UploadError;
-use crate::state::{AppState, StateMutex};
+use crate::signal;
+use crate::state::{AppState, SignalKeys, StateMutex};
 
 #[tauri::command]
 pub fn upload_key_image(app: AppHandle) {
     println!("uploading key image");
     app.dialog().file().pick_file(move |file_path| {
-        if let Some(file_path) = file_path {
-            match read_from_path(file_path) {
-                Ok(mat) => match mat_to_base64_png(&mat) {
-                    Ok(base64_image) => {
-                        let mutex = app.state::<StateMutex>();
-                        let mut state = mutex.lock().unwrap();
-                        match *state {
-                            AppState::Init | AppState::WithKeyImage { .. } => {
-                                *state = AppState::WithKeyImage { key: mat };
-                                let _ = app.emit("key-image", base64_image);
-                                let _ = app.emit("key-status", "");
-                            }
-                            _ => (),
-                        }
+        let Some(file_path) = file_path else {
+            signal!(
+                app,
+                SignalKeys::KeyStatus,
+                format!("{}", UploadError::Canceled)
+            );
+            return;
+        };
+        match handle_upload(file_path) {
+            Ok((base64_image, mat)) => {
+                let mutex = app.state::<StateMutex>();
+                let mut state = mutex.lock().unwrap();
+                match *state {
+                    AppState::Init | AppState::WithKeyImage { .. } => {
+                        *state = AppState::WithKeyImage { key: mat };
+                        signal!(app, SignalKeys::KeyImage, base64_image);
+                        signal!(app, SignalKeys::KeyStatus, "");
                     }
-                    Err(e) => _ = app.emit("key-status", format!("{}", UploadError::from(e))),
-                },
-                Err(e) => _ = app.emit("key-status", format!("{e}")),
+                    _ => (),
+                }
             }
+            Err(e) => signal!(app, SignalKeys::KeyStatus, format!("{e}")),
         }
     });
 }
@@ -42,8 +46,8 @@ pub fn clear_key_image(app: AppHandle) {
     let mut state = mutex.lock().unwrap();
     if let AppState::WithKeyImage { .. } = *state {
         *state = AppState::Init;
-        _ = app.emit("key-image", "");
-        _ = app.emit("key-status", "");
+        signal!(app, SignalKeys::KeyImage, "");
+        signal!(app, SignalKeys::KeyStatus, "");
     }
 }
 
@@ -55,28 +59,35 @@ pub fn upload_sheet_images(app: AppHandle) {
         let mut state = mutex.lock().unwrap();
         match *state {
             AppState::WithKeyImage { ref key } | AppState::WithKeyAndSheets { ref key, .. } => {
-                if let Some(file_paths) = file_paths {
-                    let base64_list: Result<Vec<(String, Mat)>, UploadError> = file_paths
-                        .into_iter()
-                        .map(|file_path| {
-                            let mat = read_from_path(file_path)?;
-                            let base64 = mat_to_base64_png(&mat).map_err(UploadError::from)?;
-                            Ok((base64, mat))
-                        })
-                        .collect();
-                    match base64_list {
-                        Ok(vec) => {
-                            let (vec_base64, vec_mat): (Vec<String>, Vec<Mat>) =
-                                vec.into_iter().unzip();
-                            *state = AppState::WithKeyAndSheets {
-                                key: key.clone(),
-                                sheets: vec_mat,
-                            };
-                            _ = app.emit("sheet-images", vec_base64);
-                            _ = app.emit("sheet-status", "");
+                match file_paths.ok_or(UploadError::Canceled) {
+                    Ok(file_paths) => {
+                        let base64_list: Result<Vec<(String, Mat)>, UploadError> = file_paths
+                            .into_iter()
+                            .enumerate()
+                            .map(|(idx, file_path)| {
+                                signal!(
+                                    app,
+                                    SignalKeys::SheetStatus,
+                                    format!("Processing image #{}", idx + 1)
+                                );
+                                handle_upload(file_path)
+                            })
+                            .collect();
+                        match base64_list {
+                            Ok(vec) => {
+                                let (vec_base64, vec_mat): (Vec<String>, Vec<Mat>) =
+                                    vec.into_iter().unzip();
+                                *state = AppState::WithKeyAndSheets {
+                                    key: key.clone(),
+                                    _sheets: vec_mat,
+                                };
+                                signal!(app, SignalKeys::SheetImages, vec_base64);
+                                signal!(app, SignalKeys::SheetStatus, "");
+                            }
+                            Err(e) => signal!(app, SignalKeys::SheetStatus, format!("{e}")),
                         }
-                        Err(e) => _ = app.emit("sheet-status", format!("{e}")),
                     }
+                    Err(e) => signal!(app, SignalKeys::SheetStatus, format!("{e}")),
                 }
             }
             _ => (),
@@ -90,9 +101,15 @@ pub fn clear_sheet_images(app: AppHandle) {
     let mut state = mutex.lock().unwrap();
     if let AppState::WithKeyAndSheets { ref key, .. } = *state {
         *state = AppState::WithKeyImage { key: key.clone() };
-        _ = app.emit("sheet-images", Vec::<String>::new());
-        _ = app.emit("sheet-status", "");
+        signal!(app, SignalKeys::SheetImages, Vec::<String>::new());
+        signal!(app, SignalKeys::SheetStatus, "");
     }
+}
+
+fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
+    let mat = read_from_path(path)?;
+    let base64 = mat_to_base64_png(&mat).map_err(UploadError::from)?;
+    Ok((base64, mat))
 }
 
 fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
@@ -102,8 +119,8 @@ fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
     Ok(format!("data:image/png;base64,{base64}"))
 }
 
-fn read_from_path(file_path: FilePath) -> Result<Mat, UploadError> {
-    let path = file_path.into_path()?;
+fn read_from_path(path: FilePath) -> Result<Mat, UploadError> {
+    let path = path.into_path()?;
     let path_str = path.to_str().ok_or(UploadError::NonUtfPath)?;
     let mat = imread(path_str, ImreadModes::IMREAD_GRAYSCALE.into())
         .map_err(|_| UploadError::NotImage)?;

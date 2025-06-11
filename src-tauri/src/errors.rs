@@ -13,6 +13,4 @@ pub enum UploadError {
         #[from]
         under: opencv::Error,
     },
-    #[error("No files have been selected.")]
-    NoFiles,
 }
