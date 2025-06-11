@@ -54,8 +54,6 @@ jobs:
         run: nix profile install nixpkgs#devenv
         shell: bash
 
-      - name: Test
-        run: devenv tasks run quikscore:test
       - name: Generate coverage report
         run: devenv tasks run quikscore:coverage
 
