@@ -34,3 +34,5 @@ dist-ssr
 *.sw?
 
 answer sheet*
+
+*.profraw
