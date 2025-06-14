@@ -19,7 +19,7 @@ jobs:
           project-url: https://github.com/users/${{ github.repository_owner }}/projects/4
           github-token: ${{ secrets.UPDATE_PROJECT_V2_PAT }}
           field-name: "Status"
-          field-value: "In Progress"
+          field-value: "In progress"
 
       - name: Set start date 
         if: github.event.action == 'assigned'
@@ -27,7 +27,7 @@ jobs:
         with:
           project-url: https://github.com/users/${{ github.repository_owner }}/projects/4
           github-token: ${{ secrets.UPDATE_PROJECT_V2_PAT }}
-          field-name: "Start Date"
+          field-name: "Start date"
           field-value: "${{ steps.vars.outputs.date }}"
 
 
@@ -37,5 +37,5 @@ jobs:
         with:
           project-url: https://github.com/users/${{ github.repository_owner }}/projects/4
           github-token: ${{ secrets.UPDATE_PROJECT_V2_PAT }}
-          field-name: "End Date"
+          field-name: "End date"
           field-value: "${{ steps.vars.outputs.date }}"
