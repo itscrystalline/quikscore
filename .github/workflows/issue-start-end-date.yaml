@@ -31,7 +31,7 @@ jobs:
           field=$([ "$event" = "assigned" ] && echo "Start Date" || echo "End Date")
 
           # Replace with your actual project number
-          PROJECT_NUM=1
+          PROJECT_NUM=4
 
           # Get project and field IDs via GraphQL
           projectId=$(gh api graphql -f query="query {
