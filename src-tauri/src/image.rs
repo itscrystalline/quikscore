@@ -22,22 +22,26 @@ pub fn upload_key_image(app: AppHandle) {
             );
             return;
         };
-        match handle_upload(file_path) {
-            Ok((base64_image, mat)) => {
-                let mutex = app.state::<StateMutex>();
-                let mut state = mutex.lock().unwrap();
-                match *state {
-                    AppState::Init | AppState::WithKeyImage { .. } => {
-                        *state = AppState::WithKeyImage { key: mat };
-                        signal!(app, SignalKeys::KeyImage, base64_image);
-                        signal!(app, SignalKeys::KeyStatus, "");
-                    }
-                    _ => (),
-                }
-            }
-            Err(e) => signal!(app, SignalKeys::KeyStatus, format!("{e}")),
-        }
+        upload_key_image_impl(app, file_path);
     });
+}
+
+fn upload_key_image_impl(app: AppHandle, path: FilePath) {
+    match handle_upload(path) {
+        Ok((base64_image, mat)) => {
+            let mutex = app.state::<StateMutex>();
+            let mut state = mutex.lock().unwrap();
+            match *state {
+                AppState::Init | AppState::WithKeyImage { .. } => {
+                    *state = AppState::WithKeyImage { key: mat };
+                    signal!(app, SignalKeys::KeyImage, base64_image);
+                    signal!(app, SignalKeys::KeyStatus, "");
+                }
+                _ => (),
+            }
+        }
+        Err(e) => signal!(app, SignalKeys::KeyStatus, format!("{e}")),
+    }
 }
 
 #[tauri::command]
@@ -55,44 +59,50 @@ pub fn clear_key_image(app: AppHandle) {
 pub fn upload_sheet_images(app: AppHandle) {
     println!("uploading sheet images");
     app.dialog().file().pick_files(move |file_paths| {
-        let mutex = app.state::<StateMutex>();
-        let mut state = mutex.lock().unwrap();
-        match *state {
-            AppState::WithKeyImage { ref key } | AppState::WithKeyAndSheets { ref key, .. } => {
-                match file_paths.ok_or(UploadError::Canceled) {
-                    Ok(file_paths) => {
-                        let base64_list: Result<Vec<(String, Mat)>, UploadError> = file_paths
-                            .into_iter()
-                            .enumerate()
-                            .map(|(idx, file_path)| {
-                                signal!(
-                                    app,
-                                    SignalKeys::SheetStatus,
-                                    format!("Processing image #{}", idx + 1)
-                                );
-                                handle_upload(file_path)
-                            })
-                            .collect();
-                        match base64_list {
-                            Ok(vec) => {
-                                let (vec_base64, vec_mat): (Vec<String>, Vec<Mat>) =
-                                    vec.into_iter().unzip();
-                                *state = AppState::WithKeyAndSheets {
-                                    key: key.clone(),
-                                    _sheets: vec_mat,
-                                };
-                                signal!(app, SignalKeys::SheetImages, vec_base64);
-                                signal!(app, SignalKeys::SheetStatus, "");
-                            }
-                            Err(e) => signal!(app, SignalKeys::SheetStatus, format!("{e}")),
-                        }
-                    }
-                    Err(e) => signal!(app, SignalKeys::SheetStatus, format!("{e}")),
-                }
-            }
-            _ => (),
-        }
+        let Some(file_paths) = file_paths else {
+            signal!(
+                app,
+                SignalKeys::SheetStatus,
+                format!("{}", UploadError::Canceled)
+            );
+            return;
+        };
+        upload_sheet_images_impl(app, file_paths);
     });
+}
+
+fn upload_sheet_images_impl(app: AppHandle, paths: Vec<FilePath>) {
+    let mutex = app.state::<StateMutex>();
+    let mut state = mutex.lock().unwrap();
+    match *state {
+        AppState::WithKeyImage { ref key } | AppState::WithKeyAndSheets { ref key, .. } => {
+            let base64_list: Result<Vec<(String, Mat)>, UploadError> = paths
+                .into_iter()
+                .enumerate()
+                .map(|(idx, file_path)| {
+                    signal!(
+                        app,
+                        SignalKeys::SheetStatus,
+                        format!("Processing image #{}", idx + 1)
+                    );
+                    handle_upload(file_path)
+                })
+                .collect();
+            match base64_list {
+                Ok(vec) => {
+                    let (vec_base64, vec_mat): (Vec<String>, Vec<Mat>) = vec.into_iter().unzip();
+                    *state = AppState::WithKeyAndSheets {
+                        key: key.clone(),
+                        _sheets: vec_mat,
+                    };
+                    signal!(app, SignalKeys::SheetImages, vec_base64);
+                    signal!(app, SignalKeys::SheetStatus, "");
+                }
+                Err(e) => signal!(app, SignalKeys::SheetStatus, format!("{e}")),
+            }
+        }
+        _ => (),
+    }
 }
 
 #[tauri::command]
@@ -122,16 +132,24 @@ fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
 fn read_from_path(path: FilePath) -> Result<Mat, UploadError> {
     let path = path.into_path()?;
     let path_str = path.to_str().ok_or(UploadError::NonUtfPath)?;
-    let mat = imread(path_str, ImreadModes::IMREAD_GRAYSCALE.into())
-        .map_err(|_| UploadError::NotImage)?;
-    Ok(mat)
+    imread(path_str, ImreadModes::IMREAD_GRAYSCALE.into())
+        .map_err(|_| UploadError::NotImage)
+        .and_then(|mat| {
+            if mat.empty() {
+                Err(UploadError::NotImage)
+            } else {
+                Ok(mat)
+            }
+        })
 }
 
 #[cfg(test)]
 mod unit_tests {
+    use std::path::PathBuf;
+
     use super::*;
     use base64::prelude::*;
-    use opencv::{core, imgcodecs, prelude::*};
+    use opencv::core;
 
     #[test]
     fn test_basic_functionality() {
@@ -159,5 +177,62 @@ mod unit_tests {
         let mat = Mat::default();
         let result = mat_to_base64_png(&mat);
         assert!(result.is_err());
+    }
+
+    fn test_image_path() -> PathBuf {
+        PathBuf::from("tests/assets/sample_valid_image.jpg")
+    }
+
+    fn non_image_path() -> PathBuf {
+        PathBuf::from("tests/assets/sample_invalid_image.jpg")
+    }
+
+    #[test]
+    fn test_read_from_valid_path() {
+        let path = FilePath::Path(test_image_path());
+        let mat = read_from_path(path);
+        assert!(mat.is_ok());
+        let mat = mat.unwrap();
+        assert!(!mat.empty());
+    }
+
+    #[test]
+    fn test_read_from_invalid_image_file() {
+        let path = FilePath::Path(non_image_path());
+        let result = read_from_path(path);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), UploadError::NotImage));
+    }
+
+    #[test]
+    fn test_read_from_non_utf8_path() {
+        // This simulates a non-UTF-8 path by using invalid UTF-8 bytes
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+        let non_utf8 = OsStr::from_bytes(b"\xff\xfe").to_os_string();
+        let path = FilePath::Path(PathBuf::from(non_utf8));
+
+        let result = read_from_path(path);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), UploadError::NonUtfPath));
+    }
+
+    #[test]
+    fn test_handle_upload_success() {
+        let path = FilePath::Path(test_image_path());
+        let result = handle_upload(path);
+        assert!(result.is_ok());
+
+        let (base64_string, mat) = result.unwrap();
+        assert!(base64_string.starts_with("data:image/png;base64,"));
+        assert!(!mat.empty());
+    }
+
+    #[test]
+    fn test_handle_upload_failure() {
+        let path = FilePath::Path(non_image_path());
+        let result = handle_upload(path);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), UploadError::NotImage));
     }
 }

@@ -8,9 +8,6 @@ pub enum UploadError {
     NonUtfPath,
     #[error("Invalid image format")]
     NotImage,
-    #[error("Unable to reencode image: {} (errno {})", .under.message, .under.code)]
-    EncodeError {
-        #[from]
-        under: opencv::Error,
-    },
+    #[error("Unable to reencode image: {} (errno {})", .0.message, .0.code)]
+    EncodeError(#[from] opencv::Error),
 }
