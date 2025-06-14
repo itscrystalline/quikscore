@@ -6,10 +6,6 @@ on:
 jobs:
   update-dates:
     runs-on: ubuntu-latest
-    env:
-      PROJECT_NUMBER: 4  # <-- set your actual project number
-      PROJECT_OWNER: ${{ github.repository_owner }}
-
     steps:
       - name: Determine field name and date
         id: vars
@@ -20,7 +16,7 @@ jobs:
         if: github.event.action == 'assigned'
         uses: nipe0324/update-project-v2-item-field@v2.0.2
         with:
-          project-url: https://github.com/users/$PROJECT_OWNER/projects/$PROJECT_NUMBER
+          project-url: https://github.com/users/${{ github.repository_owner }}/projects/4
           github-token: ${{ secrets.UPDATE_PROJECT_V2_PAT }}
           field-name: "Status"
           field-value: "In Progress"
@@ -29,7 +25,7 @@ jobs:
         if: github.event.action == 'assigned'
         uses: nipe0324/update-project-v2-item-field@v2.0.2
         with:
-          project-url: https://github.com/users/$PROJECT_OWNER/projects/$PROJECT_NUMBER
+          project-url: https://github.com/users/${{ github.repository_owner }}/projects/4
           github-token: ${{ secrets.UPDATE_PROJECT_V2_PAT }}
           field-name: "Start Date"
           field-value: "${{ steps.vars.outputs.date }}"
@@ -39,7 +35,7 @@ jobs:
         if: github.event.action == 'closed'
         uses: nipe0324/update-project-v2-item-field@v2.0.2
         with:
-          project-url: https://github.com/users/$PROJECT_OWNER/projects/$PROJECT_NUMBER
+          project-url: https://github.com/users/${{ github.repository_owner }}/projects/4
           github-token: ${{ secrets.UPDATE_PROJECT_V2_PAT }}
           field-name: "End Date"
           field-value: "${{ steps.vars.outputs.date }}"
