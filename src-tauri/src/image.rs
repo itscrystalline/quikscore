@@ -145,9 +145,11 @@ fn read_from_path(path: FilePath) -> Result<Mat, UploadError> {
 
 #[cfg(test)]
 mod unit_tests {
+    use std::path::PathBuf;
+
     use super::*;
     use base64::prelude::*;
-    use opencv::{core, imgcodecs, prelude::*};
+    use opencv::core;
 
     #[test]
     fn test_basic_functionality() {
@@ -175,5 +177,62 @@ mod unit_tests {
         let mat = Mat::default();
         let result = mat_to_base64_png(&mat);
         assert!(result.is_err());
+    }
+
+    fn test_image_path() -> PathBuf {
+        PathBuf::from("tests/assets/sample_valid_image.jpg")
+    }
+
+    fn non_image_path() -> PathBuf {
+        PathBuf::from("tests/assets/sample_invalid_image.jpg")
+    }
+
+    #[test]
+    fn test_read_from_valid_path() {
+        let path = FilePath::Path(test_image_path());
+        let mat = read_from_path(path);
+        assert!(mat.is_ok());
+        let mat = mat.unwrap();
+        assert!(!mat.empty());
+    }
+
+    #[test]
+    fn test_read_from_invalid_image_file() {
+        let path = FilePath::Path(non_image_path());
+        let result = read_from_path(path);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), UploadError::NotImage));
+    }
+
+    #[test]
+    fn test_read_from_non_utf8_path() {
+        // This simulates a non-UTF-8 path by using invalid UTF-8 bytes
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+        let non_utf8 = OsStr::from_bytes(b"\xff\xfe").to_os_string();
+        let path = FilePath::Path(PathBuf::from(non_utf8));
+
+        let result = read_from_path(path);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), UploadError::NonUtfPath));
+    }
+
+    #[test]
+    fn test_handle_upload_success() {
+        let path = FilePath::Path(test_image_path());
+        let result = handle_upload(path);
+        assert!(result.is_ok());
+
+        let (base64_string, mat) = result.unwrap();
+        assert!(base64_string.starts_with("data:image/png;base64,"));
+        assert!(!mat.empty());
+    }
+
+    #[test]
+    fn test_handle_upload_failure() {
+        let path = FilePath::Path(non_image_path());
+        let result = handle_upload(path);
+        assert!(result.is_err());
+        assert!(matches!(result.unwrap_err(), UploadError::NotImage));
     }
 }
