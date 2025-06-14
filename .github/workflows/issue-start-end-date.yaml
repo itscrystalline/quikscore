@@ -1,5 +1,4 @@
-name: 📅 Track Issue Start/End Dates
-
+name: 📅 Track Issue Start/End Dates 
 on:
   issues:
     types: [assigned, closed]
@@ -11,50 +10,45 @@ permissions:
 jobs:
   update-dates:
     runs-on: ubuntu-latest
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PROJECT_NUMBER: 4  # <-- set your actual project number
+      PROJECT_OWNER: ${{ github.repository_owner }}
 
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Install GitHub CLI
+      - name: Determine field name and date
+        id: vars
         run: |
-          if ! command -v gh &>/dev/null; then
-            curl -sSL https://github.com/cli/cli/releases/latest/download/gh_$(uname -s | tr '[:upper:]' '[:lower:]')_amd64.tar.gz \
-              | tar xz -C /usr/local
+          if [ "${{ github.event.action }}" = "assigned" ]; then
+            echo "FIELD=Start Date" >> $GITHUB_OUTPUT
+          else
+            echo "FIELD=End Date" >> $GITHUB_OUTPUT
           fi
+          echo "DATE=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
 
-      - name: Update Start/End Date field in project
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Fetch project & field IDs
+        id: ids
         run: |
-          event="${{ github.event.action }}"
-          date=$(date -u +'%Y-%m-%d')
-          field=$([ "$event" = "assigned" ] && echo "Start Date" || echo "End Date")
+          proj=$(gh project view "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json)
+          echo "PROJECT_ID=$(echo "$proj" | jq -r .id)" >> $GITHUB_OUTPUT
 
-          # Replace with your actual project number
-          PROJECT_NUM=4
+          fields=$(gh project field-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json)
+          echo "FIELD_ID=$(echo "$fields" | jq -r \
+            --arg name "${{ steps.vars.outputs.FIELD }}" \
+            '.fields[] | select(.name == $name).id')" >> $GITHUB_OUTPUT
 
-          # Get project and field IDs via GraphQL
-          projectId=$(gh api graphql -f query="query {
-            repository(owner: \"${{ github.repository_owner }}\", name: \"${{ github.event.repository.name }}\") {
-              projectV2(number: $PROJECT_NUM) { id }
-            }
-          }" -q .data.repository.projectV2.id)
+      - name: Get issue item ID in the project
+        id: item
+        run: |
+          ITEM_ID=$(gh project item-list "$PROJECT_NUMBER" --owner "$PROJECT_OWNER" --format json \
+            | jq -r --arg num "${{ github.event.issue.number }}" \
+              '.[] | select(.content.number|tostring == $num).id')
+          echo "ITEM_ID=$ITEM_ID" >> $GITHUB_OUTPUT
 
-          fieldId=$(gh api graphql -f query="query {
-            repository(owner: \"${{ github.repository_owner }}\", name: \"${{ github.event.repository.name }}\") {
-              projectV2(number: $PROJECT_NUM) {
-                field(name: \"$field\") { id }
-              }
-            }
-          }" -q .data.repository.projectV2.field.id)
-
-          # Update the date field for this issue
-          itemId=$(gh api repos/${{ github.repository }}/issues/${{ github.event.issue.number }} -q .id)
-          gh api graphql -f query="mutation(\$input: UpdateProjectV2ItemFieldInput!) {
-            updateProjectV2ItemField(input: \$input) { projectV2Item { id } }
-          }" -f input="{
-            \"projectId\": \"$projectId\",
-            \"itemId\": \"$itemId\",
-            \"fieldId\": \"$fieldId\",
-            \"value\": {\"date\": \"$date\"}
-          }"
+      - name: Update date field on project item
+        run: |
+          gh project item-edit \
+            --project-id "${{ steps.ids.outputs.PROJECT_ID }}" \
+            --field-id "${{ steps.ids.outputs.FIELD_ID }}" \
+            --id "${{ steps.item.outputs.ITEM_ID }}" \
+            --date "${{ steps.vars.outputs.DATE }}"
