@@ -1,0 +1,72 @@
+name: Track Issue Start/End Dates
+
+on:
+  issues:
+    types: [assigned, closed]
+
+jobs:
+  update-date:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      contents: read
+      projects: write
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set Start/End date in Project
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          issue_number=${{ github.event.issue.number }}
+          repository=${{ github.repository }}
+          action_type=${{ github.event.action }}
+
+          timestamp=$(date -u +"%Y-%m-%d")
+          
+          if [ "$action_type" = "assigned" ]; then
+            date_field="Start Date"
+            date_value="$timestamp"
+          elif [ "$action_type" = "closed" ]; then
+            date_field="End Date"
+            date_value="$timestamp"
+          else
+            exit 0
+          fi
+
+          # Install GitHub CLI if needed
+          if ! command -v gh &>/dev/null; then
+            echo "Installing gh..."
+            curl -sSL https://github.com/cli/cli/releases/latest/download/gh_$(uname -s | tr '[:upper:]' '[:lower:]')_amd64.tar.gz \
+              | tar xz --strip-components=1 -C /usr/local
+          fi
+
+          # Locate project field ID
+          field_id=$(gh api repos/$repository/issues/$issue_number |
+            jq -r '.timelineItems.nodes[]?
+                  | select(.__typename=="ProjectCard")
+                  | .project.number as $pnum
+                  | (gh api graphql -f query="query($num:Int!){
+                      repository(owner:\"${GITHUB_REPOSITORY_OWNER}\", name:\"${GITHUB_REPOSITORY_REPO}\") {
+                        projectV2(number:$pnum) {
+                          field(name:\"'"${date_field}"'\") { id }
+                        }
+                      }
+                    }" -f num=$pnum) | .data.repository.projectV2.field.id')
+
+          # Update the field
+          gh api graphql -f query="mutation($input:UpdateProjectV2ItemFieldInput!) {
+              updateProjectV2ItemField(input:$input) {
+                projectV2Item { id }
+              }
+            }" -f input="{
+              \"projectId\": \"$(gh api graphql -f query="query {
+                repository(owner:\\\"${GITHUB_REPOSITORY_OWNER}\\\", name:\\\"${GITHUB_REPOSITORY_REPO}\\\") {
+                  projectV2(number: $pnum) { id }
+                }
+              }" | jq -r .data.repository.projectV2.id)\",
+              \"itemId\": $(gh api repos/$repository/issues/$issue_number | jq -r .id),
+              \"fieldId\": \"$field_id\",
+              \"value\": {\"date\":\"$date_value\"}
+            }"
