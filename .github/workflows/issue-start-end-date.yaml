@@ -10,7 +10,7 @@ jobs:
       - name: Determine field name and date
         id: vars
         run: |
-          echo "date=$(date -u +%Y-%m-%d)" >> $GITHUB_OUTPUT
+          echo "date=$(date +'%Y-%m-%d')" >> $GITHUB_OUTPUT
 
       - name: Update status to "In Progress"
         if: github.event.action == 'assigned'
