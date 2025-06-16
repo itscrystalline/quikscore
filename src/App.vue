@@ -82,6 +82,7 @@ listen<string[]>('sheet-images', (event) => {
 
   color: #cdd6f4;
   background-color: #111827;
+  --muted: #9ca3af;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
