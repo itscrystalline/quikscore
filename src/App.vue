@@ -44,19 +44,23 @@ listen<string[]>('sheet-images', (event) => {
     <h1>Quikscore</h1>
     <p>Upload your key sheet and some answer sheets!</p>
 
-    <button @click="uploadKey" :disabled="answerImages.length !== 0">{{ keyImage === "" ? "Upload Answer Key..." :
+    <button class="btn-key" @click="uploadKey" :disabled="answerImages.length !== 0">{{ keyImage === "" ? "📥\nUpload Answer Key..." :
       "Change Answer Key" }}</button>
-    <button @click="clearKey" :disabled="answerImages.length !== 0" v-if="keyImage !== ''">Clear Answer Key</button>
+    <button class="btn-key" @click="clearKey" :disabled="answerImages.length !== 0" v-if="keyImage !== ''">🔄 Clear Answer Key</button>
     <p :style="keyStatus == '' ? 'display: none;' : ''">{{ keyStatus }}</p>
     <img v-bind:src="keyImage" :style="keyImage == '' ? 'display: none;' : ''"></img>
 
-    <button @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ? "Upload Answer Sheets..." :
+    <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ? "🧾\nUpload Answer Sheets..." :
       "Change Answer Sheets"
       }}</button>
-    <button @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">Clear Answer
+    <button class="btn-sheet" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄 Clear Answer
       Sheets</button>
     <p :style="answerStatus == '' ? 'display: none;' : ''">{{ answerStatus }}</p>
     <img v-for="source in answerImages" :src="source"></img>
+      <!-- 📦 Result Placeholder -->
+    <div class="card" v-if="!keyImage && answerImages.length === 0">
+      <div class="placeholder">← Upload files to see results here</div>
+    </div>
   </main>
 </template>
 
@@ -72,12 +76,12 @@ listen<string[]>('sheet-images', (event) => {
 <style>
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
+  font-size: 19px;
+  line-height: 60px;
   font-weight: 400;
 
   color: #cdd6f4;
-  background-color: #11111b;
+  background-color: #111827;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -132,8 +136,6 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #313244;
-  color: #cdd6f4;
   transition: border-color 0.25s;
   box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
 }
@@ -155,7 +157,39 @@ button {
   outline: none;
 }
 
+button.btn-key {
+  background-color: #3b82f6;
+  color: #ffffff;
+}
+button.btn-key:hover {
+  background-color: #2563eb;
+}
+
+button.btn-sheet {
+  background-color: #10b981;
+  color: #ffffff;
+}
+button.btn-sheet:hover {
+  background-color: #059669;
+}
+
 #greet-input {
   margin-right: 5px;
+}
+.card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  background: #1e293b; /* slate-800 */
+  margin-top: 20px;
+}
+
+.placeholder {
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  font-style: italic;
 }
 </style>
