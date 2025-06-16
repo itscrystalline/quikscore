@@ -82,7 +82,6 @@ listen<string[]>('sheet-images', (event) => {
 
   color: #cdd6f4;
   background-color: #111827;
-  --muted: #9ca3af;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -190,7 +189,7 @@ button.btn-sheet:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--muted);
+  color: #9ca3af;
   font-style: italic;
 }
 </style>
