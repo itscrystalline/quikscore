@@ -11,3 +11,9 @@ pub enum UploadError {
     #[error("Unable to reencode image: {} (errno {})", .0.message, .0.code)]
     EncodeError(#[from] opencv::Error),
 }
+
+#[derive(thiserror::Error, Debug)]
+pub enum SheetError {
+    #[error("OpenCV Error on reading sheet: {} (errno {})", .0.message, .0.code)]
+    OpenCvError(#[from] opencv::Error),
+}

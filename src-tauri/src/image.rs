@@ -1,14 +1,17 @@
 use base64::Engine;
+use opencv::core::Point;
 use opencv::core::{Mat, Size, Vector};
 use opencv::highgui;
 use opencv::imgcodecs::{imencode, imread, ImreadModes};
-use opencv::imgproc;
+use opencv::imgproc::{
+    self, CHAIN_APPROX_SIMPLE, FILLED, LINE_8, RETR_EXTERNAL, THRESH_BINARY_INV,
+};
 use opencv::prelude::*;
 use tauri_plugin_dialog::FilePath;
 
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::errors::UploadError;
+use crate::errors::{SheetError, UploadError};
 use crate::signal;
 use crate::state::{AppState, SignalKeys, StateMutex};
 
@@ -109,6 +112,86 @@ fn read_from_path(path: FilePath) -> Result<Mat, UploadError> {
                 Ok(mat)
             }
         })
+}
+
+macro_rules! new_mat_copy {
+    ($orig: ident) => {{
+        let mut mat = Mat::default();
+        mat.set_rows($orig.rows());
+        mat.set_cols($orig.cols());
+        mat
+    }};
+}
+
+fn fix_answer_sheet(mat: &Mat) -> Result<Mat, SheetError> {
+    // blur
+    let blurred = {
+        let mut mat_blur = new_mat_copy!(mat);
+        imgproc::gaussian_blur_def(mat, &mut mat_blur, (5, 5).into(), 0.0)?;
+        mat_blur
+    };
+    // thresholding
+    let threshoulded = {
+        let mut mat_thresh = new_mat_copy!(mat);
+        _ = imgproc::threshold(&blurred, &mut mat_thresh, 200.0, 255.0, THRESH_BINARY_INV)?;
+        mat_thresh
+    };
+
+    // contours
+    let contours: Vector<Vector<Point>> = {
+        let mut contours: Vector<Vector<Point>> = vec![].into();
+        imgproc::find_contours_def(
+            &threshoulded,
+            &mut contours,
+            RETR_EXTERNAL,
+            CHAIN_APPROX_SIMPLE,
+        )?;
+        contours
+    };
+
+    let mut debug_image = new_mat_copy!(mat);
+    imgproc::cvt_color_def(&mat, &mut debug_image, imgproc::COLOR_GRAY2RGB)?;
+
+    let corner_markers: Vec<(f64, f64)> = contours
+        .to_vec()
+        .into_iter()
+        .filter_map(|contour| {
+            let peri = imgproc::arc_length(&contour, true).ok()?;
+            let approx = {
+                let mut approx: Vector<Point> = vec![].into();
+                imgproc::approx_poly_dp(&contour, &mut approx, 0.04 * peri, true).ok()?;
+                approx
+            };
+            if approx.len() == 3 && imgproc::contour_area_def(&contour).ok()? > 100.0 {
+                let moments = imgproc::moments_def(&contour).ok()?;
+                if moments.m00 != 0.0 {
+                    let cx = moments.m10 / moments.m00;
+                    let cy = moments.m01 / moments.m00;
+                    Some((cx, cy))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .inspect(|&(x, y)| {
+            _ = imgproc::circle(
+                &mut debug_image,
+                Point {
+                    x: x as i32,
+                    y: y as i32,
+                },
+                10,
+                (255, 0, 0).into(),
+                FILLED,
+                LINE_8,
+                0,
+            );
+        })
+        .collect();
+
+    Ok(debug_image)
 }
 
 #[cfg(test)]
