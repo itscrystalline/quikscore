@@ -1,7 +1,9 @@
 use base64::Engine;
-use opencv::core::Vector;
+use opencv::core::{Vector, Mat, Size};
 use opencv::imgcodecs::{imencode, imread, ImreadModes};
 use opencv::prelude::*;
+use opencv::imgproc;
+use opencv::highgui;
 use tauri_plugin_dialog::{DialogExt, FilePath};
 
 use tauri::{AppHandle, Emitter, Manager};
@@ -116,8 +118,28 @@ pub fn clear_sheet_images(app: AppHandle) {
     }
 }
 
+fn resize_img(src: &Mat) -> opencv::Result<Mat> {
+    let mut dst = Mat::default();
+    let width = src.cols();
+    let height = src.rows();
+    let new_size = Size::new(width / 3, height / 3);
+
+    imgproc::resize(src, &mut dst, new_size, 0.0, 0.0, imgproc::INTER_LINEAR)?;
+    Ok(dst)
+}
+
+fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
+    highgui::imshow(window_name, mat)?;
+    highgui::wait_key(0)?;
+    Ok(())
+}
+
 fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
     let mat = read_from_path(path)?;
+    let resized = resize_img(&mat).map_err(UploadError::from)?;
+    //testing
+    #[cfg(not(test))]
+    let _ = show_img(&resized, "resize image");
     let base64 = mat_to_base64_png(&mat).map_err(UploadError::from)?;
     Ok((base64, mat))
 }
@@ -236,4 +258,20 @@ mod unit_tests {
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), UploadError::NotImage));
     }
+    #[test]
+    fn test_resize_img() {
+        let width = 300;
+        let height = 300;
+        let mat = Mat::new_rows_cols_with_default(height, width, core::CV_8UC1, core::Scalar::all(128.0)).unwrap();
+    
+        let resized = resize_img(&mat);
+        assert!(resized.is_ok());
+
+        let resized = resized.unwrap();
+        assert!(!resized.empty());
+
+        assert_eq!(resized.cols(), width / 3);
+        assert_eq!(resized.rows(), height / 3);
+    }
+
 }
