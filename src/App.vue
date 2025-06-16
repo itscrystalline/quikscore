@@ -72,8 +72,8 @@ listen<string[]>('sheet-images', (event) => {
 <style>
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 16px;
-  line-height: 24px;
+  font-size: 20px;
+  line-height: 70px;
   font-weight: 400;
 
   color: #cdd6f4;
