@@ -3,6 +3,7 @@ use opencv::core::{Vector, Mat, Size};
 use opencv::imgcodecs::{imencode, imread, ImreadModes};
 use opencv::prelude::*;
 use opencv::imgproc;
+use opencv::highgui;
 use tauri_plugin_dialog::{DialogExt, FilePath};
 
 use tauri::{AppHandle, Emitter, Manager};
@@ -127,8 +128,17 @@ fn resize_img(src: &Mat) -> opencv::Result<Mat> {
     Ok(dst)
 }
 
+fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
+    highgui::imshow(window_name, mat)?;
+    highgui::wait_key(0)?;
+    Ok(())
+}
+
 fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
     let mat = read_from_path(path)?;
+    let resized = resize_img(&mat).map_err(UploadError::from)?;
+    //testing
+    let _ = show_img(&resized, "resize image");
     let base64 = mat_to_base64_png(&mat).map_err(UploadError::from)?;
     Ok((base64, mat))
 }
