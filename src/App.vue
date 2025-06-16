@@ -44,16 +44,16 @@ listen<string[]>('sheet-images', (event) => {
     <h1>Quikscore</h1>
     <p>Upload your key sheet and some answer sheets!</p>
 
-    <button @click="uploadKey" :disabled="answerImages.length !== 0">{{ keyImage === "" ? "Upload Answer Key..." :
+    <button class="btn-key" @click="uploadKey" :disabled="answerImages.length !== 0">{{ keyImage === "" ? "📥\nUpload Answer Key..." :
       "Change Answer Key" }}</button>
-    <button @click="clearKey" :disabled="answerImages.length !== 0" v-if="keyImage !== ''">Clear Answer Key</button>
+    <button class="btn-key" @click="clearKey" :disabled="answerImages.length !== 0" v-if="keyImage !== ''">🔄 Clear Answer Key</button>
     <p :style="keyStatus == '' ? 'display: none;' : ''">{{ keyStatus }}</p>
     <img v-bind:src="keyImage" :style="keyImage == '' ? 'display: none;' : ''"></img>
 
-    <button @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ? "Upload Answer Sheets..." :
+    <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ? "🧾\nUpload Answer Sheets..." :
       "Change Answer Sheets"
       }}</button>
-    <button @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">Clear Answer
+    <button class="btn-sheet" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄 Clear Answer
       Sheets</button>
     <p :style="answerStatus == '' ? 'display: none;' : ''">{{ answerStatus }}</p>
     <img v-for="source in answerImages" :src="source"></img>
@@ -77,7 +77,7 @@ listen<string[]>('sheet-images', (event) => {
   font-weight: 400;
 
   color: #cdd6f4;
-  background-color: #11111b;
+  background-color: #111827;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -132,8 +132,6 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #313244;
-  color: #cdd6f4;
   transition: border-color 0.25s;
   box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
 }
@@ -153,6 +151,22 @@ button:active {
 
 button {
   outline: none;
+}
+
+button.btn-key {
+  background-color: #3b82f6;
+  color: #ffffff;
+}
+button.btn-key:hover {
+  background-color: #2563eb;
+}
+
+button.btn-sheet {
+  background-color: #10b981;
+  color: #ffffff;
+}
+button.btn-sheet:hover {
+  background-color: #059669;
 }
 
 #greet-input {
