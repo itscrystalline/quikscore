@@ -205,6 +205,7 @@ mod unit_tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn test_read_from_non_utf8_path() {
         // This simulates a non-UTF-8 path by using invalid UTF-8 bytes
         use std::ffi::OsStr;
