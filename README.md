@@ -38,7 +38,7 @@ after that, confirm that `C:\tools\opencv` exists.
 next, you need to define 3 environment variables.
 
 `OPENCV_INCLUDE_PATHS`: Set to `C:\tools\opencv\build\include`
-`OPENCV_LINK_LIBS`: Set to `+opencv_world411`
+`OPENCV_LINK_LIBS`: Set to `+opencv_world4110`
 `OPENCV_LINK_PATHS`: Set to `+C:\tools\opencv\build\x64\vc16\lib`
 
 then add `C:\tools\opencv\build\x64\vc16\bin` to your `PATH`.
