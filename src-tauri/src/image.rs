@@ -138,6 +138,7 @@ fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
     let mat = read_from_path(path)?;
     let resized = resize_img(&mat).map_err(UploadError::from)?;
     //testing
+    #[cfg(not(test))]
     let _ = show_img(&resized, "resize image");
     let base64 = mat_to_base64_png(&mat).map_err(UploadError::from)?;
     Ok((base64, mat))
@@ -257,4 +258,20 @@ mod unit_tests {
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), UploadError::NotImage));
     }
+    #[test]
+    fn test_resize_img() {
+        let width = 300;
+        let height = 300;
+        let mat = Mat::new_rows_cols_with_default(height, width, core::CV_8UC1, core::Scalar::all(128.0)).unwrap();
+    
+        let resized = resize_img(&mat);
+        assert!(resized.is_ok());
+
+        let resized = resized.unwrap();
+        assert!(!resized.empty());
+
+        assert_eq!(resized.cols(), width / 3);
+        assert_eq!(resized.rows(), height / 3);
+    }
+
 }
