@@ -1,6 +1,5 @@
 use base64::Engine;
-use opencv::core::Point;
-use opencv::core::{Mat, Size, Vector};
+use opencv::core::{Mat, Point, Size, Vector};
 use opencv::highgui;
 use opencv::imgcodecs::{imencode, imread, ImreadModes};
 use opencv::imgproc::{
