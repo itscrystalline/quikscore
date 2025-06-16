@@ -57,6 +57,10 @@ listen<string[]>('sheet-images', (event) => {
       Sheets</button>
     <p :style="answerStatus == '' ? 'display: none;' : ''">{{ answerStatus }}</p>
     <img v-for="source in answerImages" :src="source"></img>
+      <!-- 📦 Result Placeholder -->
+    <div class="card" v-if="!keyImage && answerImages.length === 0">
+      <div class="placeholder">← Upload files to see results here</div>
+    </div>
   </main>
 </template>
 
@@ -72,8 +76,8 @@ listen<string[]>('sheet-images', (event) => {
 <style>
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
-  font-size: 20px;
-  line-height: 70px;
+  font-size: 19px;
+  line-height: 60px;
   font-weight: 400;
 
   color: #cdd6f4;
@@ -171,5 +175,21 @@ button.btn-sheet:hover {
 
 #greet-input {
   margin-right: 5px;
+}
+.card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  background: #1e293b; /* slate-800 */
+  margin-top: 20px;
+}
+
+.placeholder {
+  height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-style: italic;
 }
 </style>
