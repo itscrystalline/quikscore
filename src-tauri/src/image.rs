@@ -121,9 +121,7 @@ fn upload_sheet_images_impl(app: AppHandle, paths: Vec<FilePath>) {
 }
 
 fn resize_img(src: &Mat) -> opencv::Result<Mat> {
-    let mut dst = Mat::default();
-    let width = src.cols();
-    let height = src.rows();
+    let mut dst = new_map_copy!(src);
     let new_size = Size::new(width / 3, height / 3);
 
     imgproc::resize(src, &mut dst, new_size, 0.0, 0.0, imgproc::INTER_LINEAR)?;
@@ -139,10 +137,12 @@ fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
 fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
     let mat = read_from_path(path)?;
     let resized = resize_img(&mat).map_err(UploadError::from)?;
+    // FIXME: add proper error handling
+    let aligned = fix_answer_sheet(&resized).unwrap();
     //testing
     #[cfg(not(test))]
-    let _ = show_img(&resized, "resize image");
-    let base64 = mat_to_base64_png(&mat).map_err(UploadError::from)?;
+    let _ = show_img(&aligned, "resized & aligned image");
+    let base64 = mat_to_base64_png(&aligned).map_err(UploadError::from)?;
     Ok((base64, mat))
 }
 
