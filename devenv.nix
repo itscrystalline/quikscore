@@ -17,29 +17,32 @@ in {
   env.LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
   #
   # # https://devenv.sh/packages/
-  packages = with pkgs; [
-    pkg-config
-    gobject-introspection
-    cargo-tauri
-    at-spi2-atk
-    atkmm
-    cairo
-    gdk-pixbuf
-    glib
-    gtk3
-    harfbuzz
-    librsvg
-    libsoup_3
-    pango
-    webkitgtk_4_1
-    openssl
-    libllvm
-    libclang
-    opencv
+  packages = with pkgs;
+    [
+      pkg-config
+      cargo-tauri
+      openssl
+      libllvm
+      libclang
+      opencv
 
-    cargo-tarpaulin
-    bacon
-  ];
+      cargo-tarpaulin
+      bacon
+    ]
+    ++ lib.optionals pkgs.stdenv.isLinux [
+      gobject-introspection
+      at-spi2-atk
+      atkmm
+      cairo
+      gdk-pixbuf
+      glib
+      gtk3
+      harfbuzz
+      librsvg
+      libsoup_3
+      pango
+      webkitgtk_4_1
+    ];
   #
   # # https://devenv.sh/languages/
   # opencv headers
