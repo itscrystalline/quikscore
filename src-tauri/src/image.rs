@@ -65,7 +65,7 @@ pub fn upload_sheet_images_impl(app: AppHandle, paths: Vec<FilePath>) {
 }
 
 fn resize_img(src: &Mat) -> opencv::Result<Mat> {
-    let mut dst = new_map_copy!(src);
+    let mut dst = new_mat_copy!(src);
     let new_size = Size::new(width / 3, height / 3);
 
     imgproc::resize(src, &mut dst, new_size, 0.0, 0.0, imgproc::INTER_LINEAR)?;
