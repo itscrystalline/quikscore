@@ -1,7 +1,8 @@
 use base64::Engine;
-use opencv::core::Vector;
+use opencv::core::{Vector, Mat, Size};
 use opencv::imgcodecs::{imencode, imread, ImreadModes};
 use opencv::prelude::*;
+use opencv::imgproc;
 use tauri_plugin_dialog::{DialogExt, FilePath};
 
 use tauri::{AppHandle, Emitter, Manager};
@@ -114,6 +115,16 @@ pub fn clear_sheet_images(app: AppHandle) {
         signal!(app, SignalKeys::SheetImages, Vec::<String>::new());
         signal!(app, SignalKeys::SheetStatus, "");
     }
+}
+
+fn resize_img(src: &Mat) -> Result<Mat> {
+    let mut dst = Mat::default();
+    let width = src.cols();
+    let height = src.rows();
+    let new_size = Size::new(width / 3, height / 3);
+
+    imgproc::resize(src, &mut dst, new_size, 0.0, 0.0, imgproc::INTER_LINEAR)?;
+    Ok(dst)
 }
 
 fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
