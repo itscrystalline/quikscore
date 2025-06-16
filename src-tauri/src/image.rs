@@ -117,7 +117,7 @@ pub fn clear_sheet_images(app: AppHandle) {
     }
 }
 
-fn resize_img(src: &Mat) -> Result<Mat> {
+fn resize_img(src: &Mat) -> opencv::Result<Mat> {
     let mut dst = Mat::default();
     let width = src.cols();
     let height = src.rows();
