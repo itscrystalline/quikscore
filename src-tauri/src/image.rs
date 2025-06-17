@@ -1,5 +1,5 @@
 use base64::Engine;
-use opencv::core::{Mat, Point, Size, Vector};
+use opencv::core::{Mat, Moments, Point, Rect_, Size, Vector};
 use opencv::highgui;
 use opencv::imgcodecs::{imencode, imread, ImreadModes};
 use opencv::imgproc::{
@@ -68,6 +68,15 @@ pub fn clear_sheet_images(app: AppHandle) {
     }
 }
 
+macro_rules! new_mat_copy {
+    ($orig: ident) => {{
+        let mut mat = Mat::default();
+        mat.set_rows($orig.rows());
+        mat.set_cols($orig.cols());
+        mat
+    }};
+}
+
 fn upload_key_image_impl(app: AppHandle, path: FilePath) {
     match handle_upload(path) {
         Ok((base64_image, mat)) => {
@@ -122,7 +131,7 @@ fn upload_sheet_images_impl(app: AppHandle, paths: Vec<FilePath>) {
 
 fn resize_img(src: &Mat) -> opencv::Result<Mat> {
     let mut dst = new_mat_copy!(src);
-    let new_size = Size::new(width / 3, height / 3);
+    let new_size = Size::new(src.cols() / 3, src.rows() / 3);
 
     imgproc::resize(src, &mut dst, new_size, 0.0, 0.0, imgproc::INTER_LINEAR)?;
     Ok(dst)
@@ -165,15 +174,6 @@ fn read_from_path(path: FilePath) -> Result<Mat, UploadError> {
                 Ok(mat)
             }
         })
-}
-
-macro_rules! new_mat_copy {
-    ($orig: ident) => {{
-        let mut mat = Mat::default();
-        mat.set_rows($orig.rows());
-        mat.set_cols($orig.cols());
-        mat
-    }};
 }
 
 fn fix_answer_sheet(mat: &Mat) -> Result<Mat, SheetError> {
