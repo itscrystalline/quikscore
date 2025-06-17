@@ -2,12 +2,9 @@ use crate::errors::{SheetError, UploadError};
 use crate::signal;
 use crate::state::{AppState, SignalKeys, StateMutex};
 use base64::Engine;
-use opencv::core::{Mat, Moments, Point, Rect_, Size, Vector};
+use opencv::core::{Mat, Range, Size, Vector};
 use opencv::imgcodecs::{imencode, imread, ImreadModes};
-use opencv::imgproc::{
-    ADAPTIVE_THRESH_GAUSSIAN_C, CHAIN_APPROX_SIMPLE, FILLED, LINE_8, RETR_EXTERNAL,
-    THRESH_BINARY_INV,
-};
+use opencv::imgproc::THRESH_BINARY;
 use opencv::prelude::*;
 use opencv::{highgui, imgproc, prelude::*};
 use tauri::{AppHandle, Emitter, Manager};
@@ -83,8 +80,10 @@ fn resize_img(src: &Mat) -> opencv::Result<Mat> {
 }
 
 fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
+    println!("showing window {window_name}");
+    highgui::named_window(window_name, 0)?;
     highgui::imshow(window_name, mat)?;
-    highgui::wait_key(0)?;
+    highgui::wait_key(10000)?;
     Ok(())
 }
 
@@ -122,186 +121,26 @@ fn read_from_path(path: FilePath) -> Result<Mat, UploadError> {
 
 fn preprocess_sheet(mat: Mat) -> Result<Mat, SheetError> {
     // blur
-    let mut mat_blur = new_mat_copy!(mat);
-    imgproc::gaussian_blur_def(&mat, &mut mat_blur, (3, 3).into(), 0.0)?;
+    // let mut mat_blur = new_mat_copy!(mat);
+    // imgproc::gaussian_blur_def(&mat, &mut mat_blur, (5, 5).into(), 0.0)?;
     // thresholding
     let mut mat_thresh = new_mat_copy!(mat);
-    imgproc::adaptive_threshold(
-        &mat_blur,
-        &mut mat_thresh,
-        255.0,
-        ADAPTIVE_THRESH_GAUSSIAN_C,
-        THRESH_BINARY_INV,
-        11,
-        2.0,
-    )?;
+    imgproc::threshold(&mat, &mut mat_thresh, 230.0, 255.0, THRESH_BINARY)?;
     Ok(mat_thresh)
 }
 
-fn find_markers(mat_ref: &Mat, mat_debug: &mut Mat) -> Result<Markers, SheetError> {
-    // contours
-    let contours: Vector<Vector<Point>> = {
-        let mut contours: Vector<Vector<Point>> = vec![].into();
-        imgproc::find_contours_def(&mat_ref, &mut contours, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE)?;
-        contours
-    };
-
-    // imgproc::draw_contours_def(mat_debug, &contours, -1, (0, 255, 0).into())?;
-
-    let corner_markers: Vec<(i32, i32, usize)> = contours
-        .to_vec()
-        .into_iter()
-        .filter_map(|contour| {
-            let peri = imgproc::arc_length(&contour, true).ok()?;
-            let approx = {
-                let mut approx: Vector<Point> = vec![].into();
-                imgproc::approx_poly_dp(&contour, &mut approx, 0.04 * peri, true).ok()?;
-                approx
-            };
-            let area = imgproc::contour_area_def(&contour).ok()?;
-            if !(50.0..).contains(&area) {
-                return None;
-            }
-
-            match approx.len() {
-                3 => {
-                    let Moments { m00, m10, m01, .. } = imgproc::moments_def(&contour).ok()?;
-                    if m00 == 0.0 {
-                        return None;
-                    }
-                    let mut tmp: Vector<Vector<Point>> = Vector::new();
-                    tmp.push(contour.clone());
-                    _ = imgproc::draw_contours_def(mat_debug, &tmp, -1, (0, 255, 0).into());
-                    Some(((m10 / m00) as i32, (m01 / m00) as i32, 3))
-                }
-                4 => {
-                    let Rect_ { width, height, .. } = imgproc::bounding_rect(&contour).ok()?;
-                    let aspect_ratio = width as f32 / height as f32;
-                    if !(1.5..1.7).contains(&aspect_ratio) {
-                        return None;
-                    }
-                    let Moments { m00, m10, m01, .. } = imgproc::moments_def(&contour).ok()?;
-                    if m00 == 0.0 {
-                        return None;
-                    }
-                    let mut tmp: Vector<Vector<Point>> = Vector::new();
-                    tmp.push(contour.clone());
-                    _ = imgproc::draw_contours_def(mat_debug, &tmp, -1, (0, 255, 0).into());
-                    Some(((m10 / m00) as i32, (m01 / m00) as i32, 4))
-                }
-                _ => None,
-            }
-        })
-        .inspect(|&(x, y, corners)| {
-            println!("found marker with {corners} corners at x: {x}, y: {y}")
-            // if corners == 3 {
-            //     _ = imgproc::circle(
-            //         mat_debug,
-            //         Point { x, y },
-            //         2,
-            //         (192, 255, 0).into(),
-            //         FILLED,
-            //         LINE_8,
-            //         0,
-            //     );
-            // } else {
-            //     _ = imgproc::circle(
-            //         mat_debug,
-            //         Point { x, y },
-            //         2,
-            //         (255, 192, 0).into(),
-            //         FILLED,
-            //         LINE_8,
-            //         0,
-            //     );
-            // }
-        })
-        .collect();
-
-    let (mut tri_markers, mut rect_markers): (Vec<_>, Vec<_>) = corner_markers
-        .into_iter()
-        .partition(|&(_, _, corners)| corners == 3);
-    rect_markers.sort_by(|&(_, ay, _), &(_, by, _)| ay.cmp(&by));
-    tri_markers.sort_by(|&(_, ay, _), &(_, by, _)| ay.cmp(&by));
-
-    let top_center = rect_markers
-        .first()
-        .ok_or(SheetError::MarkerNotFound)?
-        .to_owned();
-    let bottom_center = rect_markers
-        .last()
-        .ok_or(SheetError::MarkerNotFound)?
-        .to_owned();
-
-    let bottom_left = tri_markers
-        .last()
-        .ok_or(SheetError::MarkerNotFound)?
-        .to_owned();
-
-    tri_markers.sort_by(|&(ax, _, _), &(bx, _, _)| ax.cmp(&bx));
-    let mut tri_markers = tri_markers.into_iter();
-
-    let top_left = tri_markers
-        .next()
-        .ok_or(SheetError::MarkerNotFound)?
-        .to_owned();
-    let top_right = tri_markers
-        .next()
-        .ok_or(SheetError::MarkerNotFound)?
-        .to_owned();
-
-    let markers = Markers {
-        top_left: (top_left.0, top_left.1).into(),
-        top_right: (top_right.0, top_right.1).into(),
-        bottom_left: (bottom_left.0, bottom_left.1).into(),
-        top_center: (top_center.0, top_center.1).into(),
-        bottom_center: (bottom_center.0, bottom_center.1).into(),
-    };
-
-    markers.draw_markers_debug(mat_debug);
-
-    Ok(markers)
+fn crop_to_markers(mat: Mat) -> Result<Mat, SheetError> {
+    Ok(mat
+        .col_range(&Range::new(38, 1133)?)?
+        .row_range(&Range::new(30, 795)?)?
+        .clone_pointee())
 }
 
 fn fix_answer_sheet(mat: Mat) -> Result<Mat, SheetError> {
-    let mut debug_image = new_mat_copy!(mat);
-    imgproc::cvt_color_def(&mat, &mut debug_image, imgproc::COLOR_GRAY2RGB)?;
-
     let preprocessed = preprocess_sheet(mat)?;
-    let contours = find_markers(&preprocessed, &mut debug_image);
+    let cropped = crop_to_markers(preprocessed)?;
 
-    Ok(debug_image)
-}
-
-#[derive(Debug)]
-struct Markers {
-    top_left: Point,
-    top_right: Point,
-    bottom_left: Point,
-    top_center: Point,
-    bottom_center: Point,
-}
-impl Markers {
-    fn infer_bottom_right(&self) -> Point {
-        let dx = self.bottom_left.x - self.top_left.x;
-        let dy = self.bottom_left.y - self.top_left.y;
-        opencv::core::Point_ {
-            x: self.top_right.x + dx,
-            y: self.top_right.y + dy,
-        }
-    }
-
-    fn draw_markers_debug(&self, mat_debug: &mut Mat) {
-        for point in [
-            self.top_left,
-            self.top_right,
-            self.top_center,
-            self.bottom_left,
-            self.bottom_center,
-        ] {
-            _ = imgproc::circle(mat_debug, point, 3, (0, 0, 255).into(), FILLED, LINE_8, 0);
-        }
-    }
+    Ok(cropped)
 }
 
 #[cfg(test)]
