@@ -146,8 +146,7 @@ fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
 fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
     let mat = read_from_path(path)?;
     let resized = resize_img(&mat).map_err(UploadError::from)?;
-    // FIXME: add proper error handling
-    let aligned = fix_answer_sheet(&resized).unwrap();
+    let aligned = fix_answer_sheet(resized)?;
     //testing
     #[cfg(not(test))]
     let _ = show_img(&aligned, "resized & aligned image");
