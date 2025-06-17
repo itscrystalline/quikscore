@@ -2,7 +2,7 @@ use crate::errors::{SheetError, UploadError};
 use crate::signal;
 use crate::state::{AppState, SignalKeys, StateMutex};
 use base64::Engine;
-use opencv::core::{Point, Vector};
+use opencv::core::{Mat, Moments, Point, Rect_, Size, Vector};
 use opencv::imgcodecs::{imencode, imread, ImreadModes};
 use opencv::imgproc::{
     CHAIN_APPROX_SIMPLE, FILLED, LINE_8, RETR_EXTERNAL, THRESH_BINARY_INV, THRESH_OTSU,
@@ -11,6 +11,15 @@ use opencv::prelude::*;
 use opencv::{highgui, imgproc, prelude::*};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_dialog::FilePath;
+
+macro_rules! new_mat_copy {
+    ($orig: ident) => {{
+        let mut mat = Mat::default();
+        mat.set_rows($orig.rows());
+        mat.set_cols($orig.cols());
+        mat
+    }};
+}
 
 pub fn upload_key_image_impl(app: AppHandle, path: FilePath) {
     match handle_upload(path) {
@@ -66,7 +75,7 @@ pub fn upload_sheet_images_impl(app: AppHandle, paths: Vec<FilePath>) {
 
 fn resize_img(src: &Mat) -> opencv::Result<Mat> {
     let mut dst = new_mat_copy!(src);
-    let new_size = Size::new(width / 3, height / 3);
+    let new_size = Size::new(src.cols() / 3, src.rows() / 3);
 
     imgproc::resize(src, &mut dst, new_size, 0.0, 0.0, imgproc::INTER_LINEAR)?;
     Ok(dst)
@@ -109,15 +118,6 @@ fn read_from_path(path: FilePath) -> Result<Mat, UploadError> {
                 Ok(mat)
             }
         })
-}
-
-macro_rules! new_mat_copy {
-    ($orig: ident) => {{
-        let mut mat = Mat::default();
-        mat.set_rows($orig.rows());
-        mat.set_cols($orig.cols());
-        mat
-    }};
 }
 
 fn fix_answer_sheet(mat: &Mat) -> Result<Mat, SheetError> {
