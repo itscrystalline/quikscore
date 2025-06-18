@@ -299,4 +299,46 @@ mod unit_tests {
         assert_eq!(resized.cols(), width / 3);
         assert_eq!(resized.rows(), height / 3);
     }
+
+    #[test]
+    fn test_preprocess_sheet_thresholding() {
+        // Make a light gray image (above threshold)
+        let mat = Mat::new_rows_cols_with_default(10, 10, core::CV_8UC1, core::Scalar::all(240.0))
+            .unwrap();
+        let thresh = preprocess_sheet(mat);
+        assert!(thresh.is_ok());
+
+        let result = thresh.unwrap();
+        assert_eq!(result.at_2d::<u8>(0, 0).unwrap(), &255);
+    }
+
+    #[test]
+    fn test_crop_to_markers_size() {
+        let mat =
+            Mat::new_rows_cols_with_default(900, 1200, core::CV_8UC1, core::Scalar::all(100.0))
+                .unwrap();
+        let cropped = crop_to_markers(mat);
+        assert!(cropped.is_ok());
+        let cropped = cropped.unwrap();
+        assert_eq!(cropped.rows(), 765); // 795 - 30
+        assert_eq!(cropped.cols(), 1095); // 1133 - 38
+    }
+
+    #[test]
+    fn test_split_into_areas() {
+        // Size must be at least (1090, 750) to cover all ROIs
+        let mat =
+            Mat::new_rows_cols_with_default(800, 1100, core::CV_8UC1, core::Scalar::all(200.0))
+                .unwrap();
+        let result = split_into_areas(mat);
+        assert!(result.is_ok());
+
+        let (subject, student_id, answers) = result.unwrap();
+        assert_eq!(subject.rows(), 212);
+        assert_eq!(subject.cols(), 48);
+        assert_eq!(student_id.rows(), 211);
+        assert_eq!(student_id.cols(), 141);
+        assert_eq!(answers.rows(), 735);
+        assert_eq!(answers.cols(), 884);
+    }
 }
