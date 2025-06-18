@@ -25,7 +25,7 @@ pub enum AppState {
     WithKeyAndSheets {
         key_image: Mat,
         // key: AnswerKeySheet,
-        _sheet_images: Vec<Mat>,
+        sheet_images: Vec<Mat>,
         // _answer_sheets: Vec<AnswerSheet>,
     },
 }
@@ -79,7 +79,7 @@ impl AppState {
                 *state = AppState::WithKeyAndSheets {
                     key_image: key_image.clone(),
                     // key: key.clone(),
-                    _sheet_images: images,
+                    sheet_images: images,
                     // _answer_sheets: vec_answers,
                 };
                 signal!(app, SignalKeys::SheetImages, base64_images);
