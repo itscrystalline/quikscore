@@ -1,5 +1,5 @@
 use crate::errors::{SheetError, UploadError};
-use crate::{signal, state};
+use crate::signal;
 use base64::Engine;
 use itertools::Itertools;
 use opencv::core::{Mat, Range, Rect_, Size, Vector};
@@ -7,11 +7,11 @@ use opencv::imgproc::THRESH_BINARY;
 use opencv::{highgui, imgproc, prelude::*};
 use tauri_plugin_dialog::FilePath;
 
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{Emitter, Manager, Runtime};
 
 use opencv::imgcodecs::{imencode, imread, ImreadModes};
 
-use crate::state::{AnswerSheet, AppState, SignalKeys, StateMutex};
+use crate::state::{AppState, SignalKeys};
 
 macro_rules! new_mat_copy {
     ($orig: ident) => {{
@@ -22,7 +22,10 @@ macro_rules! new_mat_copy {
     }};
 }
 
-pub fn upload_key_image_impl(app: AppHandle, path_maybe: Option<FilePath>) {
+pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
+    app: &A,
+    path_maybe: Option<FilePath>,
+) {
     let Some(file_path) = path_maybe else {
         signal!(
             app,
@@ -37,7 +40,10 @@ pub fn upload_key_image_impl(app: AppHandle, path_maybe: Option<FilePath>) {
     }
 }
 
-pub fn upload_sheet_images_impl(app: AppHandle, paths: Option<Vec<FilePath>>) {
+pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
+    app: &A,
+    paths: Option<Vec<FilePath>>,
+) {
     let Some(paths) = paths else {
         signal!(
             app,
@@ -177,6 +183,14 @@ mod unit_tests {
     use base64::prelude::*;
     use opencv::core;
 
+    fn test_key_image() -> FilePath {
+        FilePath::Path(PathBuf::from("tests/assets/sample_valid_image.jpg"))
+    }
+
+    fn not_image() -> FilePath {
+        FilePath::Path(PathBuf::from("tests/assets/sample_invalid_image.jpg"))
+    }
+
     #[test]
     fn test_basic_functionality() {
         // Create a 2x2 black image (3 channels, 8-bit)
@@ -205,17 +219,9 @@ mod unit_tests {
         assert!(result.is_err());
     }
 
-    fn test_image_path() -> PathBuf {
-        PathBuf::from("tests/assets/sample_valid_image.jpg")
-    }
-
-    fn non_image_path() -> PathBuf {
-        PathBuf::from("tests/assets/sample_invalid_image.jpg")
-    }
-
     #[test]
     fn test_read_from_valid_path() {
-        let path = FilePath::Path(test_image_path());
+        let path = test_key_image();
         let mat = read_from_path(path);
         assert!(mat.is_ok());
         let mat = mat.unwrap();
@@ -224,7 +230,7 @@ mod unit_tests {
 
     #[test]
     fn test_read_from_invalid_image_file() {
-        let path = FilePath::Path(non_image_path());
+        let path = not_image();
         let result = read_from_path(path);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), UploadError::NotImage));
@@ -246,7 +252,7 @@ mod unit_tests {
 
     #[test]
     fn test_handle_upload_success() {
-        let path = FilePath::Path(test_image_path());
+        let path = test_key_image();
         let result = handle_upload(path);
         assert!(result.is_ok());
 
@@ -257,7 +263,7 @@ mod unit_tests {
 
     #[test]
     fn test_handle_upload_failure() {
-        let path = FilePath::Path(non_image_path());
+        let path = not_image();
         let result = handle_upload(path);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), UploadError::NotImage));
