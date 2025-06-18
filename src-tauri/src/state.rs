@@ -37,7 +37,7 @@ impl AppState {
         image: Mat,
     ) {
         let mutex = app.state::<StateMutex>();
-        let mut state = mutex.lock().unwrap();
+        let mut state = mutex.lock().expect("poisoned");
         match *state {
             AppState::Init | AppState::WithKey { .. } => {
                 *state = AppState::WithKey {
@@ -52,7 +52,7 @@ impl AppState {
     }
     pub fn clear_key<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A) {
         let mutex = app.state::<StateMutex>();
-        let mut state = mutex.lock().unwrap();
+        let mut state = mutex.lock().expect("poisoned");
         if let AppState::WithKey { .. } = *state {
             *state = AppState::Init;
             signal!(app, SignalKeys::KeyImage, "");
@@ -65,8 +65,8 @@ impl AppState {
         images: Vec<Mat>,
     ) {
         let mutex = app.state::<StateMutex>();
-        let mut state = mutex.lock().unwrap();
         match *state {
+        let mut state = mutex.lock().expect("poisoned");
             AppState::WithKey {
                 ref key_image,
                 // ref key,
@@ -90,7 +90,7 @@ impl AppState {
     }
     pub fn clear_answer_sheets<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A) {
         let mutex = app.state::<StateMutex>();
-        let mut state = mutex.lock().unwrap();
+        let mut state = mutex.lock().expect("poisoned");
         if let AppState::WithKeyAndSheets {
             /*key,*/ ref key_image,
             ..
