@@ -6,6 +6,7 @@ use tauri::Manager;
 mod errors;
 mod image;
 mod state;
+mod commands;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -14,10 +15,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            image::upload_key_image,
-            image::clear_key_image,
-            image::upload_sheet_images,
-            image::clear_sheet_images
+            commands::upload_key_image,
+            commands::clear_key_image,
+            commands::upload_sheet_images,
+            commands::clear_sheet_images
         ])
         .setup(|app| {
             app.manage(Mutex::new(AppState::Init));

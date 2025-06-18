@@ -1,10 +1,10 @@
 use base64::Engine;
-use opencv::core::{Vector, Mat, Size};
-use opencv::imgcodecs::{imencode, imread, ImreadModes};
-use opencv::prelude::*;
-use opencv::imgproc;
+use opencv::core::{Mat, Size, Vector};
 use opencv::highgui;
-use tauri_plugin_dialog::{DialogExt, FilePath};
+use opencv::imgcodecs::{imencode, imread, ImreadModes};
+use opencv::imgproc;
+use opencv::prelude::*;
+use tauri_plugin_dialog::FilePath;
 
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -12,23 +12,7 @@ use crate::errors::UploadError;
 use crate::signal;
 use crate::state::{AppState, SignalKeys, StateMutex};
 
-#[tauri::command]
-pub fn upload_key_image(app: AppHandle) {
-    println!("uploading key image");
-    app.dialog().file().pick_file(move |file_path| {
-        let Some(file_path) = file_path else {
-            signal!(
-                app,
-                SignalKeys::KeyStatus,
-                format!("{}", UploadError::Canceled)
-            );
-            return;
-        };
-        upload_key_image_impl(app, file_path);
-    });
-}
-
-fn upload_key_image_impl(app: AppHandle, path: FilePath) {
+pub fn upload_key_image_impl(app: AppHandle, path: FilePath) {
     match handle_upload(path) {
         Ok((base64_image, mat)) => {
             let mutex = app.state::<StateMutex>();
@@ -46,34 +30,7 @@ fn upload_key_image_impl(app: AppHandle, path: FilePath) {
     }
 }
 
-#[tauri::command]
-pub fn clear_key_image(app: AppHandle) {
-    let mutex = app.state::<StateMutex>();
-    let mut state = mutex.lock().unwrap();
-    if let AppState::WithKeyImage { .. } = *state {
-        *state = AppState::Init;
-        signal!(app, SignalKeys::KeyImage, "");
-        signal!(app, SignalKeys::KeyStatus, "");
-    }
-}
-
-#[tauri::command]
-pub fn upload_sheet_images(app: AppHandle) {
-    println!("uploading sheet images");
-    app.dialog().file().pick_files(move |file_paths| {
-        let Some(file_paths) = file_paths else {
-            signal!(
-                app,
-                SignalKeys::SheetStatus,
-                format!("{}", UploadError::Canceled)
-            );
-            return;
-        };
-        upload_sheet_images_impl(app, file_paths);
-    });
-}
-
-fn upload_sheet_images_impl(app: AppHandle, paths: Vec<FilePath>) {
+pub fn upload_sheet_images_impl(app: AppHandle, paths: Vec<FilePath>) {
     let mutex = app.state::<StateMutex>();
     let mut state = mutex.lock().unwrap();
     match *state {
@@ -104,17 +61,6 @@ fn upload_sheet_images_impl(app: AppHandle, paths: Vec<FilePath>) {
             }
         }
         _ => (),
-    }
-}
-
-#[tauri::command]
-pub fn clear_sheet_images(app: AppHandle) {
-    let mutex = app.state::<StateMutex>();
-    let mut state = mutex.lock().unwrap();
-    if let AppState::WithKeyAndSheets { ref key, .. } = *state {
-        *state = AppState::WithKeyImage { key: key.clone() };
-        signal!(app, SignalKeys::SheetImages, Vec::<String>::new());
-        signal!(app, SignalKeys::SheetStatus, "");
     }
 }
 
@@ -262,8 +208,10 @@ mod unit_tests {
     fn test_resize_img() {
         let width = 300;
         let height = 300;
-        let mat = Mat::new_rows_cols_with_default(height, width, core::CV_8UC1, core::Scalar::all(128.0)).unwrap();
-    
+        let mat =
+            Mat::new_rows_cols_with_default(height, width, core::CV_8UC1, core::Scalar::all(128.0))
+                .unwrap();
+
         let resized = resize_img(&mat);
         assert!(resized.is_ok());
 
@@ -273,5 +221,4 @@ mod unit_tests {
         assert_eq!(resized.cols(), width / 3);
         assert_eq!(resized.rows(), height / 3);
     }
-
 }
