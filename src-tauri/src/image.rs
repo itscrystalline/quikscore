@@ -3,14 +3,24 @@ use crate::signal;
 use base64::Engine;
 use itertools::Itertools;
 use opencv::core::{Mat, Range, Size, Vector};
-use opencv::imgcodecs::{imencode, imread, ImreadModes};
 use opencv::imgproc::THRESH_BINARY;
 use opencv::{highgui, imgproc, prelude::*};
 use tauri_plugin_dialog::FilePath;
 
 use tauri::{AppHandle, Emitter, Manager};
 
+use opencv::imgcodecs::{imencode, imread, ImreadModes};
+
 use crate::state::{AnswerSheet, AppState, SignalKeys, StateMutex};
+
+macro_rules! new_mat_copy {
+    ($orig: ident) => {{
+        let mut mat = Mat::default();
+        mat.set_rows($orig.rows());
+        mat.set_cols($orig.cols());
+        mat
+    }};
+}
 
 macro_rules! new_mat_copy {
     ($orig: ident) => {{
