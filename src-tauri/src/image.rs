@@ -24,14 +24,14 @@ macro_rules! new_mat_copy {
 
 pub fn upload_key_image_impl(app: AppHandle, path: FilePath) {
     match handle_upload(path) {
-        Ok((base64_image, mat, answer)) => {
+        Ok((base64_image, mat)) => {
             let mutex = app.state::<StateMutex>();
             let mut state = mutex.lock().unwrap();
             match *state {
                 AppState::Init | AppState::WithKey { .. } => {
                     *state = AppState::WithKey {
                         key_image: mat,
-                        key: answer.into(),
+                        // key: answer.into(),
                     };
                     signal!(app, SignalKeys::KeyImage, base64_image);
                     signal!(app, SignalKeys::KeyStatus, "");
@@ -49,14 +49,14 @@ pub fn upload_sheet_images_impl(app: AppHandle, paths: Vec<FilePath>) {
     match *state {
         AppState::WithKey {
             ref key_image,
-            ref key,
+            // ref key,
         }
         | AppState::WithKeyAndSheets {
             ref key_image,
-            ref key,
+            // ref key,
             ..
         } => {
-            let base64_list: Result<Vec<(String, Mat, AnswerSheet)>, UploadError> = paths
+            let base64_list: Result<Vec<(String, Mat)>, UploadError> = paths
                 .into_iter()
                 .enumerate()
                 .map(|(idx, file_path)| {
@@ -70,16 +70,13 @@ pub fn upload_sheet_images_impl(app: AppHandle, paths: Vec<FilePath>) {
                 .collect();
             match base64_list {
                 Ok(vec) => {
-                    let (vec_base64, vec_mat, vec_answers): (
-                        Vec<String>,
-                        Vec<Mat>,
-                        Vec<AnswerSheet>,
-                    ) = vec.into_iter().multiunzip();
+                    let (vec_base64, vec_mat): (Vec<String>, Vec<Mat>) =
+                        vec.into_iter().multiunzip();
                     *state = AppState::WithKeyAndSheets {
                         key_image: key_image.clone(),
-                        key: key.clone(),
+                        // key: key.clone(),
                         _sheet_images: vec_mat,
-                        _answer_sheets: vec_answers,
+                        // _answer_sheets: vec_answers,
                     };
                     signal!(app, SignalKeys::SheetImages, vec_base64);
                     signal!(app, SignalKeys::SheetStatus, "");
@@ -107,7 +104,7 @@ fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
     Ok(())
 }
 
-fn handle_upload(path: FilePath) -> Result<(String, Mat, AnswerSheet), UploadError> {
+fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
     let mat = read_from_path(path)?;
     let resized = resize_img(mat).map_err(UploadError::from)?;
     let (aligned_for_display, aligned_for_processing) = fix_answer_sheet(resized)?;
@@ -115,7 +112,7 @@ fn handle_upload(path: FilePath) -> Result<(String, Mat, AnswerSheet), UploadErr
     #[cfg(not(test))]
     let _ = show_img(&aligned_for_processing, "resized & aligned image");
     let base64 = mat_to_base64_png(&aligned_for_display).map_err(UploadError::from)?;
-    Ok((base64, aligned_for_display, todo!()))
+    Ok((base64, aligned_for_display))
 }
 
 fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
@@ -163,7 +160,7 @@ fn fix_answer_sheet(mat: Mat) -> Result<(Mat, Mat), SheetError> {
     Ok((cropped, preprocessed))
 }
 
-fn split_into_areas(sheet: Mat) -> Result<AnswerSheet, SheetError> {
+fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
     todo!()
 }
 
@@ -248,7 +245,7 @@ mod unit_tests {
         let result = handle_upload(path);
         assert!(result.is_ok());
 
-        let (base64_string, mat, _) = result.unwrap();
+        let (base64_string, mat /*, answer_sheet*/) = result.unwrap();
         assert!(base64_string.starts_with("data:image/png;base64,"));
         assert!(!mat.empty());
     }

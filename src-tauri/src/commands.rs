@@ -56,12 +56,13 @@ pub fn clear_sheet_images(app: AppHandle) {
     let mutex = app.state::<StateMutex>();
     let mut state = mutex.lock().unwrap();
     if let AppState::WithKeyAndSheets {
-        key, ref key_image, ..
+        /*key,*/ ref key_image,
+        ..
     } = *state
     {
         *state = AppState::WithKey {
             key_image: key_image.clone(),
-            key,
+            // key,
         };
         signal!(app, SignalKeys::SheetImages, Vec::<String>::new());
         signal!(app, SignalKeys::SheetStatus, "");

@@ -19,13 +19,13 @@ pub enum AppState {
     Init,
     WithKey {
         key_image: Mat,
-        key: AnswerKeySheet,
+        // key: AnswerKeySheet,
     },
     WithKeyAndSheets {
         key_image: Mat,
-        key: AnswerKeySheet,
+        // key: AnswerKeySheet,
         _sheet_images: Vec<Mat>,
-        _answer_sheets: Vec<AnswerSheet>,
+        // _answer_sheets: Vec<AnswerSheet>,
     },
 }
 
@@ -47,6 +47,13 @@ impl From<AnswerSheet> for AnswerKeySheet {
             subject_code: value.subject_code,
             answers: value.answers,
         }
+    }
+}
+
+impl From<(Mat, Mat, Mat)> for AnswerSheet {
+    fn from(value: (Mat, Mat, Mat)) -> Self {
+        let (subject_code_mat, student_id_mat, answers_mat) = value;
+        todo!()
     }
 }
 
