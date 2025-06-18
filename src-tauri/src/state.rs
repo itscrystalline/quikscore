@@ -1,4 +1,5 @@
 use std::sync::Mutex;
+use tauri::{AppHandle, Emitter, Manager};
 
 use opencv::core::Mat;
 
@@ -27,6 +28,74 @@ pub enum AppState {
         _sheet_images: Vec<Mat>,
         // _answer_sheets: Vec<AnswerSheet>,
     },
+}
+
+impl AppState {
+    pub fn upload_key(app: AppHandle, base64_image: String, image: Mat) {
+        let mutex = app.state::<StateMutex>();
+        let mut state = mutex.lock().unwrap();
+        match *state {
+            AppState::Init | AppState::WithKey { .. } => {
+                *state = AppState::WithKey {
+                    key_image: image,
+                    // key: answer.into(),
+                };
+                signal!(app, SignalKeys::KeyImage, base64_image);
+                signal!(app, SignalKeys::KeyStatus, "");
+            }
+            _ => (),
+        }
+    }
+    pub fn clear_key(app: AppHandle) {
+        let mutex = app.state::<StateMutex>();
+        let mut state = mutex.lock().unwrap();
+        if let AppState::WithKey { .. } = *state {
+            *state = AppState::Init;
+            signal!(app, SignalKeys::KeyImage, "");
+            signal!(app, SignalKeys::KeyStatus, "");
+        }
+    }
+    pub fn upload_answer_sheets(app: AppHandle, base64_images: Vec<String>, images: Vec<Mat>) {
+        let mutex = app.state::<StateMutex>();
+        let mut state = mutex.lock().unwrap();
+        match *state {
+            AppState::WithKey {
+                ref key_image,
+                // ref key,
+            }
+            | AppState::WithKeyAndSheets {
+                ref key_image,
+                // ref key,
+                ..
+            } => {
+                *state = AppState::WithKeyAndSheets {
+                    key_image: key_image.clone(),
+                    // key: key.clone(),
+                    _sheet_images: images,
+                    // _answer_sheets: vec_answers,
+                };
+                signal!(app, SignalKeys::SheetImages, base64_images);
+                signal!(app, SignalKeys::SheetStatus, "");
+            }
+            _ => (),
+        }
+    }
+    pub fn clear_answer_sheets(app: AppHandle) {
+        let mutex = app.state::<StateMutex>();
+        let mut state = mutex.lock().unwrap();
+        if let AppState::WithKeyAndSheets {
+            /*key,*/ ref key_image,
+            ..
+        } = *state
+        {
+            *state = AppState::WithKey {
+                key_image: key_image.clone(),
+                // key,
+            };
+            signal!(app, SignalKeys::SheetImages, Vec::<String>::new());
+            signal!(app, SignalKeys::SheetStatus, "");
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
