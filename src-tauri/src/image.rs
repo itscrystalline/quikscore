@@ -22,15 +22,6 @@ macro_rules! new_mat_copy {
     }};
 }
 
-macro_rules! new_mat_copy {
-    ($orig: ident) => {{
-        let mut mat = Mat::default();
-        mat.set_rows($orig.rows());
-        mat.set_cols($orig.cols());
-        mat
-    }};
-}
-
 pub fn upload_key_image_impl(app: AppHandle, path: FilePath) {
     match handle_upload(path) {
         Ok((base64_image, mat, answer)) => {
