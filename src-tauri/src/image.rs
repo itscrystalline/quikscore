@@ -183,6 +183,14 @@ mod unit_tests {
     use base64::prelude::*;
     use opencv::core;
 
+    fn test_key_image() -> FilePath {
+        FilePath::Path(PathBuf::from("tests/assets/sample_valid_image.jpg"))
+    }
+
+    fn not_image() -> FilePath {
+        FilePath::Path(PathBuf::from("tests/assets/sample_invalid_image.jpg"))
+    }
+
     #[test]
     fn test_basic_functionality() {
         // Create a 2x2 black image (3 channels, 8-bit)
@@ -211,17 +219,9 @@ mod unit_tests {
         assert!(result.is_err());
     }
 
-    fn test_image_path() -> PathBuf {
-        PathBuf::from("tests/assets/sample_valid_image.jpg")
-    }
-
-    fn non_image_path() -> PathBuf {
-        PathBuf::from("tests/assets/sample_invalid_image.jpg")
-    }
-
     #[test]
     fn test_read_from_valid_path() {
-        let path = FilePath::Path(test_image_path());
+        let path = test_key_image();
         let mat = read_from_path(path);
         assert!(mat.is_ok());
         let mat = mat.unwrap();
@@ -230,7 +230,7 @@ mod unit_tests {
 
     #[test]
     fn test_read_from_invalid_image_file() {
-        let path = FilePath::Path(non_image_path());
+        let path = not_image();
         let result = read_from_path(path);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), UploadError::NotImage));
@@ -252,7 +252,7 @@ mod unit_tests {
 
     #[test]
     fn test_handle_upload_success() {
-        let path = FilePath::Path(test_image_path());
+        let path = test_key_image();
         let result = handle_upload(path);
         assert!(result.is_ok());
 
@@ -263,7 +263,7 @@ mod unit_tests {
 
     #[test]
     fn test_handle_upload_failure() {
-        let path = FilePath::Path(non_image_path());
+        let path = not_image();
         let result = handle_upload(path);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), UploadError::NotImage));
