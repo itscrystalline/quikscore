@@ -65,14 +65,14 @@ impl AppState {
         images: Vec<Mat>,
     ) {
         let mutex = app.state::<StateMutex>();
-        match *state {
         let mut state = mutex.lock().expect("poisoned");
+        match &*state {
             AppState::WithKey {
-                ref key_image,
+                key_image,
                 // ref key,
             }
             | AppState::WithKeyAndSheets {
-                ref key_image,
+                key_image,
                 // ref key,
                 ..
             } => {
@@ -92,9 +92,9 @@ impl AppState {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
         if let AppState::WithKeyAndSheets {
-            /*key,*/ ref key_image,
+            /*key,*/ key_image,
             ..
-        } = *state
+        } = &*state
         {
             *state = AppState::WithKey {
                 key_image: key_image.clone(),
