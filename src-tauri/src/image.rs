@@ -1,19 +1,16 @@
-use base64::Engine;
-use opencv::core::Point;
-use opencv::core::{Mat, Size, Vector};
-use opencv::highgui;
-use opencv::imgcodecs::{imencode, imread, ImreadModes};
-use opencv::imgproc::{
-    self, CHAIN_APPROX_SIMPLE, FILLED, LINE_8, RETR_EXTERNAL, THRESH_BINARY_INV,
-};
-use opencv::prelude::*;
-use tauri_plugin_dialog::FilePath;
-
-use tauri::{AppHandle, Emitter, Manager};
-
 use crate::errors::{SheetError, UploadError};
 use crate::signal;
 use crate::state::{AppState, SignalKeys, StateMutex};
+use base64::Engine;
+use opencv::core::{Point, Vector};
+use opencv::imgcodecs::{imencode, imread, ImreadModes};
+use opencv::imgproc::{
+    CHAIN_APPROX_SIMPLE, FILLED, LINE_8, RETR_EXTERNAL, THRESH_BINARY_INV, THRESH_OTSU,
+};
+use opencv::prelude::*;
+use opencv::{highgui, imgproc, prelude::*};
+use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_dialog::FilePath;
 
 pub fn upload_key_image_impl(app: AppHandle, path: FilePath) {
     match handle_upload(path) {
