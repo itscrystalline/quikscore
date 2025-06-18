@@ -16,8 +16,6 @@ pub enum UploadError {
 
 #[derive(thiserror::Error, Debug)]
 pub enum SheetError {
-    #[error("OpenCV Error on reading sheet: {} (errno {})", .0.message, .0.code)]
+    #[error("OpenCV Error: {} (errno {})", .0.message, .0.code)]
     OpenCvError(#[from] opencv::Error),
-    #[error("One or more corner markers are not found")]
-    MarkerNotFound,
 }
