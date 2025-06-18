@@ -2,7 +2,7 @@ use crate::errors::{SheetError, UploadError};
 use crate::signal;
 use base64::Engine;
 use itertools::Itertools;
-use opencv::core::{Mat, Range, Size, Vector};
+use opencv::core::{Mat, Range, Rect_, Size, Vector};
 use opencv::imgproc::THRESH_BINARY;
 use opencv::{highgui, imgproc, prelude::*};
 use tauri_plugin_dialog::FilePath;
@@ -161,7 +161,32 @@ fn fix_answer_sheet(mat: Mat) -> Result<(Mat, Mat), SheetError> {
 }
 
 fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
-    todo!()
+    let subject_area = sheet
+        .roi(Rect_ {
+            x: 2,
+            y: 189,
+            width: 48,
+            height: 212,
+        })?
+        .clone_pointee();
+    let student_id_area = sheet
+        .roi(Rect_ {
+            x: 57,
+            y: 188,
+            width: 141,
+            height: 211,
+        })?
+        .clone_pointee();
+    let answers_area = sheet
+        .roi(Rect_ {
+            x: 206,
+            y: 14,
+            width: 884,
+            height: 735,
+        })?
+        .clone_pointee();
+
+    Ok((subject_area, student_id_area, answers_area))
 }
 
 #[cfg(test)]
