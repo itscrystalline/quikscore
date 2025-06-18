@@ -1,5 +1,5 @@
 use crate::errors::{SheetError, UploadError};
-use crate::{signal, state};
+use crate::signal;
 use base64::Engine;
 use itertools::Itertools;
 use opencv::core::{Mat, Range, Rect_, Size, Vector};
@@ -7,11 +7,11 @@ use opencv::imgproc::THRESH_BINARY;
 use opencv::{highgui, imgproc, prelude::*};
 use tauri_plugin_dialog::FilePath;
 
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{Emitter, Manager, Runtime};
 
 use opencv::imgcodecs::{imencode, imread, ImreadModes};
 
-use crate::state::{AnswerSheet, AppState, SignalKeys, StateMutex};
+use crate::state::{AppState, SignalKeys};
 
 macro_rules! new_mat_copy {
     ($orig: ident) => {{
@@ -22,7 +22,10 @@ macro_rules! new_mat_copy {
     }};
 }
 
-pub fn upload_key_image_impl(app: AppHandle, path_maybe: Option<FilePath>) {
+pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
+    app: &A,
+    path_maybe: Option<FilePath>,
+) {
     let Some(file_path) = path_maybe else {
         signal!(
             app,
@@ -37,7 +40,10 @@ pub fn upload_key_image_impl(app: AppHandle, path_maybe: Option<FilePath>) {
     }
 }
 
-pub fn upload_sheet_images_impl(app: AppHandle, paths: Option<Vec<FilePath>>) {
+pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
+    app: &A,
+    paths: Option<Vec<FilePath>>,
+) {
     let Some(paths) = paths else {
         signal!(
             app,

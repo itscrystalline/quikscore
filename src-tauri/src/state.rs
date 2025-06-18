@@ -1,5 +1,5 @@
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use opencv::core::Mat;
 
@@ -31,7 +31,11 @@ pub enum AppState {
 }
 
 impl AppState {
-    pub fn upload_key(app: AppHandle, base64_image: String, image: Mat) {
+    pub fn upload_key<R: Runtime, A: Emitter<R> + Manager<R>>(
+        app: &A,
+        base64_image: String,
+        image: Mat,
+    ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().unwrap();
         match *state {
@@ -46,7 +50,7 @@ impl AppState {
             _ => (),
         }
     }
-    pub fn clear_key(app: AppHandle) {
+    pub fn clear_key<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().unwrap();
         if let AppState::WithKey { .. } = *state {
@@ -55,7 +59,11 @@ impl AppState {
             signal!(app, SignalKeys::KeyStatus, "");
         }
     }
-    pub fn upload_answer_sheets(app: AppHandle, base64_images: Vec<String>, images: Vec<Mat>) {
+    pub fn upload_answer_sheets<R: Runtime, A: Emitter<R> + Manager<R>>(
+        app: &A,
+        base64_images: Vec<String>,
+        images: Vec<Mat>,
+    ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().unwrap();
         match *state {
@@ -80,7 +88,7 @@ impl AppState {
             _ => (),
         }
     }
-    pub fn clear_answer_sheets(app: AppHandle) {
+    pub fn clear_answer_sheets<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().unwrap();
         if let AppState::WithKeyAndSheets {
