@@ -1,16 +1,26 @@
+use crate::errors::{SheetError, UploadError};
+use crate::signal;
 use base64::Engine;
-use opencv::core::{Mat, Size, Vector};
-use opencv::highgui;
-use opencv::imgcodecs::{imencode, imread, ImreadModes};
-use opencv::imgproc;
-use opencv::prelude::*;
+use itertools::Itertools;
+use opencv::core::{Mat, Range, Rect_, Size, Vector};
+use opencv::imgproc::THRESH_BINARY;
+use opencv::{highgui, imgproc, prelude::*};
 use tauri_plugin_dialog::FilePath;
 
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::errors::UploadError;
-use crate::signal;
-use crate::state::{AppState, SignalKeys, StateMutex};
+use opencv::imgcodecs::{imencode, imread, ImreadModes};
+
+use crate::state::{AnswerSheet, AppState, SignalKeys, StateMutex};
+
+macro_rules! new_mat_copy {
+    ($orig: ident) => {{
+        let mut mat = Mat::default();
+        mat.set_rows($orig.rows());
+        mat.set_cols($orig.cols());
+        mat
+    }};
+}
 
 pub fn upload_key_image_impl(app: AppHandle, path: FilePath) {
     match handle_upload(path) {
@@ -18,8 +28,11 @@ pub fn upload_key_image_impl(app: AppHandle, path: FilePath) {
             let mutex = app.state::<StateMutex>();
             let mut state = mutex.lock().unwrap();
             match *state {
-                AppState::Init | AppState::WithKeyImage { .. } => {
-                    *state = AppState::WithKeyImage { key: mat };
+                AppState::Init | AppState::WithKey { .. } => {
+                    *state = AppState::WithKey {
+                        key_image: mat,
+                        // key: answer.into(),
+                    };
                     signal!(app, SignalKeys::KeyImage, base64_image);
                     signal!(app, SignalKeys::KeyStatus, "");
                 }
@@ -34,7 +47,15 @@ pub fn upload_sheet_images_impl(app: AppHandle, paths: Vec<FilePath>) {
     let mutex = app.state::<StateMutex>();
     let mut state = mutex.lock().unwrap();
     match *state {
-        AppState::WithKeyImage { ref key } | AppState::WithKeyAndSheets { ref key, .. } => {
+        AppState::WithKey {
+            ref key_image,
+            // ref key,
+        }
+        | AppState::WithKeyAndSheets {
+            ref key_image,
+            // ref key,
+            ..
+        } => {
             let base64_list: Result<Vec<(String, Mat)>, UploadError> = paths
                 .into_iter()
                 .enumerate()
@@ -49,10 +70,13 @@ pub fn upload_sheet_images_impl(app: AppHandle, paths: Vec<FilePath>) {
                 .collect();
             match base64_list {
                 Ok(vec) => {
-                    let (vec_base64, vec_mat): (Vec<String>, Vec<Mat>) = vec.into_iter().unzip();
+                    let (vec_base64, vec_mat): (Vec<String>, Vec<Mat>) =
+                        vec.into_iter().multiunzip();
                     *state = AppState::WithKeyAndSheets {
-                        key: key.clone(),
-                        _sheets: vec_mat,
+                        key_image: key_image.clone(),
+                        // key: key.clone(),
+                        _sheet_images: vec_mat,
+                        // _answer_sheets: vec_answers,
                     };
                     signal!(app, SignalKeys::SheetImages, vec_base64);
                     signal!(app, SignalKeys::SheetStatus, "");
@@ -64,30 +88,31 @@ pub fn upload_sheet_images_impl(app: AppHandle, paths: Vec<FilePath>) {
     }
 }
 
-fn resize_img(src: &Mat) -> opencv::Result<Mat> {
-    let mut dst = Mat::default();
-    let width = src.cols();
-    let height = src.rows();
-    let new_size = Size::new(width / 3, height / 3);
+fn resize_img(src: Mat) -> opencv::Result<Mat> {
+    let mut dst = new_mat_copy!(src);
+    let new_size = Size::new(src.cols() / 3, src.rows() / 3);
 
-    imgproc::resize(src, &mut dst, new_size, 0.0, 0.0, imgproc::INTER_LINEAR)?;
+    imgproc::resize(&src, &mut dst, new_size, 0.0, 0.0, imgproc::INTER_LINEAR)?;
     Ok(dst)
 }
 
 fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
+    println!("showing window {window_name}");
+    highgui::named_window(window_name, 0)?;
     highgui::imshow(window_name, mat)?;
-    highgui::wait_key(0)?;
+    highgui::wait_key(10000)?;
     Ok(())
 }
 
 fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
     let mat = read_from_path(path)?;
-    let resized = resize_img(&mat).map_err(UploadError::from)?;
+    let resized = resize_img(mat).map_err(UploadError::from)?;
+    let (aligned_for_display, aligned_for_processing) = fix_answer_sheet(resized)?;
     //testing
     #[cfg(not(test))]
-    let _ = show_img(&resized, "resize image");
-    let base64 = mat_to_base64_png(&mat).map_err(UploadError::from)?;
-    Ok((base64, mat))
+    let _ = show_img(&aligned_for_processing, "resized & aligned image");
+    let base64 = mat_to_base64_png(&aligned_for_display).map_err(UploadError::from)?;
+    Ok((base64, aligned_for_display))
 }
 
 fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
@@ -109,6 +134,59 @@ fn read_from_path(path: FilePath) -> Result<Mat, UploadError> {
                 Ok(mat)
             }
         })
+}
+
+fn preprocess_sheet(mat: Mat) -> Result<Mat, SheetError> {
+    // blur
+    // let mut mat_blur = new_mat_copy!(mat);
+    // imgproc::gaussian_blur_def(&mat, &mut mat_blur, (5, 5).into(), 0.0)?;
+    // thresholding
+    let mut mat_thresh = new_mat_copy!(mat);
+    imgproc::threshold(&mat, &mut mat_thresh, 230.0, 255.0, THRESH_BINARY)?;
+    Ok(mat_thresh)
+}
+
+fn crop_to_markers(mat: Mat) -> Result<Mat, SheetError> {
+    Ok(mat
+        .col_range(&Range::new(38, 1133)?)?
+        .row_range(&Range::new(30, 795)?)?
+        .clone_pointee())
+}
+
+fn fix_answer_sheet(mat: Mat) -> Result<(Mat, Mat), SheetError> {
+    let cropped = crop_to_markers(mat)?;
+    let preprocessed = preprocess_sheet(cropped.clone())?;
+
+    Ok((cropped, preprocessed))
+}
+
+fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
+    let subject_area = sheet
+        .roi(Rect_ {
+            x: 2,
+            y: 189,
+            width: 48,
+            height: 212,
+        })?
+        .clone_pointee();
+    let student_id_area = sheet
+        .roi(Rect_ {
+            x: 57,
+            y: 188,
+            width: 141,
+            height: 211,
+        })?
+        .clone_pointee();
+    let answers_area = sheet
+        .roi(Rect_ {
+            x: 206,
+            y: 14,
+            width: 884,
+            height: 735,
+        })?
+        .clone_pointee();
+
+    Ok((subject_area, student_id_area, answers_area))
 }
 
 #[cfg(test)]
@@ -192,7 +270,7 @@ mod unit_tests {
         let result = handle_upload(path);
         assert!(result.is_ok());
 
-        let (base64_string, mat) = result.unwrap();
+        let (base64_string, mat /*, answer_sheet*/) = result.unwrap();
         assert!(base64_string.starts_with("data:image/png;base64,"));
         assert!(!mat.empty());
     }
@@ -212,7 +290,7 @@ mod unit_tests {
             Mat::new_rows_cols_with_default(height, width, core::CV_8UC1, core::Scalar::all(128.0))
                 .unwrap();
 
-        let resized = resize_img(&mat);
+        let resized = resize_img(mat);
         assert!(resized.is_ok());
 
         let resized = resized.unwrap();
@@ -220,5 +298,47 @@ mod unit_tests {
 
         assert_eq!(resized.cols(), width / 3);
         assert_eq!(resized.rows(), height / 3);
+    }
+
+    #[test]
+    fn test_preprocess_sheet_thresholding() {
+        // Make a light gray image (above threshold)
+        let mat = Mat::new_rows_cols_with_default(10, 10, core::CV_8UC1, core::Scalar::all(240.0))
+            .unwrap();
+        let thresh = preprocess_sheet(mat);
+        assert!(thresh.is_ok());
+
+        let result = thresh.unwrap();
+        assert_eq!(result.at_2d::<u8>(0, 0).unwrap(), &255);
+    }
+
+    #[test]
+    fn test_crop_to_markers_size() {
+        let mat =
+            Mat::new_rows_cols_with_default(900, 1200, core::CV_8UC1, core::Scalar::all(100.0))
+                .unwrap();
+        let cropped = crop_to_markers(mat);
+        assert!(cropped.is_ok());
+        let cropped = cropped.unwrap();
+        assert_eq!(cropped.rows(), 765); // 795 - 30
+        assert_eq!(cropped.cols(), 1095); // 1133 - 38
+    }
+
+    #[test]
+    fn test_split_into_areas() {
+        // Size must be at least (1090, 750) to cover all ROIs
+        let mat =
+            Mat::new_rows_cols_with_default(800, 1100, core::CV_8UC1, core::Scalar::all(200.0))
+                .unwrap();
+        let result = split_into_areas(mat);
+        assert!(result.is_ok());
+
+        let (subject, student_id, answers) = result.unwrap();
+        assert_eq!(subject.rows(), 212);
+        assert_eq!(subject.cols(), 48);
+        assert_eq!(student_id.rows(), 211);
+        assert_eq!(student_id.cols(), 141);
+        assert_eq!(answers.rows(), 735);
+        assert_eq!(answers.cols(), 884);
     }
 }

@@ -27,4 +27,5 @@ tauri-plugin-dialog = "2"
 base64 = "0.22.1"
 thiserror = "2.0.12"
 tauri-plugin-fs = "2"
+itertools = "0.14.0"
 

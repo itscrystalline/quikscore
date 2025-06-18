@@ -10,4 +10,12 @@ pub enum UploadError {
     NotImage,
     #[error("Unable to reencode image: {} (errno {})", .0.message, .0.code)]
     EncodeError(#[from] opencv::Error),
+    #[error("Unable to detect answer sheet: {0}")]
+    NotAnswerSheet(#[from] SheetError),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum SheetError {
+    #[error("OpenCV Error: {} (errno {})", .0.message, .0.code)]
+    OpenCvError(#[from] opencv::Error),
 }

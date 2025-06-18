@@ -50,6 +50,7 @@ in {
   languages.rust = {
     enable = true;
     channel = "nightly";
+    rustflags = "-Z threads=8";
     components = ["rustc" "cargo" "clippy" "rustfmt" "rust-analyzer"];
   };
   languages.javascript = {
