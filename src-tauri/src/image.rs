@@ -93,8 +93,8 @@ fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
 fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
     let mat = read_from_path(path)?;
     let resized = resize_img(mat).map_err(UploadError::from)?;
-    let (aligned_for_display, aligned_for_processing, subject_id, student_id, answer_sheet)
-    = fix_answer_sheet(resized)?;
+    let (aligned_for_display, aligned_for_processing, subject_id, student_id, answer_sheet) =
+        fix_answer_sheet(resized)?;
 
     let subject_id_string = extract_digits_for_sub_stu(&subject_id, 2)?;
     let student_id_string = extract_digits_for_sub_stu(&student_id, 9)?;
@@ -162,7 +162,8 @@ fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
             width: 48,
             height: 212,
         })?
-        .clone_pointee();
+        .clone_pointee()
+        .try_clone()?;
     let student_id_area = sheet
         .roi(Rect_ {
             x: 57,
@@ -170,7 +171,8 @@ fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
             width: 141,
             height: 211,
         })?
-        .clone_pointee();
+        .clone_pointee()
+        .try_clone()?;
     let answers_area = sheet
         .roi(Rect_ {
             x: 206,
@@ -178,7 +180,8 @@ fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
             width: 884,
             height: 735,
         })?
-        .clone_pointee();
+        .clone_pointee()
+        .try_clone()?;
 
     Ok((subject_area, student_id_area, answers_area))
 }
@@ -192,8 +195,8 @@ fn extract_digits_for_sub_stu(mat: &Mat, num_digits: i32) -> Result<String, open
     for i in 0..num_digits {
         let x = i * digit_width;
         let roi = mat.roi(Rect_ {
-            x : x as i32,
-            y : 0,
+            x: x as i32,
+            y: 0,
             width: digit_width,
             height: mat.rows(),
         })?;
@@ -205,16 +208,12 @@ fn extract_digits_for_sub_stu(mat: &Mat, num_digits: i32) -> Result<String, open
             let y = j * digit_height;
             let digit_roi = roi.roi(Rect_ {
                 x: 0,
-                y : y as i32,
+                y: y as i32,
                 width: digit_width,
                 height: digit_height,
             })?;
 
-            let sum: u32 = digit_roi
-                .data_bytes()?
-                .iter()
-                .map(|&b| b as u32)
-                .sum();
+            let sum: u32 = digit_roi.data_bytes()?.iter().map(|&b| b as u32).sum();
 
             if sum < min_sum {
                 min_sum = sum;
@@ -227,7 +226,6 @@ fn extract_digits_for_sub_stu(mat: &Mat, num_digits: i32) -> Result<String, open
 
     Ok(digits)
 }
-
 
 #[cfg(test)]
 mod unit_tests {
