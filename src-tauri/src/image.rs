@@ -93,10 +93,16 @@ fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
 fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
     let mat = read_from_path(path)?;
     let resized = resize_img(mat).map_err(UploadError::from)?;
-    let (aligned_for_display, aligned_for_processing) = fix_answer_sheet(resized)?;
+    let (aligned_for_display, aligned_for_processing, subject_id, student_id, answer_sheet)
+    = fix_answer_sheet(resized)?;
+
+    let subject_id_string = extract_digits_for_sub_stu(&subject_id, 2)?;
+    let student_id_string = extract_digits_for_sub_stu(&student_id, 9)?;
+    println!("subject_id: {subject_id_string}");
+    println!("subject_id: {student_id_string}");
     //testing
-    #[cfg(not(test))]
-    let _ = show_img(&aligned_for_processing, "resized & aligned image");
+    //#[cfg(not(test))]
+    //let _ = show_img(&aligned_for_processing, "resized & aligned image");
     let base64 = mat_to_base64_png(&aligned_for_display).map_err(UploadError::from)?;
     Ok((base64, aligned_for_display))
 }
@@ -139,11 +145,13 @@ fn crop_to_markers(mat: Mat) -> Result<Mat, SheetError> {
         .clone_pointee())
 }
 
-fn fix_answer_sheet(mat: Mat) -> Result<(Mat, Mat), SheetError> {
+fn fix_answer_sheet(mat: Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
     let cropped = crop_to_markers(mat)?;
     let preprocessed = preprocess_sheet(cropped.clone())?;
 
-    Ok((cropped, preprocessed))
+    let (subject_id, student_id, ans_sheet) = split_into_areas(preprocessed.clone())?;
+
+    Ok((cropped, preprocessed, subject_id, student_id, ans_sheet))
 }
 
 fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
@@ -174,6 +182,52 @@ fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
 
     Ok((subject_area, student_id_area, answers_area))
 }
+
+fn extract_digits_for_sub_stu(mat: &Mat, num_digits: i32) -> Result<String, opencv::Error> {
+    let digit_height = mat.rows() / 10;
+    let digit_width = mat.cols() / num_digits;
+
+    let mut digits = String::new();
+
+    for i in 0..num_digits {
+        let x = i * digit_width;
+        let roi = mat.roi(Rect_ {
+            x : x as i32,
+            y : 0,
+            width: digit_width,
+            height: mat.rows(),
+        })?;
+
+        let mut min_sum = u32::MAX;
+        let mut selected_digit = 0;
+
+        for j in 0..10 {
+            let y = j * digit_height;
+            let digit_roi = roi.roi(Rect_ {
+                x: 0,
+                y : y as i32,
+                width: digit_width,
+                height: digit_height,
+            })?;
+
+            let sum: u32 = digit_roi
+                .data_bytes()?
+                .iter()
+                .map(|&b| b as u32)
+                .sum();
+
+            if sum < min_sum {
+                min_sum = sum;
+                selected_digit = j;
+            }
+        }
+
+        digits.push_str(&selected_digit.to_string());
+    }
+
+    Ok(digits)
+}
+
 
 #[cfg(test)]
 mod unit_tests {
