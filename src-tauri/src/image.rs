@@ -395,68 +395,22 @@ mod unit_tests {
         assert_eq!(answers.rows(), 735);
         assert_eq!(answers.cols(), 884);
     }
-}
-
-#[cfg(test)]
-mod extract_digits_tests {
-    use super::*;
-    use opencv::core::{Mat, Scalar, CV_8UC1};
-    use opencv::prelude::*;
-
-    /// Helper to create a synthetic Mat with pixel intensities set
-    /// to simulate bubble marks for digits.
-    /// For simplicity, bubbles are represented by black boxes (low sum)
-    fn create_test_mat(num_digits: i32, is_student_id: bool) -> Mat {
-        let digit_width = 20;
-        let digit_height = 10;
-        let rows = 400; // enough height for 10 digit rows + offset
-        let cols = digit_width * num_digits;
-        let mut mat =
-            Mat::new_rows_cols_with_default(rows, cols, CV_8UC1, Scalar::all(255.0)).unwrap();
-
-        let bubble_offset_y = 40; // same as your code
-
-        for digit_idx in 0..num_digits {
-            let x = digit_idx * digit_width;
-            // For the first digit only (simulate skipping student_id flag)
-            let actual_digit = if is_student_id && digit_idx == 0 {
-                continue;
-            } else {
-                digit_idx
-            };
-
-            // Draw a "bubble" (dark rectangle) at the digit row corresponding to digit_idx
-            let y = bubble_offset_y + (actual_digit * digit_height);
-
-            // Draw a black rectangle simulating the bubble
-            for dy in y..y + digit_height {
-                for dx in x..x + digit_width {
-                    *mat.at_2d_mut::<u8>(dy, dx).unwrap() = 0;
-                }
-            }
-        }
-
-        mat
-    }
 
     #[test]
-    fn test_extract_digits_for_subject_id() {
-        let num_digits = 2;
-        let is_student_id = false;
-        let mat = create_test_mat(num_digits, is_student_id);
-        let result = extract_digits_for_sub_stu(&mat, num_digits, is_student_id).unwrap();
-        assert_eq!(result, "01"); // digits 0 and 1
+    fn check_extracted_ids_from_real_image() {
+        let path = test_key_image();
+        let mat = read_from_path(path).expect("Failed to read image");
+        let resized = resize_img(mat).expect("Resize failed");
+        let (_cropped, subject_id_mat, student_id_mat, _answers) =
+            fix_answer_sheet(resized).expect("Fixing sheet failed");
+
+        let subject_id = extract_digits_for_sub_stu(&subject_id_mat, 2, false)
+            .expect("Extracting subject ID failed");
+        let student_id = extract_digits_for_sub_stu(&student_id_mat, 9, true)
+            .expect("Extracting student ID failed");
+
+        assert_eq!(subject_id, "10", "Subject ID does not match expected value");
+        assert_eq!(student_id, "65010001", "Student ID does not match expected value");
     }
 
-    #[test]
-    fn test_extract_digits_for_student_id() {
-        let num_digits = 9;
-        let is_student_id = true;
-        let mat = create_test_mat(num_digits, is_student_id);
-        let result = extract_digits_for_sub_stu(&mat, num_digits, is_student_id).unwrap();
-        // The first digit is skipped once due to `is_student_id` logic,
-        // so the digits will be 1 through 8 plus 0 (loop from 0 to 8 with skip)
-        assert_eq!(result, "12345678");
-        // Note: Adjust expected string if your logic differs
-    }
 }
