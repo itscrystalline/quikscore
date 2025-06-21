@@ -93,8 +93,7 @@ fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
 fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
     let mat = read_from_path(path)?;
     let resized = resize_img(mat).map_err(UploadError::from)?;
-    let (aligned_for_display, aligned_for_processing, subject_id, student_id, answer_sheet) =
-        fix_answer_sheet(resized)?;
+    let (aligned_for_display, subject_id, student_id, answer_sheet) = fix_answer_sheet(resized)?;
 
     let subject_id_string = extract_digits_for_sub_stu(&subject_id, 2, false)?;
     let student_id_string = extract_digits_for_sub_stu(&student_id, 9, true)?;
@@ -145,13 +144,13 @@ fn crop_to_markers(mat: Mat) -> Result<Mat, SheetError> {
         .clone_pointee())
 }
 
-fn fix_answer_sheet(mat: Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
+fn fix_answer_sheet(mat: Mat) -> Result<(Mat, Mat, Mat, Mat), SheetError> {
     let cropped = crop_to_markers(mat)?;
     let preprocessed = preprocess_sheet(cropped.clone())?;
 
-    let (subject_id, student_id, ans_sheet) = split_into_areas(preprocessed.clone())?;
+    let (subject_id, student_id, ans_sheet) = split_into_areas(preprocessed)?;
 
-    Ok((cropped, preprocessed, subject_id, student_id, ans_sheet))
+    Ok((cropped, subject_id, student_id, ans_sheet))
 }
 
 fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
