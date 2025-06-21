@@ -202,7 +202,7 @@ fn extract_digits_for_sub_stu(
         let x = i * digit_width;
         let roi = mat
             .roi(Rect_ {
-                x: x as i32,
+                x,
                 y: 0,
                 width: digit_width,
                 height: mat.rows(),
@@ -216,7 +216,7 @@ fn extract_digits_for_sub_stu(
             let y = j * digit_height + the_height_from_above_to_bubble;
             let digit_roi = roi.roi(Rect_ {
                 x: 0,
-                y: y as i32,
+                y,
                 width: digit_width,
                 height: digit_height,
             })?;
@@ -410,7 +410,9 @@ mod unit_tests {
             .expect("Extracting student ID failed");
 
         assert_eq!(subject_id, "10", "Subject ID does not match expected value");
-        assert_eq!(student_id, "65010001", "Student ID does not match expected value");
+        assert_eq!(
+            student_id, "65010001",
+            "Student ID does not match expected value"
+        );
     }
-
 }
