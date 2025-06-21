@@ -144,13 +144,13 @@ pub struct QuestionGroup {
     pub E: Option<Answer>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Answer {
     pub num_type: Option<NumberType>,
     pub number: u32,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum NumberType {
     Plus,
     Minus,
