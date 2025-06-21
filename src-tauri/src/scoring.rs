@@ -2,6 +2,7 @@ use itertools::Itertools;
 
 use crate::state::{Answer, AnswerKeySheet, AnswerSheet, QuestionGroup};
 
+#[derive(Debug, Clone)]
 pub struct AnswerSheetResult {
     pub correct: u32,
     pub incorrect: u32,
