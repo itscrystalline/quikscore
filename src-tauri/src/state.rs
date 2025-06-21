@@ -3,6 +3,8 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use opencv::core::Mat;
 
+use crate::errors::SheetError;
+
 pub type StateMutex = Mutex<AppState>;
 
 #[macro_export]
@@ -127,8 +129,9 @@ impl From<AnswerSheet> for AnswerKeySheet {
     }
 }
 
-impl From<(Mat, Mat, Mat)> for AnswerSheet {
-    fn from(value: (Mat, Mat, Mat)) -> Self {
+impl TryFrom<(Mat, Mat, Mat)> for AnswerSheet {
+    type Error = SheetError;
+    fn try_from(value: (Mat, Mat, Mat)) -> Result<Self, Self::Error> {
         let (subject_code_mat, student_id_mat, answers_mat) = value;
         todo!()
     }
