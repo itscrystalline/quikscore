@@ -162,8 +162,7 @@ fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
             width: 48,
             height: 212,
         })?
-        .clone_pointee()
-        .try_clone()?;
+        .clone_pointee();
     let student_id_area = sheet
         .roi(Rect_ {
             x: 57,
@@ -171,8 +170,7 @@ fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
             width: 141,
             height: 211,
         })?
-        .clone_pointee()
-        .try_clone()?;
+        .clone_pointee();
     let answers_area = sheet
         .roi(Rect_ {
             x: 206,
@@ -180,8 +178,7 @@ fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
             width: 884,
             height: 735,
         })?
-        .clone_pointee()
-        .try_clone()?;
+        .clone_pointee();
 
     Ok((subject_area, student_id_area, answers_area))
 }
