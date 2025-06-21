@@ -20,7 +20,7 @@ pub struct CheckedQuestionGroup {
     pub E: CheckedAnswer,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CheckedAnswer {
     Correct,
     Incorrect,
@@ -96,5 +96,114 @@ impl AnswerSheet {
             not_answered,
             graded_questions,
         }
+    }
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use std::array;
+
+    use super::*;
+    use crate::state::{Answer, AnswerKeySheet, AnswerSheet, NumberType, QuestionGroup};
+
+    fn answer(num: u32) -> Option<Answer> {
+        Some(Answer {
+            num_type: Some(NumberType::Plus),
+            number: num,
+        })
+    }
+
+    fn none_answer() -> Option<Answer> {
+        None
+    }
+
+    #[test]
+    fn test_check_with_answer() {
+        let a1 = answer(42);
+        let a2 = answer(42);
+        let a3 = answer(43);
+
+        assert_eq!(Answer::check_with(a1, a2), CheckedAnswer::Correct);
+        assert_eq!(Answer::check_with(a1, a3), CheckedAnswer::Incorrect);
+        assert_eq!(Answer::check_with(None, a2), CheckedAnswer::Incorrect);
+        assert_eq!(Answer::check_with(a2, None), CheckedAnswer::NotCounted);
+        assert_eq!(Answer::check_with(None, None), CheckedAnswer::NotCounted);
+    }
+
+    #[test]
+    fn test_check_with_question_group() {
+        let group1 = QuestionGroup {
+            A: answer(1),
+            B: answer(2),
+            C: answer(3),
+            D: answer(4),
+            E: none_answer(),
+        };
+        let key = QuestionGroup {
+            A: answer(1),
+            B: answer(0),
+            C: answer(3),
+            D: none_answer(),
+            E: answer(5),
+        };
+
+        let checked = group1.check_with(&key);
+
+        assert_eq!(checked.A, CheckedAnswer::Correct);
+        assert_eq!(checked.B, CheckedAnswer::Incorrect);
+        assert_eq!(checked.C, CheckedAnswer::Correct);
+        assert_eq!(checked.D, CheckedAnswer::NotCounted);
+        assert_eq!(checked.E, CheckedAnswer::Incorrect);
+    }
+
+    #[test]
+    fn test_collect_stats() {
+        let checked = CheckedQuestionGroup {
+            A: CheckedAnswer::Correct,
+            B: CheckedAnswer::Incorrect,
+            C: CheckedAnswer::Incorrect,
+            D: CheckedAnswer::Missing,
+            E: CheckedAnswer::NotCounted,
+        };
+
+        let stats = checked.collect_stats();
+        assert_eq!(stats, (1, 2, 1));
+    }
+
+    #[test]
+    fn test_score_answersheet() {
+        let correct_group = QuestionGroup {
+            A: answer(1),
+            B: answer(2),
+            C: answer(3),
+            D: answer(4),
+            E: answer(5),
+        };
+        let student_group = QuestionGroup {
+            A: answer(1),     // correct
+            B: answer(9),     // incorrect
+            C: answer(3),     // correct
+            D: none_answer(), // incorrect
+            E: none_answer(), // incorrect
+        };
+
+        let answer_sheet = AnswerSheet {
+            subject_code: 1001,
+            student_id: 123456,
+            answers: array::from_fn(|_| student_group.clone()),
+        };
+
+        let key_sheet = AnswerKeySheet {
+            subject_code: 1001,
+            answers: array::from_fn(|_| correct_group.clone()),
+        };
+
+        let result = answer_sheet.score(&key_sheet);
+
+        // Per group: 2 correct, 3 incorrect (since missing is also considered incorrect here)
+        assert_eq!(result.correct, 2 * 36);
+        assert_eq!(result.incorrect, 3 * 36);
+        assert_eq!(result.not_answered, 0);
+        assert_eq!(result.graded_questions.len(), 36);
     }
 }
