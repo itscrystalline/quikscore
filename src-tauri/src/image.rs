@@ -93,10 +93,15 @@ fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
 fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
     let mat = read_from_path(path)?;
     let resized = resize_img(mat).map_err(UploadError::from)?;
-    let (aligned_for_display, aligned_for_processing) = fix_answer_sheet(resized)?;
+    let (aligned_for_display, subject_id, student_id, answer_sheet) = fix_answer_sheet(resized)?;
+
+    let subject_id_string = extract_digits_for_sub_stu(&subject_id, 2, false)?;
+    let student_id_string = extract_digits_for_sub_stu(&student_id, 9, true)?;
+    println!("subject_id: {subject_id_string}");
+    println!("subject_id: {student_id_string}");
     //testing
-    #[cfg(not(test))]
-    let _ = show_img(&aligned_for_processing, "resized & aligned image");
+    //#[cfg(not(test))]
+    //let _ = show_img(&aligned_for_processing, "resized & aligned image");
     let base64 = mat_to_base64_png(&aligned_for_display).map_err(UploadError::from)?;
     Ok((base64, aligned_for_display))
 }
@@ -139,11 +144,13 @@ fn crop_to_markers(mat: Mat) -> Result<Mat, SheetError> {
         .clone_pointee())
 }
 
-fn fix_answer_sheet(mat: Mat) -> Result<(Mat, Mat), SheetError> {
+fn fix_answer_sheet(mat: Mat) -> Result<(Mat, Mat, Mat, Mat), SheetError> {
     let cropped = crop_to_markers(mat)?;
     let preprocessed = preprocess_sheet(cropped.clone())?;
 
-    Ok((cropped, preprocessed))
+    let (subject_id, student_id, ans_sheet) = split_into_areas(preprocessed)?;
+
+    Ok((cropped, subject_id, student_id, ans_sheet))
 }
 
 fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
@@ -175,6 +182,59 @@ fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
     Ok((subject_area, student_id_area, answers_area))
 }
 
+fn extract_digits_for_sub_stu(
+    mat: &Mat,
+    num_digits: i32,
+    mut is_student_id: bool,
+) -> Result<String, opencv::Error> {
+    let the_height_from_above_to_bubble = 40;
+    let overall_height = mat.rows() - the_height_from_above_to_bubble;
+    let digit_height = overall_height / 10;
+    let digit_width = mat.cols() / num_digits;
+
+    let mut digits = String::new();
+
+    for i in 0..num_digits {
+        if is_student_id {
+            is_student_id = false;
+            continue;
+        }
+        let x = i * digit_width;
+        let roi = mat
+            .roi(Rect_ {
+                x,
+                y: 0,
+                width: digit_width,
+                height: mat.rows(),
+            })?
+            .clone_pointee();
+
+        let mut min_sum = u32::MAX;
+        let mut selected_digit = 0;
+
+        for j in 0..10 {
+            let y = j * digit_height + the_height_from_above_to_bubble;
+            let digit_roi = roi.roi(Rect_ {
+                x: 0,
+                y,
+                width: digit_width,
+                height: digit_height,
+            })?;
+
+            let sum: u32 = digit_roi.data_bytes()?.iter().map(|&b| b as u32).sum();
+
+            if sum < min_sum {
+                min_sum = sum;
+                selected_digit = j;
+            }
+        }
+
+        digits.push_str(&selected_digit.to_string());
+    }
+
+    Ok(digits)
+}
+
 #[cfg(test)]
 mod unit_tests {
     use std::path::PathBuf;
@@ -185,6 +245,14 @@ mod unit_tests {
 
     fn test_key_image() -> FilePath {
         FilePath::Path(PathBuf::from("tests/assets/sample_valid_image.jpg"))
+    }
+
+    fn test_images() -> Vec<FilePath> {
+        vec![
+            FilePath::Path(PathBuf::from("tests/assets/image_001.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/image_002.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/image_003.jpg")),
+        ]
     }
 
     fn not_image() -> FilePath {
@@ -326,5 +394,25 @@ mod unit_tests {
         assert_eq!(student_id.cols(), 141);
         assert_eq!(answers.rows(), 735);
         assert_eq!(answers.cols(), 884);
+    }
+
+    #[test]
+    fn check_extracted_ids_from_real_image() {
+        let path = test_key_image();
+        let mat = read_from_path(path).expect("Failed to read image");
+        let resized = resize_img(mat).expect("Resize failed");
+        let (_cropped, subject_id_mat, student_id_mat, _answers) =
+            fix_answer_sheet(resized).expect("Fixing sheet failed");
+
+        let subject_id = extract_digits_for_sub_stu(&subject_id_mat, 2, false)
+            .expect("Extracting subject ID failed");
+        let student_id = extract_digits_for_sub_stu(&student_id_mat, 9, true)
+            .expect("Extracting student ID failed");
+
+        assert_eq!(subject_id, "10", "Subject ID does not match expected value");
+        assert_eq!(
+            student_id, "65010001",
+            "Student ID does not match expected value"
+        );
     }
 }
