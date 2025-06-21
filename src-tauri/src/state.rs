@@ -106,14 +106,14 @@ impl AppState {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct AnswerSheet {
     pub subject_code: u16,
     pub student_id: u32,
     pub answers: [QuestionGroup; 36],
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct AnswerKeySheet {
     pub subject_code: u16,
     pub answers: [QuestionGroup; 36],
@@ -135,7 +135,7 @@ impl From<(Mat, Mat, Mat)> for AnswerSheet {
 }
 
 #[allow(non_snake_case)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct QuestionGroup {
     pub A: Option<Answer>,
     pub B: Option<Answer>,
