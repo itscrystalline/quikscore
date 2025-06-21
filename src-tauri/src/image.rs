@@ -183,7 +183,11 @@ fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
     Ok((subject_area, student_id_area, answers_area))
 }
 
-fn extract_digits_for_sub_stu(mat: &Mat, num_digits: i32, mut is_student_id : bool) -> Result<String, opencv::Error> {
+fn extract_digits_for_sub_stu(
+    mat: &Mat,
+    num_digits: i32,
+    mut is_student_id: bool,
+) -> Result<String, opencv::Error> {
     let the_height_from_above_to_bubble = 40;
     let overall_height = mat.rows() - the_height_from_above_to_bubble;
     let digit_height = overall_height / 10;
@@ -197,12 +201,14 @@ fn extract_digits_for_sub_stu(mat: &Mat, num_digits: i32, mut is_student_id : bo
             continue;
         }
         let x = i * digit_width;
-        let roi = mat.roi(Rect_ {
-            x: x as i32,
-            y: 0,
-            width: digit_width,
-            height: mat.rows(),
-        })?.clone_pointee();
+        let roi = mat
+            .roi(Rect_ {
+                x: x as i32,
+                y: 0,
+                width: digit_width,
+                height: mat.rows(),
+            })?
+            .clone_pointee();
 
         let mut min_sum = u32::MAX;
         let mut selected_digit = 0;
@@ -240,6 +246,14 @@ mod unit_tests {
 
     fn test_key_image() -> FilePath {
         FilePath::Path(PathBuf::from("tests/assets/sample_valid_image.jpg"))
+    }
+
+    fn test_images() -> Vec<FilePath> {
+        vec![
+            FilePath::Path(PathBuf::from("tests/assets/image_001.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/image_002.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/image_003.jpg")),
+        ]
     }
 
     fn not_image() -> FilePath {
@@ -398,21 +412,26 @@ mod extract_digits_tests {
         let digit_height = 10;
         let rows = 400; // enough height for 10 digit rows + offset
         let cols = digit_width * num_digits;
-        let mut mat = Mat::new_rows_cols_with_default(rows, cols, CV_8UC1, Scalar::all(255.0)).unwrap();
+        let mut mat =
+            Mat::new_rows_cols_with_default(rows, cols, CV_8UC1, Scalar::all(255.0)).unwrap();
 
         let bubble_offset_y = 40; // same as your code
 
         for digit_idx in 0..num_digits {
             let x = digit_idx * digit_width;
             // For the first digit only (simulate skipping student_id flag)
-            let actual_digit = if is_student_id && digit_idx == 0 { continue; } else { digit_idx };
+            let actual_digit = if is_student_id && digit_idx == 0 {
+                continue;
+            } else {
+                digit_idx
+            };
 
             // Draw a "bubble" (dark rectangle) at the digit row corresponding to digit_idx
             let y = bubble_offset_y + (actual_digit * digit_height);
 
             // Draw a black rectangle simulating the bubble
-            for dy in y..y+digit_height {
-                for dx in x..x+digit_width {
+            for dy in y..y + digit_height {
+                for dx in x..x + digit_width {
                     *mat.at_2d_mut::<u8>(dy, dx).unwrap() = 0;
                 }
             }
