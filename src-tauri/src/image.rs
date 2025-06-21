@@ -96,8 +96,8 @@ fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
     let (aligned_for_display, aligned_for_processing, subject_id, student_id, answer_sheet) =
         fix_answer_sheet(resized)?;
 
-    let subject_id_string = extract_digits_for_sub_stu(&subject_id, 2)?;
-    let student_id_string = extract_digits_for_sub_stu(&student_id, 9)?;
+    let subject_id_string = extract_digits_for_sub_stu(&subject_id, 2, false)?;
+    let student_id_string = extract_digits_for_sub_stu(&student_id, 9, true)?;
     println!("subject_id: {subject_id_string}");
     println!("subject_id: {student_id_string}");
     //testing
@@ -186,26 +186,32 @@ fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
     Ok((subject_area, student_id_area, answers_area))
 }
 
-fn extract_digits_for_sub_stu(mat: &Mat, num_digits: i32) -> Result<String, opencv::Error> {
-    let digit_height = mat.rows() / 10;
+fn extract_digits_for_sub_stu(mat: &Mat, num_digits: i32, mut is_student_id : bool) -> Result<String, opencv::Error> {
+    let the_height_from_above_to_bubble = 40;
+    let overall_height = mat.rows() - the_height_from_above_to_bubble;
+    let digit_height = overall_height / 10;
     let digit_width = mat.cols() / num_digits;
 
     let mut digits = String::new();
 
     for i in 0..num_digits {
+        if is_student_id {
+            is_student_id = false;
+            continue;
+        }
         let x = i * digit_width;
         let roi = mat.roi(Rect_ {
             x: x as i32,
             y: 0,
             width: digit_width,
             height: mat.rows(),
-        })?;
+        })?.clone_pointee();
 
         let mut min_sum = u32::MAX;
         let mut selected_digit = 0;
 
         for j in 0..10 {
-            let y = j * digit_height;
+            let y = j * digit_height + the_height_from_above_to_bubble;
             let digit_roi = roi.roi(Rect_ {
                 x: 0,
                 y: y as i32,
