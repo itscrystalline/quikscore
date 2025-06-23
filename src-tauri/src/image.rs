@@ -480,6 +480,58 @@ impl AnswerSheetResult {
         Ok(())
     }
 }
+fn crop_user_information(mat: &Mat) -> Result<Mat, SheetError> {
+    let user_information = mat
+        .roi(Rect_ {
+            x: 0,
+            y: 92,
+            width: 200,
+            heihgt: 90,
+        })?
+        .clone_pointee();
+    Ok(user_information)
+}
+
+fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
+    let name = mat.roi(Rect_ {
+        x: 45,
+        y: 0,
+        width: 150,
+        height: 17,
+    });
+    let subject = mat.roi(Rect_ {
+        x: 21,
+        y: 30,
+        width: 176,
+        height: 14,
+    });
+    let date = mat.roi(Rect_ {
+        x: 95,
+        y: 49,
+        width: 102,
+        height: 18,
+    });
+    let exam_room = mat.roi(Rect_ {
+        x: 41,
+        y: 71,
+        width: 60,
+        height: 18,
+    });
+    let seat = mat.roi(Rect_ {
+        x: 152,
+        y: 72,
+        width: 45,
+        height: 17,
+    });
+
+    Ok((name, subject, date, exam_room, seat))
+}
+
+fn extract_user_information(
+    mat: &Mat,
+) -> Result<(String, String, String, String, String), opencv::error> {
+    let user_information = crop_user_information(mat)?;
+}
 
 #[cfg(test)]
 mod unit_tests {
