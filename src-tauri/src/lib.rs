@@ -3,10 +3,11 @@ use std::sync::Mutex;
 use tauri::Manager;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+mod commands;
 mod errors;
 mod image;
+mod scoring;
 mod state;
-mod commands;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
