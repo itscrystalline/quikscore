@@ -14,7 +14,7 @@
         pkgs = import nixpkgs {inherit system;};
         inherit (pkgs) lib stdenv fetchYarnDeps;
         inherit (pkgs.rustPlatform) buildRustPackage;
-        package = buildRustPackage (finalAttrs: {
+        package = buildRustPackage (finalAttrs: rec {
           pname = "quikscore";
           version = "0.1.0";
 
@@ -35,6 +35,9 @@
           ];
 
           cargoRoot = "src-tauri";
+          cargoLock = {
+            lockFile = src + "/${cargoRoot}" + "/Cargo.lock";
+          };
 
           buildAndTestSubdir = "src-tauri";
 
