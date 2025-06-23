@@ -29,4 +29,5 @@ thiserror = "2.0.12"
 tauri-plugin-fs = "2"
 itertools = "0.14.0"
 rayon = "1.10.0"
+tesseract-rs = "0.1.19"
 
