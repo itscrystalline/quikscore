@@ -493,36 +493,46 @@ fn crop_user_information(mat: &Mat) -> Result<Mat, SheetError> {
 }
 
 fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
-    let name = mat.roi(Rect_ {
-        x: 45,
-        y: 0,
-        width: 150,
-        height: 17,
-    });
-    let subject = mat.roi(Rect_ {
-        x: 21,
-        y: 30,
-        width: 176,
-        height: 14,
-    });
-    let date = mat.roi(Rect_ {
-        x: 95,
-        y: 49,
-        width: 102,
-        height: 18,
-    });
-    let exam_room = mat.roi(Rect_ {
-        x: 41,
-        y: 71,
-        width: 60,
-        height: 18,
-    });
-    let seat = mat.roi(Rect_ {
-        x: 152,
-        y: 72,
-        width: 45,
-        height: 17,
-    });
+    let name = mat
+        .roi(Rect_ {
+            x: 45,
+            y: 0,
+            width: 150,
+            height: 17,
+        })?
+        .clone_pointee();
+    let subject = mat
+        .roi(Rect_ {
+            x: 21,
+            y: 30,
+            width: 176,
+            height: 14,
+        })?
+        .clone_pointee();
+    let date = mat
+        .roi(Rect_ {
+            x: 95,
+            y: 49,
+            width: 102,
+            height: 18,
+        })?
+        .clone_pointee();
+    let exam_room = mat
+        .roi(Rect_ {
+            x: 41,
+            y: 71,
+            width: 60,
+            height: 18,
+        })?
+        .clone_pointee();
+    let seat = mat
+        .roi(Rect_ {
+            x: 152,
+            y: 72,
+            width: 45,
+            height: 17,
+        })?
+        .clone_pointee();
 
     Ok((name, subject, date, exam_room, seat))
 }
@@ -531,6 +541,19 @@ fn extract_user_information(
     mat: &Mat,
 ) -> Result<(String, String, String, String, String), opencv::error> {
     let user_information = crop_user_information(mat)?;
+    let (name, subject, date, exam_room, seat) = crop_each_part(user_information)?;
+    let name_string: String = "".to_string();
+    let subject_string: String = "".to_string();
+    let date_string: String = "".to_string();
+    let exam_room_string: String = "".to_string();
+    let seat_string: String = "".to_string();
+    Ok((
+        name_string,
+        subject_string,
+        date_string,
+        exam_room_string,
+        seat_string,
+    ))
 }
 
 #[cfg(test)]
