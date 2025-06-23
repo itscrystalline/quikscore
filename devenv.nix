@@ -21,6 +21,7 @@ in {
     [
       pkg-config
       cargo-tauri
+      cargo-nextest
       openssl
       libllvm
       libclang
@@ -84,7 +85,7 @@ in {
   tasks = {
     "quikscore:check".exec = "cd $DEVENV_ROOT/src-tauri; cargo check";
     "quikscore:lint".exec = "cd $DEVENV_ROOT/src-tauri; RUSTFLAGS=\"-Dwarnings\" cargo-clippy";
-    "quikscore:test".exec = "cd $DEVENV_ROOT/src-tauri; cargo test";
+    "quikscore:test".exec = "cd $DEVENV_ROOT/src-tauri; cargo nextest run";
     "quikscore:coverage".exec = "cd $DEVENV_ROOT/src-tauri; ${pkgs.cargo-tarpaulin}/bin/cargo-tarpaulin --color always --verbose --all-features --workspace --timeout 120 --out xml --no-dead-code --engine llvm";
   };
   #
