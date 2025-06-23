@@ -192,15 +192,15 @@ fn extract_answers(answer_mat: &Mat) -> Result<[QuestionGroup; 36], SheetError> 
     let mat_debug_cloned = answer_mat.try_clone()?;
     let mut mat_debug = new_mat_copy!(answer_mat);
     imgproc::cvt_color_def(&mat_debug_cloned, &mut mat_debug, COLOR_GRAY2RGB)?;
-    for x_idx in 0..9 {
-        for y_idx in 0..4 {
+    for x_idx in 0..4 {
+        for y_idx in 0..9 {
             let (x, y) = (
                 (ANSWER_WIDTH + ANSWER_WIDTH_GAP) * x_idx,
                 (ANSWER_HEIGHT + ANSWER_HEIGHT_GAP) * y_idx,
             );
             let (x, y) = (
-                x.clamp(0, answer_mat.cols() - (ANSWER_WIDTH + ANSWER_WIDTH_GAP)),
-                y.clamp(0, answer_mat.rows() - (ANSWER_HEIGHT + ANSWER_HEIGHT_GAP)),
+                x.clamp(0, answer_mat.cols() - ANSWER_WIDTH),
+                y.clamp(0, answer_mat.rows() - ANSWER_HEIGHT),
             );
             let rect = Rect_ {
                 x,
@@ -208,12 +208,23 @@ fn extract_answers(answer_mat: &Mat) -> Result<[QuestionGroup; 36], SheetError> 
                 width: ANSWER_WIDTH,
                 height: ANSWER_HEIGHT,
             };
-            let question_block = answer_mat.roi(rect)?;
-            println!("block at ({x_idx}, {y_idx})");
+            let question_block = answer_mat.roi(rect)?.clone_pointee();
+            for row_idx in 0..5 {
+                let row_y = (ANSWER_HEIGHT / 5) * row_idx;
+                let row_rect = Rect_ {
+                    x,
+                    y: row_y.clamp(0, question_block.rows() - ANSWER_HEIGHT / 5),
+                    width: ANSWER_WIDTH,
+                    height: ANSWER_HEIGHT / 5,
+                };
+                let row = question_block.roi(row_rect)?;
+                imgproc::rectangle_def(&mut mat_debug, row_rect, (0, 0, 255).into())?;
+            }
+            println!("block ({x_idx}, {y_idx}) at ({x}, {y})");
             imgproc::rectangle_def(&mut mat_debug, rect, (255, 0, 0).into())?;
         }
+        imgcodecs::imwrite_def("debug-images/answer_borders.png", &mat_debug)?;
     }
-    imgcodecs::imwrite_def("debug-images/answer_borders.png", &mat_debug)?;
 
     Err(SheetError::Unimplemented)
 }
