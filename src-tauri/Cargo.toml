@@ -28,4 +28,5 @@ base64 = "0.22.1"
 thiserror = "2.0.12"
 tauri-plugin-fs = "2"
 itertools = "0.14.0"
+tesseract-rs = "0.1.19"
 

@@ -6,6 +6,8 @@ use opencv::core::{Mat, Range, Rect_, Size, Vector};
 use opencv::imgproc::THRESH_BINARY;
 use opencv::{highgui, imgproc, prelude::*};
 use tauri_plugin_dialog::FilePath;
+use tesseract_rs::TesseractAPI;
+
 
 use tauri::{Emitter, Manager, Runtime};
 
@@ -93,7 +95,8 @@ fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
 fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
     let mat = read_from_path(path)?;
     let resized = resize_img(mat).map_err(UploadError::from)?;
-    let (aligned_for_display, subject_id, student_id, answer_sheet) = fix_answer_sheet(resized)?;
+    let resized_for_fix = resized.clone();
+    let (aligned_for_display, subject_id, student_id, answer_sheet) = fix_answer_sheet(resized_for_fix)?;
 
     let subject_id_string = extract_digits_for_sub_stu(&subject_id, 2, false)?;
     let student_id_string = extract_digits_for_sub_stu(&student_id, 9, true)?;
@@ -102,6 +105,12 @@ fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
     //testing
     //#[cfg(not(test))]
     //let _ = show_img(&aligned_for_processing, "resized & aligned image");
+    let (name, subject, date, exam_room, seat) = extract_user_information(&resized)?;
+    println!("name: {name}");
+    println!("name: {subject}");
+    println!("name: {date}");
+    println!("name: {exam_room}");
+    println!("name: {seat}");
     let base64 = mat_to_base64_png(&aligned_for_display).map_err(UploadError::from)?;
     Ok((base64, aligned_for_display))
 }
@@ -240,7 +249,7 @@ fn crop_user_information(mat: &Mat) -> Result<Mat, SheetError> {
         x: 0,
         y: 92,
         width: 200,
-        heihgt: 90 
+        height: 90 
     })?.clone_pointee();
     Ok(user_information)
 }
@@ -280,14 +289,38 @@ fn crop_each_part(mat: &Mat) ->Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
     Ok((name, subject, date, exam_room, seat))
 }
 
-fn extract_user_information(mat: &Mat) -> Result<(String, String, String, String, String), opencv::error> {
-    let user_information = crop_user_information(mat)?;
-    let (name, subject, date, exam_room, seat) = crop_each_part(user_information)?;
-    let name_string: String = "".to_string();
-    let subject_string: String = "".to_string();
-    let date_string: String = "".to_string();
-    let exam_room_string: String = "".to_string();
-    let seat_string :String = "".to_string();
+fn image_to_string(mat: &Mat) -> Result<String, opencv::Error> {
+    let width = mat.cols();
+    let height = mat.rows();
+    let bytes_per_pixel = 1;
+    let bytes_per_line = width;
+
+    let image_data = mat.data_bytes().map_err(|_| {
+        opencv::Error::new(0, "Failed to extract data from Mat".to_string())
+    })?;
+
+    let api = TesseractAPI::new();
+    api.set_image(image_data, width, height, bytes_per_pixel, bytes_per_line)
+        .map_err(|_| opencv::Error::new(0, "Failed to set image".to_string()))?;
+
+    let text = api.get_utf8_text()
+        .map_err(|_| opencv::Error::new(0, "Failed to extract text".to_string()))?;
+
+    Ok(text.trim().to_string())
+}
+
+
+fn extract_user_information(mat: &Mat) -> Result<(String, String, String, String, String), opencv::Error> {
+    let user_information = crop_user_information(mat)
+        .map_err(|e| opencv::Error::new(0, format!("Crop error: {e}")))?;
+    let (name, subject, date, exam_room, seat) = crop_each_part(&user_information)
+        .map_err(|e| opencv::Error::new(0, format!("Crop parts error: {e}")))?;
+
+    let name_string: String = image_to_string(&name)?;
+    let subject_string: String = image_to_string(&subject)?;
+    let date_string: String = image_to_string(&date)?;
+    let exam_room_string: String = image_to_string(&exam_room)?;
+    let seat_string :String = image_to_string(&seat)?;
     Ok((name_string, subject_string, date_string, exam_room_string, seat_string))
 }
 
