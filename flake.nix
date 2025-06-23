@@ -38,8 +38,9 @@
           #   LIBCLANG_PATH = "${pkgs.libclang}/lib";
           #   CPLUS_INCLUDE_PATH = "${pkgs.llvmPackages.libcxx.dev}/include/c++";
           # };
-          env.OPENCV_LINK_PATHS = "${pkgs.opencv}/lib";
-          env.OPENCV_LINK_LIBS = "opencv_core,opencv_calib3d,opencv_dnn,opencv_features2d,opencv_imgproc,opencv_video,opencv_flann,opencv_imgcodecs,opencv_objdetect,opencv_stitching,png";
+          env.OPENCV_LINK_PATHS = "+${pkgs.opencv}/lib";
+          env.OPENCV_LINK_LIBS = "+opencv_core,opencv_calib3d,opencv_dnn,opencv_features2d,opencv_imgproc,opencv_video,opencv_flann,opencv_imgcodecs,opencv_objdetect,opencv_stitching,png";
+          env.OPENCV_INCLUDE_PATHS = "+${pkgs.opencv}/include";
 
           cargoRoot = "src-tauri";
           cargoLock = {
