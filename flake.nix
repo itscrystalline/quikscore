@@ -22,7 +22,7 @@
 
           yarnOfflineCache = fetchYarnDeps {
             yarnLock = finalAttrs.src + "/yarn.lock";
-            hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+            hash = "sha256-fBrclUcHHLgviE6X6Os5zewuI4vLauz5N52N8jc2FQ0=";
           };
 
           nativeBuildInputs = with pkgs; [
@@ -31,12 +31,17 @@
             yarnInstallHook
             nodejs
             cargo-tauri.hook
+            rustPlatform.bindgenHook
             pkg-config
+            libclang
+            libllvm
           ];
+
+          LIBCLANG_PATH = "${pkgs.libclang}/lib";
 
           cargoRoot = "src-tauri";
           cargoLock = {
-            lockFile = src + "/${cargoRoot}" + "/Cargo.lock";
+            lockFile = src + "/${cargoRoot}/Cargo.lock";
           };
 
           buildAndTestSubdir = "src-tauri";
@@ -46,6 +51,7 @@
             gtk3
             openssl
             webkitgtk_4_1
+            opencv
           ]);
         });
       in {
