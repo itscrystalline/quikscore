@@ -38,9 +38,11 @@
           #   LIBCLANG_PATH = "${pkgs.libclang}/lib";
           #   CPLUS_INCLUDE_PATH = "${pkgs.llvmPackages.libcxx.dev}/include/c++";
           # };
-          env.OPENCV_LINK_PATHS = "+${pkgs.opencv}/lib";
-          env.OPENCV_LINK_LIBS = "+opencv_core,opencv_calib3d,opencv_dnn,opencv_features2d,opencv_imgproc,opencv_video,opencv_flann,opencv_imgcodecs,opencv_objdetect,opencv_stitching,png";
-          env.OPENCV_INCLUDE_PATHS = "+${pkgs.opencv}/include";
+          env = {
+            OPENCV_LINK_PATHS = "+${pkgs.opencv}/lib";
+            OPENCV_LINK_LIBS = "+opencv_core,opencv_calib3d,opencv_dnn,opencv_features2d,opencv_imgproc,opencv_video,opencv_flann,opencv_imgcodecs,opencv_objdetect,opencv_stitching,png";
+            OPENCV_INCLUDE_PATHS = "+${pkgs.opencv}/include";
+          };
 
           cargoRoot = "src-tauri";
           cargoLock = {
@@ -49,13 +51,16 @@
 
           buildAndTestSubdir = "src-tauri";
 
-          buildInputs = lib.optionals stdenv.hostPlatform.isLinux (with pkgs; [
-            glib
-            gtk3
-            openssl
-            webkitgtk_4_1
-            opencv
-          ]);
+          buildInputs = with pkgs; (lib.optionals stdenv.hostPlatform.isLinux [
+              glib
+              gtk3
+              openssl
+              webkitgtk_4_1
+            ]
+            ++ [
+              opencv
+              openssl
+            ]);
         });
       in {
         packages = {
