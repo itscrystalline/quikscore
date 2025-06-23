@@ -3,15 +3,15 @@ use crate::signal;
 use base64::Engine;
 use itertools::Itertools;
 use opencv::core::{Mat, Range, Rect_, Size, Vector};
-use opencv::imgproc::THRESH_BINARY;
-use opencv::{highgui, imgproc, prelude::*};
+use opencv::imgproc::{COLOR_GRAY2RGB, THRESH_BINARY};
+use opencv::{highgui, imgcodecs, imgproc, prelude::*};
 use tauri_plugin_dialog::FilePath;
 
 use tauri::{Emitter, Manager, Runtime};
 
-use opencv::imgcodecs::{imencode, imread, ImreadModes};
+use opencv::imgcodecs::{imencode, imread, imwrite_def, ImreadModes};
 
-use crate::state::{AppState, SignalKeys};
+use crate::state::{AppState, QuestionGroup, SignalKeys};
 
 macro_rules! new_mat_copy {
     ($orig: ident) => {{
@@ -97,6 +97,7 @@ fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
 
     let subject_id_string = extract_digits_for_sub_stu(&subject_id, 2, false)?;
     let student_id_string = extract_digits_for_sub_stu(&student_id, 9, true)?;
+    let scanned_answers = extract_answers(&answer_sheet)?;
     println!("subject_id: {subject_id_string}");
     println!("subject_id: {student_id_string}");
     //testing
@@ -180,6 +181,41 @@ fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
         .clone_pointee();
 
     Ok((subject_area, student_id_area, answers_area))
+}
+
+const ANSWER_WIDTH: i32 = 215;
+const ANSWER_WIDTH_GAP: i32 = 9;
+const ANSWER_HEIGHT: i32 = 73;
+const ANSWER_HEIGHT_GAP: i32 = 10;
+
+fn extract_answers(answer_mat: &Mat) -> Result<[QuestionGroup; 36], SheetError> {
+    let mat_debug_cloned = answer_mat.try_clone()?;
+    let mut mat_debug = new_mat_copy!(answer_mat);
+    imgproc::cvt_color_def(&mat_debug_cloned, &mut mat_debug, COLOR_GRAY2RGB)?;
+    for x_idx in 0..9 {
+        for y_idx in 0..4 {
+            let (x, y) = (
+                (ANSWER_WIDTH + ANSWER_WIDTH_GAP) * x_idx,
+                (ANSWER_HEIGHT + ANSWER_HEIGHT_GAP) * y_idx,
+            );
+            let (x, y) = (
+                x.clamp(0, answer_mat.cols() - (ANSWER_WIDTH + ANSWER_WIDTH_GAP)),
+                y.clamp(0, answer_mat.rows() - (ANSWER_HEIGHT + ANSWER_HEIGHT_GAP)),
+            );
+            let rect = Rect_ {
+                x,
+                y,
+                width: ANSWER_WIDTH,
+                height: ANSWER_HEIGHT,
+            };
+            let question_block = answer_mat.roi(rect)?;
+            println!("block at ({x_idx}, {y_idx})");
+            imgproc::rectangle_def(&mut mat_debug, rect, (255, 0, 0).into())?;
+        }
+    }
+    imgcodecs::imwrite_def("debug-images/answer_borders.png", &mat_debug)?;
+
+    Err(SheetError::Unimplemented)
 }
 
 fn extract_digits_for_sub_stu(
