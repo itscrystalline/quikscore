@@ -1,17 +1,21 @@
+use std::array;
+use tauri::ipc::Channel;
+
 use crate::errors::{SheetError, UploadError};
-use crate::{signal, state};
+use crate::signal;
 use base64::Engine;
 use itertools::Itertools;
-use opencv::core::{Mat, Range, Rect_, Size, Vector};
+use opencv::core::{Mat, Rect_, Size, Vector};
 use opencv::imgproc::THRESH_BINARY;
-use opencv::{highgui, imgproc, prelude::*};
+use opencv::{imgproc, prelude::*};
+use rayon::prelude::*;
 use tauri_plugin_dialog::FilePath;
 
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{Emitter, Manager, Runtime};
 
 use opencv::imgcodecs::{imencode, imread, ImreadModes};
 
-use crate::state::{AnswerSheet, AppState, SignalKeys, StateMutex};
+use crate::state::{Answer, AnswerSheet, AnswerUpload, AppState, KeyUpload, QuestionGroup};
 
 macro_rules! new_mat_copy {
     ($orig: ident) => {{
@@ -22,80 +26,135 @@ macro_rules! new_mat_copy {
     }};
 }
 
-pub fn upload_key_image_impl(app: AppHandle, path_maybe: Option<FilePath>) {
+pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
+    app: &A,
+    path_maybe: Option<FilePath>,
+    channel: Channel<KeyUpload>,
+) {
     let Some(file_path) = path_maybe else {
-        signal!(
-            app,
-            SignalKeys::KeyStatus,
-            format!("{}", UploadError::Canceled)
-        );
+        signal!(channel, KeyUpload::Cancelled);
         return;
     };
     match handle_upload(file_path) {
-        Ok((base64_image, mat)) => AppState::upload_key(app, base64_image, mat),
-        Err(e) => signal!(app, SignalKeys::KeyStatus, format!("{e}")),
+        Ok((base64_image, mat, key)) => {
+            let subject = key.subject_code.clone();
+            AppState::upload_key(app, channel, base64_image, mat, subject, key.into())
+        }
+        Err(e) => signal!(
+            channel,
+            KeyUpload::Error {
+                error: format!("{e}")
+            }
+        ),
     }
 }
 
-pub fn upload_sheet_images_impl(app: AppHandle, paths: Option<Vec<FilePath>>) {
+pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
+    app: &A,
+    paths: Option<Vec<FilePath>>,
+    channel: Channel<AnswerUpload>,
+) {
+    enum ProcessingState {
+        Starting,
+        Finishing,
+        Done(Vec<Result<(String, Mat, AnswerSheet), UploadError>>),
+    }
+
     let Some(paths) = paths else {
-        signal!(
-            app,
-            SignalKeys::SheetStatus,
-            format!("{}", UploadError::Canceled)
-        );
+        signal!(channel, AnswerUpload::Cancelled);
         return;
     };
 
-    let base64_list: Result<Vec<(String, Mat)>, UploadError> = paths
-        .into_iter()
-        .enumerate()
-        .map(|(idx, file_path)| {
-            signal!(
-                app,
-                SignalKeys::SheetStatus,
-                format!("Processing image #{}", idx + 1)
-            );
-            handle_upload(file_path)
-        })
-        .collect();
-    match base64_list {
-        Ok(vec) => {
-            let (vec_base64, vec_mat): (Vec<String>, Vec<Mat>) = vec.into_iter().multiunzip();
-            AppState::upload_answer_sheets(app, vec_base64, vec_mat);
+    let images_count = paths.len();
+
+    signal!(
+        channel,
+        AnswerUpload::Processing {
+            total: images_count,
+            started: 0,
+            finished: 0
         }
-        Err(e) => signal!(app, SignalKeys::SheetStatus, format!("{e}")),
+    );
+
+    let (tx, mut rx) = tauri::async_runtime::channel::<ProcessingState>(images_count);
+
+    let processing_thread = tauri::async_runtime::spawn(async move {
+        let base64_list: Vec<Result<(String, Mat, AnswerSheet), UploadError>> = paths
+            .into_par_iter()
+            .map_with(tx.clone(), |tx, file_path| {
+                _ = tx.try_send(ProcessingState::Starting);
+                let res = handle_upload(file_path);
+                _ = tx.try_send(ProcessingState::Finishing);
+                res
+            })
+            .collect();
+        _ = tx.send(ProcessingState::Done(base64_list)).await;
+    });
+
+    let (mut started, mut finished) = (0usize, 0usize);
+
+    loop {
+        match rx.blocking_recv() {
+            None => signal!(
+                channel,
+                AnswerUpload::Error {
+                    error: format!("{}", UploadError::UnexpectedPipeClosure)
+                }
+            ),
+            Some(state) => match state {
+                ProcessingState::Starting => started += 1,
+                ProcessingState::Finishing => finished += 1,
+                ProcessingState::Done(list) => {
+                    signal!(channel, AnswerUpload::AlmostDone);
+                    AppState::upload_answer_sheets(app, channel, list);
+                    processing_thread.abort();
+                    break;
+                }
+            },
+        }
+        signal!(
+            channel,
+            AnswerUpload::Processing {
+                total: images_count,
+                started,
+                finished
+            }
+        );
     }
 }
 
-fn resize_img(src: Mat) -> opencv::Result<Mat> {
+pub fn resize_relative_img(src: &Mat, relative: f64) -> opencv::Result<Mat> {
     let mut dst = new_mat_copy!(src);
-    let new_size = Size::new(src.cols() / 3, src.rows() / 3);
+    let new_size = Size::new(
+        (src.cols() as f64 * relative).round() as i32,
+        (src.rows() as f64 * relative).round() as i32,
+    );
 
     imgproc::resize(&src, &mut dst, new_size, 0.0, 0.0, imgproc::INTER_LINEAR)?;
     Ok(dst)
 }
 
-fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
-    println!("showing window {window_name}");
-    highgui::named_window(window_name, 0)?;
-    highgui::imshow(window_name, mat)?;
-    highgui::wait_key(10000)?;
-    Ok(())
-}
+// fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
+//     println!("showing window {window_name}");
+//     highgui::named_window(window_name, 0)?;
+//     highgui::imshow(window_name, mat)?;
+//     highgui::wait_key(10000)?;
+//     Ok(())
+// }
 
-fn handle_upload(path: FilePath) -> Result<(String, Mat), UploadError> {
+fn handle_upload(path: FilePath) -> Result<(String, Mat, AnswerSheet), UploadError> {
     let mat = read_from_path(path)?;
-    let resized = resize_img(mat).map_err(UploadError::from)?;
-    let (aligned_for_display, aligned_for_processing) = fix_answer_sheet(resized)?;
+    let resized = resize_relative_img(&mat, 0.333).map_err(UploadError::from)?;
+    let (aligned_for_display, subject_id, student_id, answer_sheet) = fix_answer_sheet(resized)?;
     //testing
-    #[cfg(not(test))]
-    let _ = show_img(&aligned_for_processing, "resized & aligned image");
+    //#[cfg(not(test))]
+    //let _ = show_img(&aligned_for_processing, "resized & aligned image");
     let base64 = mat_to_base64_png(&aligned_for_display).map_err(UploadError::from)?;
-    Ok((base64, aligned_for_display))
+    let answer_sheet: AnswerSheet = (subject_id, student_id, answer_sheet).try_into()?;
+    Ok((base64, aligned_for_display, answer_sheet))
 }
 
-fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
+pub fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
     let mut buf: Vector<u8> = Vec::new().into();
     imencode(".png", mat, &mut buf, &Vec::new().into())?;
     let base64 = base64::prelude::BASE64_STANDARD.encode(&buf);
@@ -128,16 +187,22 @@ fn preprocess_sheet(mat: Mat) -> Result<Mat, SheetError> {
 
 fn crop_to_markers(mat: Mat) -> Result<Mat, SheetError> {
     Ok(mat
-        .col_range(&Range::new(38, 1133)?)?
-        .row_range(&Range::new(30, 795)?)?
+        .roi(Rect_ {
+            x: 38,
+            y: 30,
+            width: 1095,
+            height: 765,
+        })?
         .clone_pointee())
 }
 
-fn fix_answer_sheet(mat: Mat) -> Result<(Mat, Mat), SheetError> {
+fn fix_answer_sheet(mat: Mat) -> Result<(Mat, Mat, Mat, Mat), SheetError> {
     let cropped = crop_to_markers(mat)?;
     let preprocessed = preprocess_sheet(cropped.clone())?;
 
-    Ok((cropped, preprocessed))
+    let (subject_id, student_id, ans_sheet) = split_into_areas(preprocessed)?;
+
+    Ok((cropped, subject_id, student_id, ans_sheet))
 }
 
 fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
@@ -169,6 +234,185 @@ fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
     Ok((subject_area, student_id_area, answers_area))
 }
 
+const ANSWER_WIDTH: i32 = 215;
+const ANSWER_WIDTH_GAP: i32 = 9;
+const ANSWER_HEIGHT: i32 = 73;
+const ANSWER_HEIGHT_GAP: i32 = 10;
+
+fn extract_answers(answer_mat: &Mat) -> Result<[QuestionGroup; 36], SheetError> {
+    // let mat_debug_cloned = answer_mat.try_clone()?;
+    // let mut mat_debug = new_mat_copy!(answer_mat);
+    // imgproc::cvt_color_def(&mat_debug_cloned, &mut mat_debug, COLOR_GRAY2RGB)?;
+    let mut out = Vec::with_capacity(36);
+    for x_idx in 0..4 {
+        for y_idx in 0..9 {
+            let (x, y) = (
+                (ANSWER_WIDTH + ANSWER_WIDTH_GAP) * x_idx,
+                (ANSWER_HEIGHT + ANSWER_HEIGHT_GAP) * y_idx,
+            );
+            let (x, y) = (
+                x.clamp(0, answer_mat.cols() - ANSWER_WIDTH),
+                y.clamp(0, answer_mat.rows() - ANSWER_HEIGHT),
+            );
+            let rect = Rect_ {
+                x,
+                y,
+                width: ANSWER_WIDTH,
+                height: ANSWER_HEIGHT,
+            };
+            // println!("block ({x_idx}, {y_idx}) at ({x}, {y})");
+            // imgproc::rectangle_def(&mut mat_debug, rect, (255, 0, 0).into())?;
+            let answers: Result<Vec<Option<Answer>>, SheetError> = (0..5)
+                .map(|row_idx| {
+                    let row_y = y
+                        + ((ANSWER_HEIGHT / 5) * row_idx).clamp(0, rect.height - ANSWER_HEIGHT / 5);
+                    let row_rect = Rect_ {
+                        x: x + 24,
+                        y: row_y,
+                        width: ANSWER_WIDTH - 24,
+                        height: ANSWER_HEIGHT / 5,
+                    };
+                    // imgproc::rectangle_def(&mut mat_debug, row_rect, (0, 0, 255).into())?;
+                    let bubbles: Result<Vec<(u8, f32)>, SheetError> = (0u8..13u8)
+                        .map(|bubble_idx| {
+                            let bubble_x = (x + 24)
+                                + ((row_rect.width / 12) * bubble_idx as i32)
+                                    .clamp(0, row_rect.width - (row_rect.width / 13));
+                            let bubble_rect = Rect_ {
+                                x: bubble_x,
+                                y: row_y,
+                                width: row_rect.width / 13,
+                                height: ANSWER_HEIGHT / 5,
+                            };
+                            let bubble_filled: u16 = answer_mat
+                                .roi(bubble_rect)?
+                                .clone_pointee()
+                                .data_bytes()?
+                                .iter()
+                                .map(|n| *n as u16)
+                                .sum();
+                            let frac = bubble_filled as f32 / u16::MAX as f32;
+                            // if frac < 0.45 {
+                            //     imgproc::rectangle_def(
+                            //         &mut mat_debug,
+                            //         bubble_rect,
+                            //         (255, 0, 255).into(),
+                            //     )?;
+                            // }
+                            Ok((bubble_idx, frac))
+                        })
+                        .collect();
+                    let bubbles = bubbles?;
+                    let circled_in: Vec<u8> = bubbles
+                        .into_iter()
+                        .sorted_by(|&(_, a), &(_, b)| b.total_cmp(&a))
+                        .filter_map(|(idx, f)| if f < 0.45 { Some(idx) } else { None })
+                        .collect();
+                    Ok(Answer::from_bubbles_vec(circled_in))
+                })
+                .collect();
+            let answers: QuestionGroup = answers?.try_into()?;
+            out.push(answers);
+        }
+        // imgcodecs::imwrite_def("debug-images/answer_borders.png", &mat_debug)?;
+    }
+    let mut out = out.into_iter();
+
+    Ok(array::from_fn(|_| {
+        out.next().expect("should have exactly 36 groups")
+    }))
+}
+
+fn extract_digits_for_sub_stu(
+    mat: &Mat,
+    num_digits: i32,
+    mut is_student_id: bool,
+) -> Result<String, opencv::Error> {
+    let the_height_from_above_to_bubble = 40;
+    let overall_height = mat.rows() - the_height_from_above_to_bubble;
+    let digit_height = overall_height / 10;
+    let digit_width = mat.cols() / num_digits;
+    let temp: bool = is_student_id;
+
+    let rows = if is_student_id { 8 } else { 2 };
+    let cols = 10;
+    let mut v: Vec<Vec<i32>> = vec![vec![0; cols]; rows];
+
+    let mut digits = String::new();
+
+    for i in 0..num_digits as usize {
+        if is_student_id {
+            is_student_id = false;
+            continue;
+        }
+        let x = (i as i32) * digit_width;
+        let roi = mat
+            .roi(Rect_ {
+                x,
+                y: 0,
+                width: digit_width,
+                height: mat.rows(),
+            })?
+            .clone_pointee();
+
+        let mut min_sum = u32::MAX;
+        let mut selected_digit = 0;
+
+        for j in 0..10usize {
+            let y = (j as i32) * digit_height + the_height_from_above_to_bubble;
+            let digit_roi = roi.roi(Rect_ {
+                x: 0,
+                y,
+                width: digit_width,
+                height: digit_height,
+            })?;
+
+            let sum: u32 = digit_roi.data_bytes()?.iter().map(|&b| b as u32).sum();
+            if temp {
+                if i > 0 {
+                    v[i - 1][j] = sum as i32; //Skip first Index NaKub
+                }
+            } else {
+                v[i][j] = sum as i32;
+            }
+
+            if sum < min_sum {
+                min_sum = sum;
+                selected_digit = j;
+            }
+        }
+        digits.push_str(&selected_digit.to_string());
+    }
+    if temp {
+        println!("Stundet:");
+    } else {
+        println!("Subject");
+    }
+    for (i, row) in v.iter().enumerate() {
+        println!("Row {i}: {row:?}");
+    }
+    Ok(digits)
+}
+
+impl TryFrom<(Mat, Mat, Mat)> for AnswerSheet {
+    type Error = SheetError;
+    fn try_from(value: (Mat, Mat, Mat)) -> Result<Self, Self::Error> {
+        let (subject_code_mat, student_id_mat, answers_mat) = value;
+        let subject_id_string = extract_digits_for_sub_stu(&subject_code_mat, 2, false)?;
+        let student_id_string = extract_digits_for_sub_stu(&student_id_mat, 9, true)?;
+        let scanned_answers = extract_answers(&answers_mat)?;
+
+        // println!("subject_id: {subject_id_string}");
+        // println!("subject_id: {student_id_string}");
+
+        Ok(Self {
+            subject_code: subject_id_string,
+            student_id: student_id_string,
+            answers: scanned_answers,
+        })
+    }
+}
+
 #[cfg(test)]
 mod unit_tests {
     use std::path::PathBuf;
@@ -176,6 +420,22 @@ mod unit_tests {
     use super::*;
     use base64::prelude::*;
     use opencv::core;
+
+    fn test_key_image() -> FilePath {
+        FilePath::Path(PathBuf::from("tests/assets/sample_valid_image.jpg"))
+    }
+
+    fn test_images() -> Vec<FilePath> {
+        vec![
+            FilePath::Path(PathBuf::from("tests/assets/image_001.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/image_002.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/image_003.jpg")),
+        ]
+    }
+
+    fn not_image() -> FilePath {
+        FilePath::Path(PathBuf::from("tests/assets/sample_invalid_image.jpg"))
+    }
 
     #[test]
     fn test_basic_functionality() {
@@ -205,17 +465,9 @@ mod unit_tests {
         assert!(result.is_err());
     }
 
-    fn test_image_path() -> PathBuf {
-        PathBuf::from("tests/assets/sample_valid_image.jpg")
-    }
-
-    fn non_image_path() -> PathBuf {
-        PathBuf::from("tests/assets/sample_invalid_image.jpg")
-    }
-
     #[test]
     fn test_read_from_valid_path() {
-        let path = FilePath::Path(test_image_path());
+        let path = test_key_image();
         let mat = read_from_path(path);
         assert!(mat.is_ok());
         let mat = mat.unwrap();
@@ -224,7 +476,7 @@ mod unit_tests {
 
     #[test]
     fn test_read_from_invalid_image_file() {
-        let path = FilePath::Path(non_image_path());
+        let path = not_image();
         let result = read_from_path(path);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), UploadError::NotImage));
@@ -246,18 +498,18 @@ mod unit_tests {
 
     #[test]
     fn test_handle_upload_success() {
-        let path = FilePath::Path(test_image_path());
+        let path = test_key_image();
         let result = handle_upload(path);
         assert!(result.is_ok());
 
-        let (base64_string, mat /*, answer_sheet*/) = result.unwrap();
+        let (base64_string, mat, answer_sheet) = result.unwrap();
         assert!(base64_string.starts_with("data:image/png;base64,"));
         assert!(!mat.empty());
     }
 
     #[test]
     fn test_handle_upload_failure() {
-        let path = FilePath::Path(non_image_path());
+        let path = not_image();
         let result = handle_upload(path);
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), UploadError::NotImage));
@@ -270,7 +522,7 @@ mod unit_tests {
             Mat::new_rows_cols_with_default(height, width, core::CV_8UC1, core::Scalar::all(128.0))
                 .unwrap();
 
-        let resized = resize_img(mat);
+        let resized = resize_relative_img(&mat, 0.333);
         assert!(resized.is_ok());
 
         let resized = resized.unwrap();
@@ -320,5 +572,25 @@ mod unit_tests {
         assert_eq!(student_id.cols(), 141);
         assert_eq!(answers.rows(), 735);
         assert_eq!(answers.cols(), 884);
+    }
+
+    #[test]
+    fn check_extracted_ids_from_real_image() {
+        let path = test_key_image();
+        let mat = read_from_path(path).expect("Failed to read image");
+        let resized = resize_relative_img(&mat, 0.3333).expect("Resize failed");
+        let (_cropped, subject_id_mat, student_id_mat, _answers) =
+            fix_answer_sheet(resized).expect("Fixing sheet failed");
+
+        let subject_id = extract_digits_for_sub_stu(&subject_id_mat, 2, false)
+            .expect("Extracting subject ID failed");
+        let student_id = extract_digits_for_sub_stu(&student_id_mat, 9, true)
+            .expect("Extracting student ID failed");
+
+        assert_eq!(subject_id, "10", "Subject ID does not match expected value");
+        assert_eq!(
+            student_id, "65010001",
+            "Student ID does not match expected value"
+        );
     }
 }

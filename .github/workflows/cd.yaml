@@ -1,0 +1,102 @@
+# .github/workflows/build.yml
+name: Build Artifacts
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  nix-build:
+    name: Build (Linux & macOS)
+    runs-on: ${{ matrix.platform.on }}
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: 
+          - on: ubuntu-latest 
+            name: linux-x86_64
+          - on: ubuntu-24.04-arm 
+            name: linux-aarch64
+          - on: macos-latest 
+            name: macos-aarch64
+          - on: macos-13
+            name: macos-x86_64
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Nix
+      uses: cachix/install-nix-action@v30
+
+    - name: Set up Cachix cache (optional)
+      uses: cachix/cachix-action@v15
+      with:
+        name: devenv
+
+    - name: Build with Nix flake
+      run: |
+        nix build . -L 2>&1
+
+    - name: Upload Nix build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: quikscore-${{ matrix.platform.name }}
+        path: |
+          result/bin/quikscore
+          result/Applications/*.app
+
+  windows-build:
+    name: Build (Windows)
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22.14'
+
+    - name: Set up Yarn
+      uses: bahmutov/npm-install@v1
+      with:
+        useLockFile: true
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with: 
+        toolchain: nightly
+
+    - name: Install OpenCV
+      run: | 
+        choco install opencv -y
+
+    - name: Install LLVM
+      uses: KyleMayes/install-llvm-action@v2
+      with:
+        version: '19.1.7'
+
+    - name: Set up Environment variables
+      run: |
+        echo "RUSTFLAGS=-Z threads=8" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "OPENCV_INCLUDE_PATHS=C:\tools\opencv\build\include" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "OPENCV_LINK_LIBS=+opencv_world4110" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "OPENCV_LINK_PATHS=+C:\tools\opencv\build\x64\vc16\lib" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+
+    - name: Build Tauri app
+      run: |
+        yarn tauri build
+
+    - name: Upload Windows artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: quikscore-windows-x86_64
+        path: |
+          src-tauri/target/release/quikscore.exe
+          src-tauri/target/release/bundle/msi/*.msi
+          src-tauri/target/release/bundle/nsis/*.exe
