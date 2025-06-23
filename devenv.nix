@@ -28,6 +28,9 @@ in {
 
       cargo-tarpaulin
       bacon
+
+      # cd testing
+      act
     ]
     ++ lib.optionals pkgs.stdenv.isLinux [
       gobject-introspection
