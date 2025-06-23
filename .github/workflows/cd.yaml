@@ -90,7 +90,7 @@ jobs:
 
     - name: Build Tauri app
       run: |
-        yarn tauri build --release
+        yarn tauri build
 
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
