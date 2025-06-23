@@ -57,7 +57,10 @@
               openssl
               webkitgtk_4_1
             ]
-            ++ [opencv]);
+            ++ [
+              opencv
+              openssl
+            ]);
         });
       in {
         packages = {
