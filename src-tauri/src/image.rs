@@ -295,6 +295,8 @@ fn image_to_string(mat: &Mat) -> Result<String, opencv::Error> {
     let bytes_per_pixel = 1;
     let bytes_per_line = width;
 
+    println!("is_continuous: {}", mat.is_continuous());
+
     let image_data = mat.data_bytes().map_err(|_| {
         opencv::Error::new(0, "Failed to extract data from Mat".to_string())
     })?;
