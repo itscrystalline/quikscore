@@ -83,10 +83,10 @@ jobs:
 
     - name: Set up Environment variables
       run: |
-        echo "RUSTFLAGS='-Z threads=8'" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-        echo "OPENCV_INCLUDE_PATHS='C:\tools\opencv\build\include'" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-        echo "OPENCV_LINK_LIBS='+opencv_world4110'" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-        echo "OPENCV_LINK_PATHS='+C:\tools\opencv\build\x64\vc16\lib'" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "RUSTFLAGS=-Z threads=8" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "OPENCV_INCLUDE_PATHS=C:\tools\opencv\build\include" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "OPENCV_LINK_LIBS=+opencv_world4110" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "OPENCV_LINK_PATHS=+C:\tools\opencv\build\x64\vc16\lib" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
     - name: Build Tauri app
       run: |

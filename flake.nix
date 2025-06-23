@@ -59,6 +59,7 @@
             ]
             ++ [
               opencv
+              libpng
               openssl
             ]);
         });
