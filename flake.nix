@@ -14,7 +14,7 @@
         pkgs = import nixpkgs {inherit system;};
         inherit (pkgs) lib stdenv fetchYarnDeps;
         inherit (pkgs.rustPlatform) buildRustPackage;
-        package = buildRustPackage (finalAttrs: rec {
+        package = buildRustPackage (finalAttrs: {
           pname = "quikscore";
           version = "0.1.0";
 
@@ -27,21 +27,23 @@
 
           nativeBuildInputs = with pkgs; [
             yarnConfigHook
-            yarnBuildHook
-            yarnInstallHook
             nodejs
             cargo-tauri.hook
             rustPlatform.bindgenHook
             pkg-config
-            libclang
-            libllvm
+            clang
           ];
 
-          LIBCLANG_PATH = "${pkgs.libclang}/lib";
+          # buildEnv = {
+          #   LIBCLANG_PATH = "${pkgs.libclang}/lib";
+          #   CPLUS_INCLUDE_PATH = "${pkgs.llvmPackages.libcxx.dev}/include/c++";
+          # };
+          env.OPENCV_LINK_PATHS = "${pkgs.opencv}/lib";
+          env.OPENCV_LINK_LIBS = "opencv_core,opencv_calib3d,opencv_dnn,opencv_features2d,opencv_imgproc,opencv_video,opencv_flann,opencv_imgcodecs,opencv_objdetect,opencv_stitching,png";
 
           cargoRoot = "src-tauri";
           cargoLock = {
-            lockFile = src + "/${cargoRoot}/Cargo.lock";
+            lockFile = finalAttrs.src + "/${finalAttrs.cargoRoot}/Cargo.lock";
           };
 
           buildAndTestSubdir = "src-tauri";
