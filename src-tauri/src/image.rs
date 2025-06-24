@@ -140,8 +140,12 @@ fn preprocess_sheet(mat: Mat) -> Result<Mat, SheetError> {
 
 fn crop_to_markers(mat: Mat) -> Result<Mat, SheetError> {
     Ok(mat
-        .col_range(&Range::new(38, 1133)?)?
-        .row_range(&Range::new(30, 795)?)?
+        .roi(Rect_ {
+            x: 38,
+            y: 30,
+            width: 1095,
+            height: 765,
+        })?
         .clone_pointee())
 }
 
