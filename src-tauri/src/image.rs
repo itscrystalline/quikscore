@@ -4,14 +4,14 @@ use crate::errors::{SheetError, UploadError};
 use crate::signal;
 use base64::Engine;
 use itertools::Itertools;
-use opencv::core::{Mat, Range, Rect_, Size, Vector};
-use opencv::imgproc::{COLOR_GRAY2RGB, THRESH_BINARY};
-use opencv::{highgui, imgcodecs, imgproc, prelude::*};
+use opencv::core::{Mat, Rect_, Size, Vector};
+use opencv::imgproc::THRESH_BINARY;
+use opencv::{highgui, imgproc, prelude::*};
 use tauri_plugin_dialog::FilePath;
 
 use tauri::{Emitter, Manager, Runtime};
 
-use opencv::imgcodecs::{imencode, imread, imwrite_def, ImreadModes};
+use opencv::imgcodecs::{imencode, imread, ImreadModes};
 
 use crate::state::{Answer, AnswerSheet, AppState, QuestionGroup, SignalKeys};
 
