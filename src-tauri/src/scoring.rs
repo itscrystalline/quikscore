@@ -1,6 +1,6 @@
 use itertools::Itertools;
 
-use crate::state::{Answer, AnswerKeySheet, AnswerSheet, QuestionGroup};
+use crate::state::{Answer, AnswerKeySheet, AnswerSheet, NumberType, QuestionGroup};
 
 #[derive(Debug, Clone)]
 pub struct AnswerSheetResult {
@@ -41,6 +41,28 @@ impl Answer {
             (None, Some(_)) => CheckedAnswer::Incorrect,
             (Some(_), None) | (None, None) => CheckedAnswer::NotCounted,
         }
+    }
+    pub fn from_bubbles_vec(vec: Vec<u8>) -> Option<Answer> {
+        let mut num_type: Option<NumberType> = None;
+        let mut num: Option<u8> = None;
+        vec.iter().for_each(|&idx| {
+            if idx < 3 {
+                if num_type.is_none() {
+                    num_type.replace(match idx {
+                        0 => NumberType::Plus,
+                        1 => NumberType::Minus,
+                        2 => NumberType::PlusOrMinus,
+                        _ => unreachable!(),
+                    });
+                }
+            } else if num.is_none() {
+                num.replace(idx - 3);
+            }
+        });
+        Some(Answer {
+            num_type,
+            number: num?,
+        })
     }
 }
 

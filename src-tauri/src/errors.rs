@@ -18,6 +18,10 @@ pub enum UploadError {
 pub enum SheetError {
     #[error("OpenCV Error: {} (errno {})", .0.message, .0.code)]
     OpenCvError(#[from] opencv::Error),
+    #[error("Detected less than 5 answers (this should not happen)")]
+    TooLittleAnswers,
+    #[error("Detected less than 36 groups (this should not happen)")]
+    TooLittleGroups,
     #[error("Unimplemented")]
     Unimplemented,
 }
