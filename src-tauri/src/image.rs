@@ -188,7 +188,7 @@ const ANSWER_WIDTH_GAP: i32 = 9;
 const ANSWER_HEIGHT: i32 = 73;
 const ANSWER_HEIGHT_GAP: i32 = 10;
 
-pub fn extract_answers(answer_mat: &Mat) -> Result<[QuestionGroup; 36], SheetError> {
+fn extract_answers(answer_mat: &Mat) -> Result<[QuestionGroup; 36], SheetError> {
     // let mat_debug_cloned = answer_mat.try_clone()?;
     // let mut mat_debug = new_mat_copy!(answer_mat);
     // imgproc::cvt_color_def(&mat_debug_cloned, &mut mat_debug, COLOR_GRAY2RGB)?;
@@ -272,7 +272,7 @@ pub fn extract_answers(answer_mat: &Mat) -> Result<[QuestionGroup; 36], SheetErr
     }))
 }
 
-pub fn extract_digits_for_sub_stu(
+fn extract_digits_for_sub_stu(
     mat: &Mat,
     num_digits: i32,
     mut is_student_id: bool,
@@ -323,6 +323,25 @@ pub fn extract_digits_for_sub_stu(
     }
 
     Ok(digits)
+}
+
+impl TryFrom<(Mat, Mat, Mat)> for AnswerSheet {
+    type Error = SheetError;
+    fn try_from(value: (Mat, Mat, Mat)) -> Result<Self, Self::Error> {
+        let (subject_code_mat, student_id_mat, answers_mat) = value;
+        let subject_id_string = extract_digits_for_sub_stu(&subject_code_mat, 2, false)?;
+        let student_id_string = extract_digits_for_sub_stu(&student_id_mat, 9, true)?;
+        let scanned_answers = extract_answers(&answers_mat)?;
+
+        // println!("subject_id: {subject_id_string}");
+        // println!("subject_id: {student_id_string}");
+
+        Ok(Self {
+            subject_code: subject_id_string,
+            student_id: student_id_string,
+            answers: scanned_answers,
+        })
+    }
 }
 
 #[cfg(test)]
