@@ -3,7 +3,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 
 use opencv::core::Mat;
 
-use crate::errors::SheetError;
+use crate::{errors::SheetError, image};
 
 pub type StateMutex = Mutex<AppState>;
 
@@ -22,13 +22,13 @@ pub enum AppState {
     Init,
     WithKey {
         key_image: Mat,
-        // key: AnswerKeySheet,
+        key: AnswerKeySheet,
     },
     WithKeyAndSheets {
         key_image: Mat,
-        // key: AnswerKeySheet,
+        key: AnswerKeySheet,
         sheet_images: Vec<Mat>,
-        // _answer_sheets: Vec<AnswerSheet>,
+        answer_sheets: Vec<AnswerSheet>,
     },
 }
 
@@ -37,6 +37,7 @@ impl AppState {
         app: &A,
         base64_image: String,
         image: Mat,
+        key: AnswerKeySheet,
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
@@ -44,7 +45,7 @@ impl AppState {
             AppState::Init | AppState::WithKey { .. } => {
                 *state = AppState::WithKey {
                     key_image: image,
-                    // key: answer.into(),
+                    key,
                 };
                 signal!(app, SignalKeys::KeyImage, base64_image);
                 signal!(app, SignalKeys::KeyStatus, "");
@@ -65,24 +66,20 @@ impl AppState {
         app: &A,
         base64_images: Vec<String>,
         images: Vec<Mat>,
+        sheets: Vec<AnswerSheet>,
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
         match &*state {
-            AppState::WithKey {
-                key_image,
-                // ref key,
-            }
+            AppState::WithKey { key_image, ref key }
             | AppState::WithKeyAndSheets {
-                key_image,
-                // ref key,
-                ..
+                key_image, ref key, ..
             } => {
                 *state = AppState::WithKeyAndSheets {
                     key_image: key_image.clone(),
-                    // key: key.clone(),
+                    key: key.clone(),
                     sheet_images: images,
-                    // _answer_sheets: vec_answers,
+                    answer_sheets: sheets,
                 };
                 signal!(app, SignalKeys::SheetImages, base64_images);
                 signal!(app, SignalKeys::SheetStatus, "");
@@ -93,14 +90,10 @@ impl AppState {
     pub fn clear_answer_sheets<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        if let AppState::WithKeyAndSheets {
-            /*key,*/ key_image,
-            ..
-        } = &*state
-        {
+        if let AppState::WithKeyAndSheets { key, key_image, .. } = &*state {
             *state = AppState::WithKey {
                 key_image: key_image.clone(),
-                // key,
+                key: key.clone(),
             };
             signal!(app, SignalKeys::SheetImages, Vec::<String>::new());
             signal!(app, SignalKeys::SheetStatus, "");
@@ -251,7 +244,7 @@ mod unit_tests {
         let current_mat = {
             let mutex = app.state::<StateMutex>();
             let state = mutex.lock().expect("poisoned");
-            let AppState::WithKey { key_image } = &*state else {
+            let AppState::WithKey { key_image, key } = &*state else {
                 unreachable!()
             };
             key_image.clone()
@@ -261,7 +254,7 @@ mod unit_tests {
 
         let mutex = app.state::<StateMutex>();
         let state = mutex.lock().unwrap();
-        if let AppState::WithKey { key_image } = &*state {
+        if let AppState::WithKey { key_image, key } = &*state {
             assert!(!compare_mats(key_image, &current_mat));
         } else {
             unreachable!()
