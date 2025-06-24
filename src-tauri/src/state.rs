@@ -1,9 +1,9 @@
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri::{Emitter, Manager, Runtime};
 
 use opencv::core::Mat;
 
-use crate::{errors::SheetError, image};
+use crate::errors::SheetError;
 
 pub type StateMutex = Mutex<AppState>;
 
@@ -119,25 +119,6 @@ impl From<AnswerSheet> for AnswerKeySheet {
             subject_code: value.subject_code,
             answers: value.answers,
         }
-    }
-}
-
-impl TryFrom<(Mat, Mat, Mat)> for AnswerSheet {
-    type Error = SheetError;
-    fn try_from(value: (Mat, Mat, Mat)) -> Result<Self, Self::Error> {
-        let (subject_code_mat, student_id_mat, answers_mat) = value;
-        let subject_id_string = image::extract_digits_for_sub_stu(&subject_code_mat, 2, false)?;
-        let student_id_string = image::extract_digits_for_sub_stu(&student_id_mat, 9, true)?;
-        let scanned_answers = image::extract_answers(&answers_mat)?;
-
-        // println!("subject_id: {subject_id_string}");
-        // println!("subject_id: {student_id_string}");
-
-        Ok(Self {
-            subject_code: subject_id_string,
-            student_id: student_id_string,
-            answers: scanned_answers,
-        })
     }
 }
 
