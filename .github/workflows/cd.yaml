@@ -37,7 +37,7 @@ jobs:
 
     - name: Build with Nix flake
       run: |
-        nix build .
+        nix build . -L 2>&1
 
     - name: Upload Nix build artifacts
       uses: actions/upload-artifact@v4
@@ -45,6 +45,7 @@ jobs:
         name: quikscore-${{ matrix.platform.name }}
         path: |
           result/bin/quikscore
+          result/target/release/bundle/**
 
   windows-build:
     name: Build (Windows)
@@ -77,9 +78,14 @@ jobs:
       with: 
         toolchain: nightly
 
-    - name: Install dependencies
+    - name: Install OpenCV
       run: |
-        choco install opencv llvm -y
+        choco install opencv -y
+
+    - name: Install LLVM
+      uses: KyleMayes/install-llvm-action@v2
+      with:
+        version: '19.1.7'
 
     - name: Set up Environment variables
       run: |
@@ -98,4 +104,5 @@ jobs:
         name: quikscore-${{ matrix.platform.name }}
         path: |
           src-tauri/target/release/quikscore.exe
-
+          src-tauri/target/release/bundle/msi/*.msi
+          src-tauri/target/release/bundle/msi/*.exe
