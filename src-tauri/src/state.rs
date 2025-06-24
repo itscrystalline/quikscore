@@ -103,14 +103,14 @@ impl AppState {
 
 #[derive(Debug, Clone)]
 pub struct AnswerSheet {
-    pub subject_code: u16,
-    pub student_id: u32,
+    pub subject_code: String,
+    pub student_id: String,
     pub answers: [QuestionGroup; 36],
 }
 
 #[derive(Debug, Clone)]
 pub struct AnswerKeySheet {
-    pub subject_code: u16,
+    pub subject_code: String,
     pub answers: [QuestionGroup; 36],
 }
 impl From<AnswerSheet> for AnswerKeySheet {
@@ -143,7 +143,7 @@ pub struct QuestionGroup {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Answer {
     pub num_type: Option<NumberType>,
-    pub number: u32,
+    pub number: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
