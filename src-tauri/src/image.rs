@@ -289,34 +289,28 @@ fn crop_each_part(mat: &Mat) ->Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
     Ok((name, subject, date, exam_room, seat))
 }
 
-fn image_to_string(mat: &Mat) -> Result<String, opencv::Error> {
+fn image_to_string(mat: &Mat) -> Result<String, SheetError> {
     let width = mat.cols();
     let height = mat.rows();
     let bytes_per_pixel = 1;
     let bytes_per_line = width;
 
-    println!("is_continuous: {}", mat.is_continuous());
+    //println!("is_continuous: {}", mat.is_continuous());
 
-    let image_data = mat.data_bytes().map_err(|_| {
-        opencv::Error::new(0, "Failed to extract data from Mat".to_string())
-    })?;
+    let image_data = mat.data_bytes()?;
 
     let api = TesseractAPI::new();
-    api.set_image(image_data, width, height, bytes_per_pixel, bytes_per_line)
-        .map_err(|_| opencv::Error::new(0, "Failed to set image".to_string()))?;
+    api.set_image(image_data, width, height, bytes_per_pixel, bytes_per_line)?;
 
-    let text = api.get_utf8_text()
-        .map_err(|_| opencv::Error::new(0, "Failed to extract text".to_string()))?;
+    let text = api.get_utf8_text()?;
 
     Ok(text.trim().to_string())
 }
 
 
-fn extract_user_information(mat: &Mat) -> Result<(String, String, String, String, String), opencv::Error> {
-    let user_information = crop_user_information(mat)
-        .map_err(|e| opencv::Error::new(0, format!("Crop error: {e}")))?;
-    let (name, subject, date, exam_room, seat) = crop_each_part(&user_information)
-        .map_err(|e| opencv::Error::new(0, format!("Crop parts error: {e}")))?;
+fn extract_user_information(mat: &Mat) -> Result<(String, String, String, String, String), SheetError> {
+    let user_information = crop_user_information(mat)?;x
+    let (name, subject, date, exam_room, seat) = crop_each_part(&user_information)?;
 
     let name_string: String = image_to_string(&name)?;
     let subject_string: String = image_to_string(&subject)?;
