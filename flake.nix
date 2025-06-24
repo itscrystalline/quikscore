@@ -25,16 +25,14 @@
             hash = "sha256-fBrclUcHHLgviE6X6Os5zewuI4vLauz5N52N8jc2FQ0=";
           };
 
-          nativeBuildInputs = with pkgs;
-            [
-              yarnConfigHook
-              nodejs
-              cargo-tauri.hook
-              rustPlatform.bindgenHook
-              pkg-config
-              clang
-            ]
-            ++ lib.optionals stdenv.hostPlatform.isLinux [wrapGAppsHook4];
+          nativeBuildInputs = with pkgs; [
+            yarnConfigHook
+            nodejs
+            cargo-tauri.hook
+            rustPlatform.bindgenHook
+            pkg-config
+            clang
+          ];
 
           # buildEnv = {
           #   LIBCLANG_PATH = "${pkgs.libclang}/lib";
