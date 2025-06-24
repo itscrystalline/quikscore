@@ -56,10 +56,10 @@ jobs:
         platform: 
           - on: windows-latest 
             name: windows-x86_64
-            vcpkg-triple: x64-windows-release
+            vcpkg-triple: x64-windows
           - on: windows-11-arm
             name: windows-aarch64
-            vcpkg-triple: arm64-windows-release
+            vcpkg-triple: arm64-windows
 
     steps:
     - name: Checkout code
