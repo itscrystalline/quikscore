@@ -1,6 +1,6 @@
 use itertools::Itertools;
 
-use crate::state::{Answer, AnswerKeySheet, AnswerSheet, QuestionGroup};
+use crate::state::{Answer, AnswerKeySheet, AnswerSheet, NumberType, QuestionGroup};
 
 #[derive(Debug, Clone)]
 pub struct AnswerSheetResult {
@@ -41,6 +41,28 @@ impl Answer {
             (None, Some(_)) => CheckedAnswer::Incorrect,
             (Some(_), None) | (None, None) => CheckedAnswer::NotCounted,
         }
+    }
+    pub fn from_bubbles_vec(vec: Vec<u8>) -> Option<Answer> {
+        let mut num_type: Option<NumberType> = None;
+        let mut num: Option<u8> = None;
+        vec.iter().for_each(|&idx| {
+            if idx < 3 {
+                if num_type.is_none() {
+                    num_type.replace(match idx {
+                        0 => NumberType::Plus,
+                        1 => NumberType::Minus,
+                        2 => NumberType::PlusOrMinus,
+                        _ => unreachable!(),
+                    });
+                }
+            } else if num.is_none() {
+                num.replace(idx - 3);
+            }
+        });
+        Some(Answer {
+            num_type,
+            number: num?,
+        })
     }
 }
 
@@ -106,7 +128,7 @@ mod unit_tests {
     use super::*;
     use crate::state::{Answer, AnswerKeySheet, AnswerSheet, NumberType, QuestionGroup};
 
-    fn answer(num: u32) -> Option<Answer> {
+    fn answer(num: u8) -> Option<Answer> {
         Some(Answer {
             num_type: Some(NumberType::Plus),
             number: num,
@@ -188,13 +210,13 @@ mod unit_tests {
         };
 
         let answer_sheet = AnswerSheet {
-            subject_code: 1001,
-            student_id: 123456,
+            subject_code: 1001.to_string(),
+            student_id: 123456.to_string(),
             answers: array::from_fn(|_| student_group.clone()),
         };
 
         let key_sheet = AnswerKeySheet {
-            subject_code: 1001,
+            subject_code: 1001.to_string(),
             answers: array::from_fn(|_| correct_group.clone()),
         };
 
@@ -205,5 +227,68 @@ mod unit_tests {
         assert_eq!(result.incorrect, 3 * 36);
         assert_eq!(result.not_answered, 0);
         assert_eq!(result.graded_questions.len(), 36);
+    }
+
+    #[test]
+    fn test_bubble_definite() {
+        let bubbles = vec![3u8];
+        let ans = Answer::from_bubbles_vec(bubbles).unwrap();
+
+        assert!(matches!(
+            ans,
+            Answer {
+                num_type: None,
+                number: 0u8
+            }
+        ))
+    }
+    #[test]
+    fn test_bubble_unclear() {
+        let bubbles = vec![5u8, 8u8];
+        let ans = Answer::from_bubbles_vec(bubbles).unwrap();
+
+        assert!(matches!(
+            ans,
+            Answer {
+                num_type: None,
+                number: 2u8
+            }
+        ))
+    }
+    #[test]
+    fn test_bubble_none() {
+        let bubbles = vec![0u8];
+        assert!(Answer::from_bubbles_vec(bubbles).is_none());
+    }
+    #[test]
+    fn test_bubble_plus_minus() {
+        let bubbles_plus = vec![0u8, 5u8];
+        let bubbles_minus = vec![1u8, 5u8];
+        let bubbles_both = vec![2u8, 5u8];
+        let ans_plus = Answer::from_bubbles_vec(bubbles_plus).unwrap();
+        let ans_minus = Answer::from_bubbles_vec(bubbles_minus).unwrap();
+        let ans_both = Answer::from_bubbles_vec(bubbles_both).unwrap();
+
+        assert!(matches!(
+            ans_plus,
+            Answer {
+                num_type: Some(NumberType::Plus),
+                number: 2u8
+            }
+        ));
+        assert!(matches!(
+            ans_minus,
+            Answer {
+                num_type: Some(NumberType::Minus),
+                number: 2u8
+            }
+        ));
+        assert!(matches!(
+            ans_both,
+            Answer {
+                num_type: Some(NumberType::PlusOrMinus),
+                number: 2u8
+            }
+        ));
     }
 }
