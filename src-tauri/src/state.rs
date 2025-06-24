@@ -71,10 +71,8 @@ impl AppState {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
         match &*state {
-            AppState::WithKey { key_image, ref key }
-            | AppState::WithKeyAndSheets {
-                key_image, ref key, ..
-            } => {
+            AppState::WithKey { key_image, key }
+            | AppState::WithKeyAndSheets { key_image, key, .. } => {
                 *state = AppState::WithKeyAndSheets {
                     key_image: key_image.clone(),
                     key: key.clone(),
