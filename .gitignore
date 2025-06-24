@@ -36,3 +36,5 @@ dist-ssr
 answer sheet*
 
 *.profraw
+
+/src-tauri/temp

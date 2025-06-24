@@ -4,9 +4,11 @@ use base64::Engine;
 use itertools::Itertools;
 use opencv::core::{Mat, Range, Rect_, Size, Vector};
 use opencv::imgproc::THRESH_BINARY;
-use opencv::{highgui, imgproc, prelude::*};
+use opencv::{highgui, imgproc, prelude::*, imgcodecs};
 use tauri_plugin_dialog::FilePath;
 use tesseract_rs::TesseractAPI;
+use std::fs;
+use std::path::Path;
 
 
 use tauri::{Emitter, Manager, Runtime};
@@ -308,16 +310,38 @@ fn image_to_string(mat: &Mat) -> Result<String, SheetError> {
 }
 
 
+
 fn extract_user_information(mat: &Mat) -> Result<(String, String, String, String, String), SheetError> {
-    let user_information = crop_user_information(mat)?;x
+    let temp_dir = "temp";
+    fs::create_dir_all(temp_dir);
+
+    println!("Working directory: {:?}", std::env::current_dir());
+
+    let user_information = crop_user_information(mat)?;
     let (name, subject, date, exam_room, seat) = crop_each_part(&user_information)?;
 
-    let name_string: String = image_to_string(&name)?;
-    let subject_string: String = image_to_string(&subject)?;
-    let date_string: String = image_to_string(&date)?;
-    let exam_room_string: String = image_to_string(&exam_room)?;
-    let seat_string :String = image_to_string(&seat)?;
+    safe_imwrite("temp/debug_name.png", &name)?;
+    safe_imwrite("temp/debug_subject.png", &subject)?;
+    safe_imwrite("temp/debug_date.png", &date)?;
+    safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
+    safe_imwrite("temp/debug_seat.png", &seat)?;
+
+    let name_string = image_to_string(&name)?;
+    let subject_string = image_to_string(&subject)?;
+    let date_string = image_to_string(&date)?;
+    let exam_room_string = image_to_string(&exam_room)?;
+    let seat_string = image_to_string(&seat)?;
+
     Ok((name_string, subject_string, date_string, exam_room_string, seat_string))
+}
+
+fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Error> {
+    if mat.empty() {
+        println!("Warning: attempting to write an empty Mat to {:?}", path.as_ref());
+    } else {
+        println!("Writing debug image to {:?}", path.as_ref());
+    }
+    imgcodecs::imwrite(path.as_ref().to_str().unwrap(), mat, &opencv::core::Vector::new())
 }
 
 #[cfg(test)]
