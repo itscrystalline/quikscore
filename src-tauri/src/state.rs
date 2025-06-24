@@ -126,7 +126,18 @@ impl TryFrom<(Mat, Mat, Mat)> for AnswerSheet {
     type Error = SheetError;
     fn try_from(value: (Mat, Mat, Mat)) -> Result<Self, Self::Error> {
         let (subject_code_mat, student_id_mat, answers_mat) = value;
-        todo!()
+        let subject_id_string = image::extract_digits_for_sub_stu(&subject_code_mat, 2, false)?;
+        let student_id_string = image::extract_digits_for_sub_stu(&student_id_mat, 9, true)?;
+        let scanned_answers = image::extract_answers(&answers_mat)?;
+
+        // println!("subject_id: {subject_id_string}");
+        // println!("subject_id: {student_id_string}");
+
+        Ok(Self {
+            subject_code: subject_id_string,
+            student_id: student_id_string,
+            answers: scanned_answers,
+        })
     }
 }
 
@@ -138,6 +149,20 @@ pub struct QuestionGroup {
     pub C: Option<Answer>,
     pub D: Option<Answer>,
     pub E: Option<Answer>,
+}
+
+impl TryFrom<Vec<Option<Answer>>> for QuestionGroup {
+    type Error = SheetError;
+    fn try_from(value: Vec<Option<Answer>>) -> Result<Self, Self::Error> {
+        let mut iter = value.into_iter();
+        Ok(Self {
+            A: iter.next().ok_or(SheetError::TooLittleAnswers)?,
+            B: iter.next().ok_or(SheetError::TooLittleAnswers)?,
+            C: iter.next().ok_or(SheetError::TooLittleAnswers)?,
+            D: iter.next().ok_or(SheetError::TooLittleAnswers)?,
+            E: iter.next().ok_or(SheetError::TooLittleAnswers)?,
+        })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
