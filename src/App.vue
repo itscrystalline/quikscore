@@ -41,8 +41,8 @@ listen<string[]>('sheet-images', (event) => {
 
 <template>
   <main class="container">
-    <div>
-      <img class="logonana" src="/src/assets/logo.png" alt="Vite logo">
+    <div display="flex">
+      <img class="logonana" src="/src/assets/logo_fit.png" alt="Vite logo">
       <span class="logo-text"><span class="q-letter"></span>uikscore</span>
     </div>
       <p>Upload your key sheet and some answer sheets!</p>
@@ -102,8 +102,9 @@ listen<string[]>('sheet-images', (event) => {
 }
 
 .logonana{
-  width: 5em;
+  width: 3em;
   height: auto;
+  align-items: center;
 }
 
 
