@@ -7,6 +7,7 @@ use itertools::Itertools;
 use opencv::core::{Mat, Rect_, Size, Vector};
 use opencv::imgproc::THRESH_BINARY;
 use opencv::{highgui, imgproc, prelude::*};
+use rayon::prelude::*;
 use tauri_plugin_dialog::FilePath;
 
 use tauri::{Emitter, Manager, Runtime};
@@ -56,14 +57,15 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     };
 
     let base64_list: Result<Vec<(String, Mat, AnswerSheet)>, UploadError> = paths
-        .into_iter()
+        .into_par_iter()
         .enumerate()
         .map(|(idx, file_path)| {
-            signal!(
-                app,
-                SignalKeys::SheetStatus,
-                format!("Processing image #{}", idx + 1)
-            );
+            // TODO: Publish Progress
+            // signal!(
+            //     app,
+            //     SignalKeys::SheetStatus,
+            //     format!("Processing image #{}", idx + 1)
+            // );
             handle_upload(file_path)
         })
         .collect();
