@@ -84,8 +84,11 @@ async function clearSheets() {
 
 <template>
   <main class="container">
-    <h1>Quikscore</h1>
-    <p>Upload your key sheet and some answer sheets!</p>
+    <div>
+      <img class="logonana" src="/src/assets/logo.png" alt="Vite logo">
+      <span class="logo-text"><span class="q-letter"></span>uikscore</span>
+    </div>
+      <p>Upload your key sheet and some answer sheets!</p>
 
     <button class="btn-key" @click="uploadKey" :disabled="answerImages.length !== 0">{{ keyImage === "" ?
       "📥 Upload Answer Key..." :
@@ -147,6 +150,20 @@ async function clearSheets() {
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
 }
+
+.logo-text {
+  font-size: 2em;
+  font-weight: 600;
+  color: #cdd6f4;
+  margin-top: 0px;
+  display: inline-block;
+}
+
+.logonana{
+  width: 5em;
+  height: auto;
+}
+
 
 .container {
   margin: 0;
