@@ -73,13 +73,13 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
 
     let (tx, mut rx) = tauri::async_runtime::channel::<ProcessingState>(images_count);
 
-    _ = tauri::async_runtime::spawn(async move {
+    let processing_thread = tauri::async_runtime::spawn(async move {
         let base64_list: Result<Vec<(String, Mat, AnswerSheet)>, UploadError> = paths
             .into_par_iter()
             .map_with(tx.clone(), |tx, file_path| {
-                _ = tx.blocking_send(ProcessingState::Starting);
+                _ = tx.try_send(ProcessingState::Starting);
                 let res = handle_upload(file_path);
-                _ = tx.blocking_send(ProcessingState::Finishing);
+                _ = tx.try_send(ProcessingState::Finishing);
                 res
             })
             .collect();
@@ -133,6 +133,7 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
                         }
                         Err(e) => signal!(app, SignalKeys::SheetStatus, format!("{e}")),
                     }
+                    processing_thread.abort();
                     break;
                 }
             },
