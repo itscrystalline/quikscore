@@ -1,42 +1,85 @@
 <script setup lang="ts">
-import { Ref, ref } from "vue";
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
+import { ref } from "vue";
+import { invoke, Channel } from "@tauri-apps/api/core";
+import { AnswerScoreResult, AnswerUpload, KeyUpload } from "./messages";
+
+
+
+const keyEventHandler = (msg: KeyUpload): void => {
+  switch (msg.event) {
+    case "cancelled":
+      keyStatus.value = "User cancelled upload";
+      break;
+
+    case "clear":
+      console.log("clear key (ts)")
+      keyImage.value = "";
+      keyStatus.value = "";
+      break;
+
+    case "done":
+      keyImage.value = msg.data.base64;
+      keyStatus.value = "";
+      break;
+
+    case "error":
+      keyStatus.value = msg.data.error;
+      break;
+  }
+}
+const answerEventHandler = (msg: AnswerUpload): void => {
+  switch (msg.event) {
+    case "cancelled":
+      answerStatus.value = "User cancelled upload";
+      break;
+    case "clear":
+      answerStatus.value = "";
+      answerImages.value = [];
+      break;
+    case "almostDone":
+      answerStatus.value = "Publishing results...";
+      break;
+    case "processing":
+      const { total, started, finished } = msg.data;
+      answerStatus.value = `Processing ${started}/${total} sheets... ${((finished / total) * 100).toFixed(2)}% (${started - finished} in progress)`;
+      break;
+    case "done":
+      answerStatus.value = "";
+      answerImages.value = msg.data.uploaded;
+      break;
+    case "error":
+      answerStatus.value = `Error uploading sheets: ${msg.data.error}`;
+      break;
+  }
+}
 
 const keyImage = ref("");
 const keyStatus = ref("");
 
-const answerImages: Ref<string[], string[]> = ref([]);
+const answerImages = ref<AnswerScoreResult[]>([]);
 const answerStatus = ref("");
 
 async function uploadKey() {
-  await invoke("upload_key_image");
+  const keyEventChannel = new Channel<KeyUpload>();
+  keyEventChannel.onmessage = keyEventHandler;
+  await invoke("upload_key_image", { channel: keyEventChannel });
 }
 async function clearKey() {
-  await invoke("clear_key_image");
+  const keyEventChannel = new Channel<KeyUpload>();
+  keyEventChannel.onmessage = keyEventHandler;
+  await invoke("clear_key_image", { channel: keyEventChannel });
 }
 
 async function uploadSheets() {
-  await invoke("upload_sheet_images");
+  const answerEventChannel = new Channel<AnswerUpload>();
+  answerEventChannel.onmessage = answerEventHandler;
+  await invoke("upload_sheet_images", { channel: answerEventChannel });
 }
 async function clearSheets() {
-  await invoke("clear_sheet_images");
+  const answerEventChannel = new Channel<AnswerUpload>();
+  answerEventChannel.onmessage = answerEventHandler;
+  await invoke("clear_sheet_images", { channel: answerEventChannel });
 }
-
-
-listen<string>('key-status', (event) => {
-  keyStatus.value = event.payload;
-});
-listen<string>('key-image', (event) => {
-  keyImage.value = event.payload;
-});
-
-listen<string>('sheet-status', (event) => {
-  answerStatus.value = event.payload;
-});
-listen<string[]>('sheet-images', (event) => {
-  answerImages.value = event.payload;
-});
 </script>
 
 <template>
@@ -47,20 +90,35 @@ listen<string[]>('sheet-images', (event) => {
     </div>
       <p>Upload your key sheet and some answer sheets!</p>
 
-    <button class="btn-key" @click="uploadKey" :disabled="answerImages.length !== 0">{{ keyImage === "" ? "📥\nUpload Answer Key..." :
+    <button class="btn-key" @click="uploadKey" :disabled="answerImages.length !== 0">{{ keyImage === "" ?
+      "📥 Upload Answer Key..." :
       "Change Answer Key" }}</button>
-    <button class="btn-key" @click="clearKey" :disabled="answerImages.length !== 0" v-if="keyImage !== ''">🔄 Clear Answer Key</button>
+    <button class="btn-key" @click="clearKey" :disabled="answerImages.length !== 0" v-if="keyImage !== ''">🔄 Clear
+      Answer Key</button>
     <p :style="keyStatus == '' ? 'display: none;' : ''">{{ keyStatus }}</p>
     <img v-bind:src="keyImage" :style="keyImage == '' ? 'display: none;' : ''"></img>
 
-    <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ? "🧾\nUpload Answer Sheets..." :
+    <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ?
+      "🧾\nUpload Answer Sheets..." :
       "Change Answer Sheets"
       }}</button>
-    <button class="btn-sheet" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄 Clear Answer
+    <button class="btn-sheet" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄 Clear
+      Answer
       Sheets</button>
     <p :style="answerStatus == '' ? 'display: none;' : ''">{{ answerStatus }}</p>
-    <img v-for="source in answerImages" :src="source"></img>
-      <!-- 📦 Result Placeholder -->
+    <div v-for="{ result, data } in answerImages">
+      <div v-if="result == 'ok'">
+        <img :src="data.base64"></img>
+        <p>ID {{ data.studentId }}</p>
+        <p>score: {{ data.correct }}</p>
+        <p>incorrect: {{ data.incorrect }}</p>
+        <p>questions not answered: {{ data.notAnswered }}</p>
+      </div>
+      <p v-else>
+        {{ data.error }}
+      </p>
+    </div>
+    <!-- 📦 Result Placeholder -->
     <div class="card" v-if="!keyImage && answerImages.length === 0">
       <div class="placeholder">← Upload files to see results here</div>
     </div>
@@ -179,6 +237,7 @@ button.btn-key {
   background-color: #3b82f6;
   color: #ffffff;
 }
+
 button.btn-key:hover {
   background-color: #2563eb;
 }
@@ -187,6 +246,7 @@ button.btn-sheet {
   background-color: #10b981;
   color: #ffffff;
 }
+
 button.btn-sheet:hover {
   background-color: #059669;
 }
@@ -194,11 +254,13 @@ button.btn-sheet:hover {
 #greet-input {
   margin-right: 5px;
 }
+
 .card {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 20px;
-  background: #1e293b; /* slate-800 */
+  background: #1e293b;
+  /* slate-800 */
   margin-top: 20px;
 }
 
