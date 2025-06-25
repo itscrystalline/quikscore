@@ -12,6 +12,8 @@ pub enum UploadError {
     EncodeError(#[from] opencv::Error),
     #[error("Unable to detect answer sheet: {0}")]
     NotAnswerSheet(#[from] SheetError),
+    #[error("Pipe between processing threads and main thread unexpectetly broken")]
+    UnexpectedPipeClosure,
 }
 
 #[derive(thiserror::Error, Debug)]
