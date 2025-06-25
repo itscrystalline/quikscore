@@ -56,23 +56,18 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         return;
     };
 
-    let base64_list: Result<Vec<(String, Mat, AnswerSheet)>, UploadError> = paths
-        .into_par_iter()
-        .enumerate()
-        .map(|(idx, file_path)| {
-            // TODO: Publish Progress
-            // signal!(
-            //     app,
-            //     SignalKeys::SheetStatus,
-            //     format!("Processing image #{}", idx + 1)
-            // );
-            handle_upload(file_path)
-        })
-        .collect();
+    signal!(
+        app,
+        SignalKeys::SheetStatus,
+        format!("Scoring {} sheets...", paths.len())
+    );
+    let base64_list: Result<Vec<(String, Mat, AnswerSheet)>, UploadError> =
+        paths.into_par_iter().map(handle_upload).collect();
     match base64_list {
         Ok(vec) => {
             let (vec_base64, vec_mat, vec_answers): (Vec<String>, Vec<Mat>, Vec<AnswerSheet>) =
                 vec.into_iter().multiunzip();
+            signal!(app, SignalKeys::SheetStatus, "Publishing results...");
             AppState::upload_answer_sheets(app, vec_base64, vec_mat, vec_answers);
         }
         Err(e) => signal!(app, SignalKeys::SheetStatus, format!("{e}")),
