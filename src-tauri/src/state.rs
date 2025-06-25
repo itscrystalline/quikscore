@@ -1,5 +1,5 @@
 use std::sync::Mutex;
-use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri::{Emitter, Manager, Runtime};
 
 use opencv::core::Mat;
 
@@ -22,13 +22,13 @@ pub enum AppState {
     Init,
     WithKey {
         key_image: Mat,
-        // key: AnswerKeySheet,
+        key: AnswerKeySheet,
     },
     WithKeyAndSheets {
         key_image: Mat,
-        // key: AnswerKeySheet,
+        key: AnswerKeySheet,
         sheet_images: Vec<Mat>,
-        // _answer_sheets: Vec<AnswerSheet>,
+        answer_sheets: Vec<AnswerSheet>,
     },
 }
 
@@ -37,6 +37,7 @@ impl AppState {
         app: &A,
         base64_image: String,
         image: Mat,
+        key: AnswerKeySheet,
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
@@ -44,7 +45,7 @@ impl AppState {
             AppState::Init | AppState::WithKey { .. } => {
                 *state = AppState::WithKey {
                     key_image: image,
-                    // key: answer.into(),
+                    key,
                 };
                 signal!(app, SignalKeys::KeyImage, base64_image);
                 signal!(app, SignalKeys::KeyStatus, "");
@@ -65,24 +66,18 @@ impl AppState {
         app: &A,
         base64_images: Vec<String>,
         images: Vec<Mat>,
+        sheets: Vec<AnswerSheet>,
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
         match &*state {
-            AppState::WithKey {
-                key_image,
-                // ref key,
-            }
-            | AppState::WithKeyAndSheets {
-                key_image,
-                // ref key,
-                ..
-            } => {
+            AppState::WithKey { key_image, key }
+            | AppState::WithKeyAndSheets { key_image, key, .. } => {
                 *state = AppState::WithKeyAndSheets {
                     key_image: key_image.clone(),
-                    // key: key.clone(),
+                    key: key.clone(),
                     sheet_images: images,
-                    // _answer_sheets: vec_answers,
+                    answer_sheets: sheets,
                 };
                 signal!(app, SignalKeys::SheetImages, base64_images);
                 signal!(app, SignalKeys::SheetStatus, "");
@@ -93,14 +88,10 @@ impl AppState {
     pub fn clear_answer_sheets<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        if let AppState::WithKeyAndSheets {
-            /*key,*/ key_image,
-            ..
-        } = &*state
-        {
+        if let AppState::WithKeyAndSheets { key, key_image, .. } = &*state {
             *state = AppState::WithKey {
                 key_image: key_image.clone(),
-                // key,
+                key: key.clone(),
             };
             signal!(app, SignalKeys::SheetImages, Vec::<String>::new());
             signal!(app, SignalKeys::SheetStatus, "");
@@ -110,14 +101,14 @@ impl AppState {
 
 #[derive(Debug, Clone)]
 pub struct AnswerSheet {
-    pub subject_code: u16,
-    pub student_id: u32,
+    pub subject_code: String,
+    pub student_id: String,
     pub answers: [QuestionGroup; 36],
 }
 
 #[derive(Debug, Clone)]
 pub struct AnswerKeySheet {
-    pub subject_code: u16,
+    pub subject_code: String,
     pub answers: [QuestionGroup; 36],
 }
 impl From<AnswerSheet> for AnswerKeySheet {
@@ -126,14 +117,6 @@ impl From<AnswerSheet> for AnswerKeySheet {
             subject_code: value.subject_code,
             answers: value.answers,
         }
-    }
-}
-
-impl TryFrom<(Mat, Mat, Mat)> for AnswerSheet {
-    type Error = SheetError;
-    fn try_from(value: (Mat, Mat, Mat)) -> Result<Self, Self::Error> {
-        let (subject_code_mat, student_id_mat, answers_mat) = value;
-        todo!()
     }
 }
 
@@ -147,10 +130,24 @@ pub struct QuestionGroup {
     pub E: Option<Answer>,
 }
 
+impl TryFrom<Vec<Option<Answer>>> for QuestionGroup {
+    type Error = SheetError;
+    fn try_from(value: Vec<Option<Answer>>) -> Result<Self, Self::Error> {
+        let mut iter = value.into_iter();
+        Ok(Self {
+            A: iter.next().ok_or(SheetError::TooLittleAnswers)?,
+            B: iter.next().ok_or(SheetError::TooLittleAnswers)?,
+            C: iter.next().ok_or(SheetError::TooLittleAnswers)?,
+            D: iter.next().ok_or(SheetError::TooLittleAnswers)?,
+            E: iter.next().ok_or(SheetError::TooLittleAnswers)?,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Answer {
     pub num_type: Option<NumberType>,
-    pub number: u32,
+    pub number: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -251,7 +248,7 @@ mod unit_tests {
         let current_mat = {
             let mutex = app.state::<StateMutex>();
             let state = mutex.lock().expect("poisoned");
-            let AppState::WithKey { key_image } = &*state else {
+            let AppState::WithKey { key_image, key } = &*state else {
                 unreachable!()
             };
             key_image.clone()
@@ -261,7 +258,7 @@ mod unit_tests {
 
         let mutex = app.state::<StateMutex>();
         let state = mutex.lock().unwrap();
-        if let AppState::WithKey { key_image } = &*state {
+        if let AppState::WithKey { key_image, key } = &*state {
             assert!(!compare_mats(key_image, &current_mat));
         } else {
             unreachable!()
