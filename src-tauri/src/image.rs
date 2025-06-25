@@ -1,4 +1,5 @@
 use std::array;
+use std::future::IntoFuture;
 
 use crate::errors::{SheetError, UploadError};
 use crate::signal;
@@ -47,6 +48,12 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
     paths: Option<Vec<FilePath>>,
 ) {
+    enum ProcessingState {
+        Starting,
+        Finishing,
+        Done(Result<Vec<(String, Mat, AnswerSheet)>, UploadError>),
+    }
+
     let Some(paths) = paths else {
         signal!(
             app,
@@ -56,21 +63,81 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         return;
     };
 
+    let images_count = paths.len();
+
     signal!(
         app,
         SignalKeys::SheetStatus,
-        format!("Scoring {} sheets...", paths.len())
+        format!("Scoring {images_count} sheets...")
     );
-    let base64_list: Result<Vec<(String, Mat, AnswerSheet)>, UploadError> =
-        paths.into_par_iter().map(handle_upload).collect();
-    match base64_list {
-        Ok(vec) => {
-            let (vec_base64, vec_mat, vec_answers): (Vec<String>, Vec<Mat>, Vec<AnswerSheet>) =
-                vec.into_iter().multiunzip();
-            signal!(app, SignalKeys::SheetStatus, "Publishing results...");
-            AppState::upload_answer_sheets(app, vec_base64, vec_mat, vec_answers);
+
+    let (tx, mut rx) = tauri::async_runtime::channel::<ProcessingState>(images_count);
+
+    let processing_thread = tauri::async_runtime::spawn(async move {
+        let base64_list: Result<Vec<(String, Mat, AnswerSheet)>, UploadError> = paths
+            .into_par_iter()
+            .map_with(tx.clone(), |tx, file_path| {
+                _ = tx.try_send(ProcessingState::Starting);
+                let res = handle_upload(file_path);
+                _ = tx.try_send(ProcessingState::Finishing);
+                res
+            })
+            .collect();
+        _ = tx.send(ProcessingState::Done(base64_list)).await;
+    });
+
+    let (mut started, mut finished) = (0usize, 0usize);
+
+    loop {
+        match rx.blocking_recv() {
+            None => signal!(
+                app,
+                SignalKeys::SheetStatus,
+                format!("{}", UploadError::UnexpectedPipeClosure)
+            ),
+            Some(state) => match state {
+                ProcessingState::Starting => {
+                    started += 1;
+                    signal!(
+                        app,
+                        SignalKeys::SheetStatus,
+                        format!(
+                            "Scoring {images_count} sheets ({:.2}%): {} started, {finished} done",
+                            (finished as f32 / images_count as f32) * 100.0,
+                            started - finished
+                        )
+                    );
+                }
+                ProcessingState::Finishing => {
+                    finished += 1;
+                    signal!(
+                        app,
+                        SignalKeys::SheetStatus,
+                        format!(
+                            "Scoring {images_count} sheets ({:.2}%): {} started, {finished} done",
+                            (finished as f32 / images_count as f32) * 100.0,
+                            started - finished
+                        )
+                    );
+                }
+                ProcessingState::Done(list) => {
+                    match list {
+                        Ok(vec) => {
+                            let (vec_base64, vec_mat, vec_answers): (
+                                Vec<String>,
+                                Vec<Mat>,
+                                Vec<AnswerSheet>,
+                            ) = vec.into_iter().multiunzip();
+                            signal!(app, SignalKeys::SheetStatus, "Publishing results...");
+                            AppState::upload_answer_sheets(app, vec_base64, vec_mat, vec_answers);
+                        }
+                        Err(e) => signal!(app, SignalKeys::SheetStatus, format!("{e}")),
+                    }
+                    processing_thread.abort();
+                    break;
+                }
+            },
         }
-        Err(e) => signal!(app, SignalKeys::SheetStatus, format!("{e}")),
     }
 }
 
