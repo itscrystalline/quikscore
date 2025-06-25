@@ -103,7 +103,7 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
                         SignalKeys::SheetStatus,
                         format!(
                             "Scoring {images_count} sheets ({:.2}%): {} started, {finished} done",
-                            finished as f32 / images_count as f32,
+                            (finished as f32 / images_count as f32) * 100.0,
                             started - finished
                         )
                     );
@@ -115,7 +115,7 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
                         SignalKeys::SheetStatus,
                         format!(
                             "Scoring {images_count} sheets ({:.2}%): {} started, {finished} done",
-                            finished as f32 / images_count as f32,
+                            (finished as f32 / images_count as f32) * 100.0,
                             started - finished
                         )
                     );
