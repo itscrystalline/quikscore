@@ -191,7 +191,8 @@ fn extract_digits_for_sub_stu(
     let overall_height = mat.rows() - the_height_from_above_to_bubble;
     let digit_height = overall_height / 10;
     let digit_width = mat.cols() / num_digits;
-    let mut rows;
+    let temp: bool = is_student_id;
+    let rows;
     if is_student_id {
         rows = 8;
     } else {
@@ -230,7 +231,7 @@ fn extract_digits_for_sub_stu(
             })?;
 
             let sum: u32 = digit_roi.data_bytes()?.iter().map(|&b| b as u32).sum();
-            if is_student_id {
+            if temp {
                 if i > 0 {
                     v[i - 1][j] = (sum as i32); //Skip first Index NaKub
                 }
@@ -243,15 +244,16 @@ fn extract_digits_for_sub_stu(
                 selected_digit = j;
             }
         }
-
-        for (i, row) in v.iter().enumerate() {
-            println!("Row {}: {:?}", i, row);
-        }
-
-
         digits.push_str(&selected_digit.to_string());
     }
-
+    if temp {
+        println!("Stundet:");
+    } else {
+        println!("Subject");
+    }
+    for (i, row) in v.iter().enumerate() {
+        println!("Row {}: {:?}", i, row);
+    }
     Ok(digits)
 }
 
