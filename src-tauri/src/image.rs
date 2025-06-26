@@ -1,5 +1,5 @@
 use std::array;
-use std::future::IntoFuture;
+use tauri::ipc::Channel;
 
 use crate::errors::{SheetError, UploadError};
 use crate::signal;
@@ -15,7 +15,7 @@ use tauri::{Emitter, Manager, Runtime};
 
 use opencv::imgcodecs::{imencode, imread, ImreadModes};
 
-use crate::state::{Answer, AnswerSheet, AppState, QuestionGroup, SignalKeys};
+use crate::state::{Answer, AnswerSheet, AnswerUpload, AppState, KeyUpload, QuestionGroup};
 
 macro_rules! new_mat_copy {
     ($orig: ident) => {{
@@ -29,52 +29,57 @@ macro_rules! new_mat_copy {
 pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
     path_maybe: Option<FilePath>,
+    channel: Channel<KeyUpload>,
 ) {
     let Some(file_path) = path_maybe else {
-        signal!(
-            app,
-            SignalKeys::KeyStatus,
-            format!("{}", UploadError::Canceled)
-        );
+        signal!(channel, KeyUpload::Cancelled);
         return;
     };
     match handle_upload(file_path) {
-        Ok((base64_image, mat, key)) => AppState::upload_key(app, base64_image, mat, key.into()),
-        Err(e) => signal!(app, SignalKeys::KeyStatus, format!("{e}")),
+        Ok((base64_image, mat, key)) => {
+            let subject = key.subject_code.clone();
+            AppState::upload_key(app, channel, base64_image, mat, subject, key.into())
+        }
+        Err(e) => signal!(
+            channel,
+            KeyUpload::Error {
+                error: format!("{e}")
+            }
+        ),
     }
 }
 
 pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
+    channel: Channel<AnswerUpload>,
     paths: Option<Vec<FilePath>>,
 ) {
     enum ProcessingState {
         Starting,
         Finishing,
-        Done(Result<Vec<(String, Mat, AnswerSheet)>, UploadError>),
+        Done(Vec<Result<(String, Mat, AnswerSheet), UploadError>>),
     }
 
     let Some(paths) = paths else {
-        signal!(
-            app,
-            SignalKeys::SheetStatus,
-            format!("{}", UploadError::Canceled)
-        );
+        signal!(channel, AnswerUpload::Cancelled);
         return;
     };
 
     let images_count = paths.len();
 
     signal!(
-        app,
-        SignalKeys::SheetStatus,
-        format!("Scoring {images_count} sheets...")
+        channel,
+        AnswerUpload::Processing {
+            total: images_count,
+            started: 0,
+            finished: 0
+        }
     );
 
     let (tx, mut rx) = tauri::async_runtime::channel::<ProcessingState>(images_count);
 
     let processing_thread = tauri::async_runtime::spawn(async move {
-        let base64_list: Result<Vec<(String, Mat, AnswerSheet)>, UploadError> = paths
+        let base64_list: Vec<Result<(String, Mat, AnswerSheet), UploadError>> = paths
             .into_par_iter()
             .map_with(tx.clone(), |tx, file_path| {
                 _ = tx.try_send(ProcessingState::Starting);
@@ -91,53 +96,30 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     loop {
         match rx.blocking_recv() {
             None => signal!(
-                app,
-                SignalKeys::SheetStatus,
-                format!("{}", UploadError::UnexpectedPipeClosure)
+                channel,
+                AnswerUpload::Error {
+                    error: format!("{}", UploadError::UnexpectedPipeClosure)
+                }
             ),
             Some(state) => match state {
-                ProcessingState::Starting => {
-                    started += 1;
-                    signal!(
-                        app,
-                        SignalKeys::SheetStatus,
-                        format!(
-                            "Scoring {images_count} sheets ({:.2}%): {} started, {finished} done",
-                            (finished as f32 / images_count as f32) * 100.0,
-                            started - finished
-                        )
-                    );
-                }
-                ProcessingState::Finishing => {
-                    finished += 1;
-                    signal!(
-                        app,
-                        SignalKeys::SheetStatus,
-                        format!(
-                            "Scoring {images_count} sheets ({:.2}%): {} started, {finished} done",
-                            (finished as f32 / images_count as f32) * 100.0,
-                            started - finished
-                        )
-                    );
-                }
+                ProcessingState::Starting => started += 1,
+                ProcessingState::Finishing => finished += 1,
                 ProcessingState::Done(list) => {
-                    match list {
-                        Ok(vec) => {
-                            let (vec_base64, vec_mat, vec_answers): (
-                                Vec<String>,
-                                Vec<Mat>,
-                                Vec<AnswerSheet>,
-                            ) = vec.into_iter().multiunzip();
-                            signal!(app, SignalKeys::SheetStatus, "Publishing results...");
-                            AppState::upload_answer_sheets(app, vec_base64, vec_mat, vec_answers);
-                        }
-                        Err(e) => signal!(app, SignalKeys::SheetStatus, format!("{e}")),
-                    }
+                    signal!(channel, AnswerUpload::AlmostDone);
+                    AppState::upload_answer_sheets(app, channel, list);
                     processing_thread.abort();
                     break;
                 }
             },
         }
+        signal!(
+            channel,
+            AnswerUpload::Processing {
+                total: images_count,
+                started,
+                finished
+            }
+        );
     }
 }
 
