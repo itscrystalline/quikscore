@@ -301,6 +301,7 @@ mod unit_tests {
     use super::*;
     use opencv::core::{self, CMP_NE};
     use opencv::prelude::*;
+    use serde::de::DeserializeOwned;
     use tauri::{test::MockRuntime, App, Manager};
     use tauri_plugin_fs::FilePath;
 
@@ -338,6 +339,21 @@ mod unit_tests {
         nz == 0
     }
 
+    fn setup_channel_msgs<T: DeserializeOwned + Send + Sync + 'static>(
+    ) -> (Channel<T>, Arc<Mutex<Vec<T>>>) {
+        let channel_msgs = Arc::new(Mutex::new(Vec::<T>::new()));
+        let channel_msgs_ref = Arc::clone(&channel_msgs);
+        (
+            Channel::new(move |msg| {
+                let mut vec = channel_msgs_ref.lock().unwrap();
+                let msg: T = msg.deserialize().unwrap();
+                vec.push(msg);
+                Ok(())
+            }),
+            channel_msgs,
+        )
+    }
+
     macro_rules! assert_state {
         ($app: ident, $pattern:pat $(if $guard:expr)? $(,)?) => {{
             let mutex = $app.state::<StateMutex>();
@@ -345,22 +361,21 @@ mod unit_tests {
             assert!(matches!(*state, $pattern $(if $guard)?));
         }};
     }
+    macro_rules! unwrap_msgs {
+        ($msgs: ident) => {
+            Arc::into_inner($msgs).unwrap().into_inner().unwrap()
+        };
+    }
 
     #[test]
     fn test_app_key_upload() {
         let app = mock_app_with_state(AppState::Init);
-        let msg_history: Arc<Mutex<Vec<KeyUpload>>> = Arc::new(Mutex::new(vec![]));
-        let msg_hist_ref = Arc::clone(&msg_history);
-        let channel: Channel<KeyUpload> = Channel::new(move |msg| {
-            let mut vec = msg_hist_ref.lock().unwrap();
-            let msg: KeyUpload = msg.deserialize().unwrap();
-            vec.push(msg);
-            Ok(())
-        });
+        let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
         upload_key_image_impl(&app, Some(test_key_image()), channel);
 
         assert_state!(app, AppState::WithKey { .. });
-        let msg_history = Arc::into_inner(msg_history).unwrap().into_inner().unwrap();
+        let msg_history = unwrap_msgs!(msgs);
+        assert!(matches!(msg_history[0], KeyUpload::Done { .. }))
     }
     #[test]
     fn test_app_change_key_upload() {
