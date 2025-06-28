@@ -1,17 +1,23 @@
-use std::sync::Mutex;
-use tauri::{Emitter, Manager, Runtime};
+use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
+use serde::{Deserialize, Serialize};
+use std::{collections::HashMap, sync::Mutex};
+use tauri::{ipc::Channel, Emitter, Manager, Runtime};
 
 use opencv::core::Mat;
 
-use crate::errors::SheetError;
+use crate::{
+    errors::{SheetError, UploadError},
+    image,
+    scoring::AnswerSheetResult,
+};
 
 pub type StateMutex = Mutex<AppState>;
 
 #[macro_export]
 macro_rules! signal {
-    ($app: ident, $message_key: expr, $message: expr) => {
-        if let Err(e) = $app.emit($message_key.into(), $message) {
-            println!("Signal emission failed: {e}");
+    ($channel: ident, $message: expr) => {
+        if let Err(e) = $channel.send($message) {
+            println!("Channel emission failed: {e}");
         }
     };
 }
@@ -23,20 +29,23 @@ pub enum AppState {
     WithKey {
         key_image: Mat,
         key: AnswerKeySheet,
+        subject_code: String,
     },
-    WithKeyAndSheets {
+    Scored {
         key_image: Mat,
         key: AnswerKeySheet,
-        sheet_images: Vec<Mat>,
-        answer_sheets: Vec<AnswerSheet>,
+        subject_code: String,
+        _answer_sheets: HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>,
     },
 }
 
 impl AppState {
     pub fn upload_key<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,
+        channel: Channel<KeyUpload>,
         base64_image: String,
         image: Mat,
+        subject_code: String,
         key: AnswerKeySheet,
     ) {
         let mutex = app.state::<StateMutex>();
@@ -46,55 +55,131 @@ impl AppState {
                 *state = AppState::WithKey {
                     key_image: image,
                     key,
+                    subject_code,
                 };
-                signal!(app, SignalKeys::KeyImage, base64_image);
-                signal!(app, SignalKeys::KeyStatus, "");
+                signal!(
+                    channel,
+                    KeyUpload::Done {
+                        base64: base64_image
+                    }
+                );
             }
             _ => (),
         }
     }
-    pub fn clear_key<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A) {
+    pub fn clear_key<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A, channel: Channel<KeyUpload>) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
         if let AppState::WithKey { .. } = *state {
             *state = AppState::Init;
-            signal!(app, SignalKeys::KeyImage, "");
-            signal!(app, SignalKeys::KeyStatus, "");
+            signal!(channel, KeyUpload::Clear);
         }
     }
     pub fn upload_answer_sheets<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,
-        base64_images: Vec<String>,
-        images: Vec<Mat>,
-        sheets: Vec<AnswerSheet>,
+        channel: Channel<AnswerUpload>,
+        result: Vec<Result<(String, Mat, AnswerSheet), UploadError>>,
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
         match &*state {
-            AppState::WithKey { key_image, key }
-            | AppState::WithKeyAndSheets { key_image, key, .. } => {
-                *state = AppState::WithKeyAndSheets {
+            AppState::WithKey {
+                key_image,
+                key,
+                subject_code,
+            }
+            | AppState::Scored {
+                key_image,
+                key,
+                subject_code,
+                ..
+            } => {
+                let key = key.clone();
+                let scored: Vec<
+                    Result<(String, Mat, AnswerSheet, AnswerSheetResult), UploadError>,
+                > = result
+                    .into_par_iter()
+                    .map(|r| {
+                        r.map(|(s, m, a)| {
+                            let score = a.score(&key);
+                            (s, m, a, score)
+                        })
+                    })
+                    .collect();
+                let to_send: Vec<AnswerScoreResult> = scored
+                    .par_iter()
+                    .map(|r| match r {
+                        Ok((
+                            _,
+                            mat,
+                            AnswerSheet { student_id, .. },
+                            AnswerSheetResult {
+                                correct,
+                                incorrect,
+                                not_answered,
+                                ..
+                            },
+                        )) => {
+                            let img_small = image::resize_relative_img(mat, 0.4)
+                                .and_then(|m| image::mat_to_base64_png(&m));
+                            match img_small {
+                                Ok(base64) => AnswerScoreResult::Ok {
+                                    student_id: student_id.clone(),
+                                    base64,
+                                    correct: *correct,
+                                    incorrect: *incorrect,
+                                    not_answered: *not_answered,
+                                },
+                                Err(e) => AnswerScoreResult::Error {
+                                    error: format!("{e}"),
+                                },
+                            }
+                        }
+                        Err(e) => AnswerScoreResult::Error {
+                            error: format!("{e}"),
+                        },
+                    })
+                    .collect();
+                let answer_sheets = scored
+                    .into_par_iter()
+                    .filter_map(|r| {
+                        if let Ok((_, m, a, ca)) = r {
+                            Some((a.student_id.clone(), (m, a, ca)))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                *state = AppState::Scored {
                     key_image: key_image.clone(),
-                    key: key.clone(),
-                    sheet_images: images,
-                    answer_sheets: sheets,
+                    key,
+                    subject_code: subject_code.clone(),
+                    _answer_sheets: answer_sheets,
                 };
-                signal!(app, SignalKeys::SheetImages, base64_images);
-                signal!(app, SignalKeys::SheetStatus, "");
+                signal!(channel, AnswerUpload::Done { uploaded: to_send });
             }
             _ => (),
         }
     }
-    pub fn clear_answer_sheets<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A) {
+    pub fn clear_answer_sheets<R: Runtime, A: Emitter<R> + Manager<R>>(
+        app: &A,
+        channel: Channel<AnswerUpload>,
+    ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        if let AppState::WithKeyAndSheets { key, key_image, .. } = &*state {
+        if let AppState::Scored {
+            key,
+            key_image,
+            subject_code,
+            ..
+        } = &*state
+        {
             *state = AppState::WithKey {
                 key_image: key_image.clone(),
                 key: key.clone(),
+                subject_code: subject_code.clone(),
             };
-            signal!(app, SignalKeys::SheetImages, Vec::<String>::new());
-            signal!(app, SignalKeys::SheetStatus, "");
+            signal!(channel, AnswerUpload::Clear);
         }
     }
 }
@@ -108,13 +193,13 @@ pub struct AnswerSheet {
 
 #[derive(Debug, Clone)]
 pub struct AnswerKeySheet {
-    pub subject_code: String,
+    pub _subject_code: String,
     pub answers: [QuestionGroup; 36],
 }
 impl From<AnswerSheet> for AnswerKeySheet {
     fn from(value: AnswerSheet) -> Self {
         Self {
-            subject_code: value.subject_code,
+            _subject_code: value.subject_code,
             answers: value.answers,
         }
     }
@@ -157,27 +242,68 @@ pub enum NumberType {
     PlusOrMinus,
 }
 
-pub enum SignalKeys {
-    KeyStatus,
-    KeyImage,
-    SheetStatus,
-    SheetImages,
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "event",
+    content = "data"
+)]
+pub enum KeyUpload {
+    Cancelled,
+    Clear,
+    Done { base64: String },
+    Error { error: String },
 }
-impl From<SignalKeys> for &str {
-    fn from(value: SignalKeys) -> Self {
-        match value {
-            SignalKeys::KeyStatus => "key-status",
-            SignalKeys::KeyImage => "key-image",
-            SignalKeys::SheetStatus => "sheet-status",
-            SignalKeys::SheetImages => "sheet-images",
-        }
-    }
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "event",
+    content = "data"
+)]
+pub enum AnswerUpload {
+    Cancelled,
+    Clear,
+    Processing {
+        total: usize,
+        started: usize,
+        finished: usize,
+    },
+    AlmostDone,
+    Done {
+        uploaded: Vec<AnswerScoreResult>,
+    },
+    Error {
+        error: String,
+    },
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "result",
+    content = "data"
+)]
+#[derive(Debug, PartialEq, Eq)]
+pub enum AnswerScoreResult {
+    Ok {
+        student_id: String,
+        base64: String,
+        correct: u32,
+        incorrect: u32,
+        not_answered: u32,
+    },
+    Error {
+        error: String,
+    },
 }
 
 #[cfg(test)]
 mod unit_tests {
     use crate::image::upload_key_image_impl;
     use crate::image::upload_sheet_images_impl;
+    use std::sync::Arc;
     use std::{path::PathBuf, sync::Mutex};
 
     use crate::state::StateMutex;
@@ -185,6 +311,7 @@ mod unit_tests {
     use super::*;
     use opencv::core::{self, CMP_NE};
     use opencv::prelude::*;
+    use serde::de::DeserializeOwned;
     use tauri::{test::MockRuntime, App, Manager};
     use tauri_plugin_fs::FilePath;
 
@@ -222,6 +349,21 @@ mod unit_tests {
         nz == 0
     }
 
+    fn setup_channel_msgs<T: DeserializeOwned + Send + Sync + 'static>(
+    ) -> (Channel<T>, Arc<Mutex<Vec<T>>>) {
+        let channel_msgs = Arc::new(Mutex::new(Vec::<T>::new()));
+        let channel_msgs_ref = Arc::clone(&channel_msgs);
+        (
+            Channel::new(move |msg| {
+                let mut vec = channel_msgs_ref.lock().unwrap();
+                let msg: T = msg.deserialize().unwrap();
+                vec.push(msg);
+                Ok(())
+            }),
+            channel_msgs,
+        )
+    }
+
     macro_rules! assert_state {
         ($app: ident, $pattern:pat $(if $guard:expr)? $(,)?) => {{
             let mutex = $app.state::<StateMutex>();
@@ -229,163 +371,279 @@ mod unit_tests {
             assert!(matches!(*state, $pattern $(if $guard)?));
         }};
     }
+    macro_rules! unwrap_msgs {
+        ($msgs: ident) => {
+            $msgs.lock().unwrap()
+        };
+    }
 
     #[test]
     fn test_app_key_upload() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(test_key_image()));
+        let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), channel);
 
         assert_state!(app, AppState::WithKey { .. });
+        let msg_history = unwrap_msgs!(msgs);
+        assert!(matches!(msg_history[0], KeyUpload::Done { .. }))
     }
     #[test]
     fn test_app_change_key_upload() {
         let path = test_key_image();
         let path2 = test_images()[1].clone();
-        let app = mock_app_with_state(AppState::Init);
 
-        upload_key_image_impl(&app, Some(path));
+        let app = mock_app_with_state(AppState::Init);
+        let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
+
+        upload_key_image_impl(&app, Some(path), channel.clone());
 
         let current_mat = {
             let mutex = app.state::<StateMutex>();
             let state = mutex.lock().expect("poisoned");
-            let AppState::WithKey { key_image, key } = &*state else {
+            let AppState::WithKey { key_image, .. } = &*state else {
                 unreachable!()
             };
             key_image.clone()
         };
 
-        upload_key_image_impl(&app, Some(path2));
+        upload_key_image_impl(&app, Some(path2), channel);
 
         let mutex = app.state::<StateMutex>();
         let state = mutex.lock().unwrap();
-        if let AppState::WithKey { key_image, key } = &*state {
+        if let AppState::WithKey { key_image, .. } = &*state {
             assert!(!compare_mats(key_image, &current_mat));
         } else {
             unreachable!()
         }
+
+        let msgs = unwrap_msgs!(msgs);
+        let mut msgs = msgs.iter();
+        assert!(matches!(msgs.next(), Some(KeyUpload::Done { .. })));
+        assert!(matches!(msgs.next(), Some(KeyUpload::Done { .. })));
     }
     #[test]
     fn test_app_key_canceled_upload() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, None);
+        let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
+        upload_key_image_impl(&app, None, channel);
 
         assert_state!(app, AppState::Init);
+        let msgs = unwrap_msgs!(msgs);
+        let mut msgs = msgs.iter();
+        assert!(matches!(msgs.next(), Some(KeyUpload::Cancelled)));
     }
     #[test]
     fn test_app_key_invalid_upload() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(not_image()));
+        let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
+        upload_key_image_impl(&app, Some(not_image()), channel);
 
         assert_state!(app, AppState::Init);
+        let msgs = unwrap_msgs!(msgs);
+        let mut msgs = msgs.iter();
+        assert!(matches!(msgs.next(), Some(KeyUpload::Error { .. })));
     }
     #[test]
     fn test_app_key_clear() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(test_key_image()));
+        let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), channel.clone());
 
         assert_state!(app, AppState::WithKey { .. });
 
-        AppState::clear_key(&app);
+        AppState::clear_key(&app, channel);
 
         assert_state!(app, AppState::Init);
+        let msgs = unwrap_msgs!(msgs);
+        let mut msgs = msgs.iter();
+        assert!(matches!(msgs.next(), Some(KeyUpload::Done { .. })));
+        assert!(matches!(msgs.next(), Some(KeyUpload::Clear)));
     }
 
     #[test]
     fn test_app_sheets_upload() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(test_key_image()));
-        upload_sheet_images_impl(&app, Some(test_images()));
+        let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
+        let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel);
+        upload_sheet_images_impl(&app, Some(test_images()), sheet_channel);
 
-        assert_state!(app, AppState::WithKeyAndSheets { .. });
+        assert_state!(app, AppState::Scored { .. });
+
+        let msgs = unwrap_msgs!(sheet_msgs);
+        let mut msgs = msgs.iter();
+
+        for _ in 0..7 {
+            assert!(matches!(msgs.next(), Some(AnswerUpload::Processing { .. })));
+        }
+        assert!(matches!(msgs.next(), Some(AnswerUpload::AlmostDone)));
+        assert!(matches!(msgs.next(), Some(AnswerUpload::Done { .. })));
     }
     #[test]
     fn test_app_change_sheets_upload() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(test_key_image()));
-        upload_sheet_images_impl(&app, Some(test_images()));
+        let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
+        let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel);
+        upload_sheet_images_impl(&app, Some(test_images()), sheet_channel.clone());
 
         let current_count = {
             let mutex = app.state::<StateMutex>();
             let state = mutex.lock().expect("poisoned");
-            let AppState::WithKeyAndSheets { sheet_images, .. } = &*state else {
+            let AppState::Scored {
+                _answer_sheets: answer_sheets,
+                ..
+            } = &*state
+            else {
                 unreachable!()
             };
-            sheet_images.len()
+            answer_sheets.len()
         };
 
-        upload_sheet_images_impl(&app, Some(vec![test_images()[0].clone()]));
+        upload_sheet_images_impl(&app, Some(vec![test_images()[0].clone()]), sheet_channel);
 
         let mutex = app.state::<StateMutex>();
         let state = mutex.lock().unwrap();
-        if let AppState::WithKeyAndSheets { sheet_images, .. } = &*state {
-            assert_ne!(current_count, sheet_images.len());
+        if let AppState::Scored {
+            _answer_sheets: answer_sheets,
+            ..
+        } = &*state
+        {
+            assert_ne!(current_count, answer_sheets.len());
         } else {
             unreachable!()
         }
+
+        let msgs = unwrap_msgs!(sheet_msgs);
+        let mut msgs = msgs.iter();
+        for _ in 0..7 {
+            assert!(matches!(msgs.next(), Some(AnswerUpload::Processing { .. })));
+        }
+        assert!(matches!(msgs.next(), Some(AnswerUpload::AlmostDone)));
+        assert!(matches!(msgs.next(), Some(AnswerUpload::Done { .. })));
+        for _ in 0..3 {
+            assert!(matches!(msgs.next(), Some(AnswerUpload::Processing { .. })));
+        }
+        assert!(matches!(msgs.next(), Some(AnswerUpload::AlmostDone)));
+        assert!(matches!(msgs.next(), Some(AnswerUpload::Done { .. })));
     }
     #[test]
     fn test_app_sheets_canceled_upload() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(test_key_image()));
-        upload_sheet_images_impl(&app, None);
+        let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
+        let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel);
+        upload_sheet_images_impl(&app, None, sheet_channel);
 
         assert_state!(app, AppState::WithKey { .. });
+
+        let msgs = unwrap_msgs!(sheet_msgs);
+        let mut msgs = msgs.iter();
+        assert!(matches!(msgs.next(), Some(AnswerUpload::Cancelled)));
     }
     #[test]
     fn test_app_sheets_invalid_upload() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(test_key_image()));
-        upload_sheet_images_impl(&app, Some(vec![not_image()]));
+        let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
+        let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel);
+        upload_sheet_images_impl(&app, Some(vec![not_image()]), sheet_channel);
 
-        assert_state!(app, AppState::WithKey { .. });
+        {
+            let mutex = app.state::<StateMutex>();
+            let state = mutex.lock().unwrap();
+            let AppState::Scored {
+                _answer_sheets: answer_sheets,
+                ..
+            } = &*state
+            else {
+                unreachable!()
+            };
+
+            assert_eq!(answer_sheets.len(), 0);
+        };
+
+        let msgs = unwrap_msgs!(sheet_msgs);
+        let mut msgs = msgs.iter();
+
+        for _ in 0..3 {
+            assert!(matches!(msgs.next(), Some(AnswerUpload::Processing { .. })));
+        }
+        assert!(matches!(msgs.next(), Some(AnswerUpload::AlmostDone)));
+        let Some(AnswerUpload::Done { uploaded }) = msgs.next() else {
+            unreachable!()
+        };
+        assert!(matches!(uploaded[0], AnswerScoreResult::Error { .. }));
     }
     #[test]
     fn test_app_sheets_clear() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(test_key_image()));
-        upload_sheet_images_impl(&app, Some(test_images()));
+        let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
+        let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel);
+        upload_sheet_images_impl(&app, Some(test_images()), sheet_channel.clone());
 
-        assert_state!(app, AppState::WithKeyAndSheets { .. });
+        assert_state!(app, AppState::Scored { .. });
 
-        AppState::clear_answer_sheets(&app);
+        AppState::clear_answer_sheets(&app, sheet_channel);
 
         assert_state!(app, AppState::WithKey { .. });
+
+        let msgs = unwrap_msgs!(sheet_msgs);
+        let mut msgs = msgs.iter();
+
+        for _ in 0..7 {
+            assert!(matches!(msgs.next(), Some(AnswerUpload::Processing { .. })));
+        }
+        assert!(matches!(msgs.next(), Some(AnswerUpload::AlmostDone)));
+        assert!(matches!(msgs.next(), Some(AnswerUpload::Done { .. })));
+
+        assert!(matches!(msgs.next(), Some(AnswerUpload::Clear)));
     }
 
     #[test]
     fn test_clear_key_on_with_key_and_sheets_does_nothing() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(test_key_image()));
-        upload_sheet_images_impl(&app, Some(test_images()));
+        let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
+        let (sheet_channel, _) = setup_channel_msgs::<AnswerUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel.clone());
+        upload_sheet_images_impl(&app, Some(test_images()), sheet_channel);
 
-        assert_state!(app, AppState::WithKeyAndSheets { .. });
+        assert_state!(app, AppState::Scored { .. });
 
-        AppState::clear_key(&app);
+        AppState::clear_key(&app, key_channel);
 
         // Should still be in WithKeyAndSheets
-        assert_state!(app, AppState::WithKeyAndSheets { .. });
+        assert_state!(app, AppState::Scored { .. });
     }
     #[test]
     fn test_clear_answer_sheets_on_init_does_nothing() {
         let app = mock_app_with_state(AppState::Init);
-        AppState::clear_answer_sheets(&app);
+        let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
+        AppState::clear_answer_sheets(&app, sheet_channel);
         assert_state!(app, AppState::Init);
+
+        let msgs = unwrap_msgs!(sheet_msgs);
+        assert!(msgs.is_empty());
     }
     #[test]
     fn test_clear_answer_sheets_on_with_key_does_nothing() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(test_key_image()));
+        let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
+        let (sheet_channel, _) = setup_channel_msgs::<AnswerUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel);
 
         assert_state!(app, AppState::WithKey { .. });
 
-        AppState::clear_answer_sheets(&app);
+        AppState::clear_answer_sheets(&app, sheet_channel);
 
         assert_state!(app, AppState::WithKey { .. });
     }
     #[test]
     fn test_upload_sheets_without_key_does_nothing() {
         let app = mock_app_with_state(AppState::Init);
-        upload_sheet_images_impl(&app, Some(test_images()));
+        let (sheet_channel, _) = setup_channel_msgs::<AnswerUpload>();
+        upload_sheet_images_impl(&app, Some(test_images()), sheet_channel);
 
         // Should remain in Init because upload_sheets does nothing without a key
         assert_state!(app, AppState::Init);

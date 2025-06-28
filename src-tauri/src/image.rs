@@ -1,5 +1,5 @@
 use std::array;
-use std::future::IntoFuture;
+use tauri::ipc::Channel;
 
 use crate::errors::{SheetError, UploadError};
 use crate::signal;
@@ -7,7 +7,7 @@ use base64::Engine;
 use itertools::Itertools;
 use opencv::core::{Mat, Rect_, Size, Vector};
 use opencv::imgproc::THRESH_BINARY;
-use opencv::{highgui, imgproc, prelude::*};
+use opencv::{imgproc, prelude::*};
 use rayon::prelude::*;
 use tauri_plugin_dialog::FilePath;
 
@@ -15,7 +15,7 @@ use tauri::{Emitter, Manager, Runtime};
 
 use opencv::imgcodecs::{imencode, imread, ImreadModes};
 
-use crate::state::{Answer, AnswerSheet, AppState, QuestionGroup, SignalKeys};
+use crate::state::{Answer, AnswerSheet, AnswerUpload, AppState, KeyUpload, QuestionGroup};
 
 macro_rules! new_mat_copy {
     ($orig: ident) => {{
@@ -29,52 +29,57 @@ macro_rules! new_mat_copy {
 pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
     path_maybe: Option<FilePath>,
+    channel: Channel<KeyUpload>,
 ) {
     let Some(file_path) = path_maybe else {
-        signal!(
-            app,
-            SignalKeys::KeyStatus,
-            format!("{}", UploadError::Canceled)
-        );
+        signal!(channel, KeyUpload::Cancelled);
         return;
     };
     match handle_upload(file_path) {
-        Ok((base64_image, mat, key)) => AppState::upload_key(app, base64_image, mat, key.into()),
-        Err(e) => signal!(app, SignalKeys::KeyStatus, format!("{e}")),
+        Ok((base64_image, mat, key)) => {
+            let subject = key.subject_code.clone();
+            AppState::upload_key(app, channel, base64_image, mat, subject, key.into())
+        }
+        Err(e) => signal!(
+            channel,
+            KeyUpload::Error {
+                error: format!("{e}")
+            }
+        ),
     }
 }
 
 pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
     paths: Option<Vec<FilePath>>,
+    channel: Channel<AnswerUpload>,
 ) {
     enum ProcessingState {
         Starting,
         Finishing,
-        Done(Result<Vec<(String, Mat, AnswerSheet)>, UploadError>),
+        Done(Vec<Result<(String, Mat, AnswerSheet), UploadError>>),
     }
 
     let Some(paths) = paths else {
-        signal!(
-            app,
-            SignalKeys::SheetStatus,
-            format!("{}", UploadError::Canceled)
-        );
+        signal!(channel, AnswerUpload::Cancelled);
         return;
     };
 
     let images_count = paths.len();
 
     signal!(
-        app,
-        SignalKeys::SheetStatus,
-        format!("Scoring {images_count} sheets...")
+        channel,
+        AnswerUpload::Processing {
+            total: images_count,
+            started: 0,
+            finished: 0
+        }
     );
 
     let (tx, mut rx) = tauri::async_runtime::channel::<ProcessingState>(images_count);
 
     let processing_thread = tauri::async_runtime::spawn(async move {
-        let base64_list: Result<Vec<(String, Mat, AnswerSheet)>, UploadError> = paths
+        let base64_list: Vec<Result<(String, Mat, AnswerSheet), UploadError>> = paths
             .into_par_iter()
             .map_with(tx.clone(), |tx, file_path| {
                 _ = tx.try_send(ProcessingState::Starting);
@@ -91,87 +96,65 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     loop {
         match rx.blocking_recv() {
             None => signal!(
-                app,
-                SignalKeys::SheetStatus,
-                format!("{}", UploadError::UnexpectedPipeClosure)
+                channel,
+                AnswerUpload::Error {
+                    error: format!("{}", UploadError::UnexpectedPipeClosure)
+                }
             ),
             Some(state) => match state {
-                ProcessingState::Starting => {
-                    started += 1;
-                    signal!(
-                        app,
-                        SignalKeys::SheetStatus,
-                        format!(
-                            "Scoring {images_count} sheets ({:.2}%): {} started, {finished} done",
-                            (finished as f32 / images_count as f32) * 100.0,
-                            started - finished
-                        )
-                    );
-                }
-                ProcessingState::Finishing => {
-                    finished += 1;
-                    signal!(
-                        app,
-                        SignalKeys::SheetStatus,
-                        format!(
-                            "Scoring {images_count} sheets ({:.2}%): {} started, {finished} done",
-                            (finished as f32 / images_count as f32) * 100.0,
-                            started - finished
-                        )
-                    );
-                }
+                ProcessingState::Starting => started += 1,
+                ProcessingState::Finishing => finished += 1,
                 ProcessingState::Done(list) => {
-                    match list {
-                        Ok(vec) => {
-                            let (vec_base64, vec_mat, vec_answers): (
-                                Vec<String>,
-                                Vec<Mat>,
-                                Vec<AnswerSheet>,
-                            ) = vec.into_iter().multiunzip();
-                            signal!(app, SignalKeys::SheetStatus, "Publishing results...");
-                            AppState::upload_answer_sheets(app, vec_base64, vec_mat, vec_answers);
-                        }
-                        Err(e) => signal!(app, SignalKeys::SheetStatus, format!("{e}")),
-                    }
+                    signal!(channel, AnswerUpload::AlmostDone);
+                    AppState::upload_answer_sheets(app, channel, list);
                     processing_thread.abort();
                     break;
                 }
             },
         }
+        signal!(
+            channel,
+            AnswerUpload::Processing {
+                total: images_count,
+                started,
+                finished
+            }
+        );
     }
 }
 
-fn resize_img(src: Mat) -> opencv::Result<Mat> {
+pub fn resize_relative_img(src: &Mat, relative: f64) -> opencv::Result<Mat> {
     let mut dst = new_mat_copy!(src);
-    let new_size = Size::new(src.cols() / 3, src.rows() / 3);
+    let new_size = Size::new(
+        (src.cols() as f64 * relative).round() as i32,
+        (src.rows() as f64 * relative).round() as i32,
+    );
 
     imgproc::resize(&src, &mut dst, new_size, 0.0, 0.0, imgproc::INTER_LINEAR)?;
     Ok(dst)
 }
 
-fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
-    println!("showing window {window_name}");
-    highgui::named_window(window_name, 0)?;
-    highgui::imshow(window_name, mat)?;
-    highgui::wait_key(10000)?;
-    Ok(())
-}
+// fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
+//     println!("showing window {window_name}");
+//     highgui::named_window(window_name, 0)?;
+//     highgui::imshow(window_name, mat)?;
+//     highgui::wait_key(10000)?;
+//     Ok(())
+// }
 
 fn handle_upload(path: FilePath) -> Result<(String, Mat, AnswerSheet), UploadError> {
     let mat = read_from_path(path)?;
-    let resized = resize_img(mat).map_err(UploadError::from)?;
+    let resized = resize_relative_img(&mat, 0.333).map_err(UploadError::from)?;
     let (aligned_for_display, subject_id, student_id, answer_sheet) = fix_answer_sheet(resized)?;
-
     //testing
     //#[cfg(not(test))]
     //let _ = show_img(&aligned_for_processing, "resized & aligned image");
     let base64 = mat_to_base64_png(&aligned_for_display).map_err(UploadError::from)?;
     let answer_sheet: AnswerSheet = (subject_id, student_id, answer_sheet).try_into()?;
-    println!("{answer_sheet:?}");
     Ok((base64, aligned_for_display, answer_sheet))
 }
 
-fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
+pub fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
     let mut buf: Vector<u8> = Vec::new().into();
     imencode(".png", mat, &mut buf, &Vec::new().into())?;
     let base64 = base64::prelude::BASE64_STANDARD.encode(&buf);
@@ -350,18 +333,14 @@ fn extract_digits_for_sub_stu(
     let digit_height = overall_height / 10;
     let digit_width = mat.cols() / num_digits;
     let temp: bool = is_student_id;
-    let rows;
-    if is_student_id {
-        rows = 8;
-    } else {
-        rows = 2;
-    }
+
+    let rows = if is_student_id { 8 } else { 2 };
     let cols = 10;
     let mut v: Vec<Vec<i32>> = vec![vec![0; cols]; rows];
 
     let mut digits = String::new();
 
-    for i in (0..num_digits as usize) {
+    for i in 0..num_digits as usize {
         if is_student_id {
             is_student_id = false;
             continue;
@@ -379,7 +358,7 @@ fn extract_digits_for_sub_stu(
         let mut min_sum = u32::MAX;
         let mut selected_digit = 0;
 
-        for j in (0..10 as usize) {
+        for j in 0..10usize {
             let y = (j as i32) * digit_height + the_height_from_above_to_bubble;
             let digit_roi = roi.roi(Rect_ {
                 x: 0,
@@ -391,10 +370,10 @@ fn extract_digits_for_sub_stu(
             let sum: u32 = digit_roi.data_bytes()?.iter().map(|&b| b as u32).sum();
             if temp {
                 if i > 0 {
-                    v[i - 1][j] = (sum as i32); //Skip first Index NaKub
+                    v[i - 1][j] = sum as i32; //Skip first Index NaKub
                 }
             } else {
-                v[i][j] = (sum as i32);
+                v[i][j] = sum as i32;
             }
 
             if sum < min_sum {
@@ -410,7 +389,7 @@ fn extract_digits_for_sub_stu(
         println!("Subject");
     }
     for (i, row) in v.iter().enumerate() {
-        println!("Row {}: {:?}", i, row);
+        println!("Row {i}: {row:?}");
     }
     Ok(digits)
 }
@@ -543,7 +522,7 @@ mod unit_tests {
             Mat::new_rows_cols_with_default(height, width, core::CV_8UC1, core::Scalar::all(128.0))
                 .unwrap();
 
-        let resized = resize_img(mat);
+        let resized = resize_relative_img(&mat, 0.333);
         assert!(resized.is_ok());
 
         let resized = resized.unwrap();
@@ -599,7 +578,7 @@ mod unit_tests {
     fn check_extracted_ids_from_real_image() {
         let path = test_key_image();
         let mat = read_from_path(path).expect("Failed to read image");
-        let resized = resize_img(mat).expect("Resize failed");
+        let resized = resize_relative_img(&mat, 0.3333).expect("Resize failed");
         let (_cropped, subject_id_mat, student_id_mat, _answers) =
             fix_answer_sheet(resized).expect("Fixing sheet failed");
 
