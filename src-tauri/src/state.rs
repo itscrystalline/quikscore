@@ -2,7 +2,7 @@ use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterato
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    sync::{Mutex, RwLock},
+    sync::{Arc, Mutex, RwLock},
 };
 use tauri::{ipc::Channel, Emitter, Manager, Runtime};
 
@@ -96,14 +96,14 @@ impl AppState {
                 subject_code,
                 ..
             } => {
-                let key = RwLock::new(key.clone());
+                let key = key.clone();
                 let scored: Vec<
                     Result<(String, Mat, AnswerSheet, AnswerSheetResult), UploadError>,
                 > = result
                     .into_par_iter()
                     .map(|r| {
                         r.map(|(s, m, a)| {
-                            let score = a.score(&key.read().expect("should not panic"));
+                            let score = a.score(&key);
                             (s, m, a, score)
                         })
                     })
@@ -144,7 +144,7 @@ impl AppState {
                     .collect();
                 *state = AppState::Scored {
                     key_image: key_image.clone(),
-                    key: key.into_inner().expect("should not panic"),
+                    key,
                     subject_code: subject_code.clone(),
                     answer_sheets,
                 };
