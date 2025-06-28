@@ -98,18 +98,17 @@ async function clearSheets() {
     <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ?
       "🧾\nUpload Answer Sheets..." :
       "Change Answer Sheets"
-      }}</button>
+    }}</button>
     <button class="btn-sheet" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄 Clear
       Answer
       Sheets</button>
     <p :style="answerStatus == '' ? 'display: none;' : ''">{{ answerStatus }}</p>
     <div v-for="{ result, data } in answerImages">
       <div v-if="result == 'ok'">
-        {{ console.log(data) }}
         <img :src="data.base64"></img>
         <p>score: {{ data.correct }}</p>
         <p>incorrect: {{ data.incorrect }}</p>
-        <p>questions not answered: {{ data.not_answered }}</p>
+        <p>questions not answered: {{ data.notAnswered }}</p>
       </div>
       <p v-else>
         {{ data.error }}

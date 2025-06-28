@@ -52,7 +52,7 @@ export type AnswerScoreResult =
         base64: string;
         correct: number;
         incorrect: number;
-        not_answered: number;
+        notAnswered: number;
       };
     }
   | {
