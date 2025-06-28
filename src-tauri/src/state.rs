@@ -490,7 +490,15 @@ mod unit_tests {
         upload_key_image_impl(&app, Some(test_key_image()), key_channel);
         upload_sheet_images_impl(&app, Some(vec![not_image()]), sheet_channel);
 
-        assert_state!(app, AppState::WithKey { .. });
+        {
+            let mutex = app.state::<StateMutex>();
+            let state = mutex.lock().unwrap();
+            let AppState::Scored { answer_sheets, .. } = &*state else {
+                unreachable!()
+            };
+
+            assert_eq!(answer_sheets.len(), 0);
+        };
     }
     #[test]
     fn test_app_sheets_clear() {
