@@ -363,7 +363,7 @@ mod unit_tests {
     }
     macro_rules! unwrap_msgs {
         ($msgs: ident) => {
-            Arc::into_inner($msgs).unwrap().into_inner().unwrap()
+            $msgs.lock().unwrap()
         };
     }
 
@@ -381,24 +381,26 @@ mod unit_tests {
     fn test_app_change_key_upload() {
         let path = test_key_image();
         let path2 = test_images()[1].clone();
-        let app = mock_app_with_state(AppState::Init);
 
-        upload_key_image_impl(&app, Some(path));
+        let app = mock_app_with_state(AppState::Init);
+        let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
+
+        upload_key_image_impl(&app, Some(path), channel.clone());
 
         let current_mat = {
             let mutex = app.state::<StateMutex>();
             let state = mutex.lock().expect("poisoned");
-            let AppState::WithKey { key_image, key } = &*state else {
+            let AppState::WithKey { key_image, .. } = &*state else {
                 unreachable!()
             };
             key_image.clone()
         };
 
-        upload_key_image_impl(&app, Some(path2));
+        upload_key_image_impl(&app, Some(path2), channel);
 
         let mutex = app.state::<StateMutex>();
         let state = mutex.lock().unwrap();
-        if let AppState::WithKey { key_image, key } = &*state {
+        if let AppState::WithKey { key_image, .. } = &*state {
             assert!(!compare_mats(key_image, &current_mat));
         } else {
             unreachable!()
@@ -407,25 +409,28 @@ mod unit_tests {
     #[test]
     fn test_app_key_canceled_upload() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, None);
+        let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
+        upload_key_image_impl(&app, None, channel);
 
         assert_state!(app, AppState::Init);
     }
     #[test]
     fn test_app_key_invalid_upload() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(not_image()));
+        let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
+        upload_key_image_impl(&app, Some(not_image()), channel);
 
         assert_state!(app, AppState::Init);
     }
     #[test]
     fn test_app_key_clear() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(test_key_image()));
+        let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), channel.clone());
 
         assert_state!(app, AppState::WithKey { .. });
 
-        AppState::clear_key(&app);
+        AppState::clear_key(&app, channel);
 
         assert_state!(app, AppState::Init);
     }
@@ -433,32 +438,36 @@ mod unit_tests {
     #[test]
     fn test_app_sheets_upload() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(test_key_image()));
-        upload_sheet_images_impl(&app, Some(test_images()));
+        let (key_channel, key_msgs) = setup_channel_msgs::<KeyUpload>();
+        let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel);
+        upload_sheet_images_impl(&app, Some(test_images()), sheet_channel);
 
         assert_state!(app, AppState::Scored { .. });
     }
     #[test]
     fn test_app_change_sheets_upload() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(test_key_image()));
-        upload_sheet_images_impl(&app, Some(test_images()));
+        let (key_channel, key_msgs) = setup_channel_msgs::<KeyUpload>();
+        let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel);
+        upload_sheet_images_impl(&app, Some(test_images()), sheet_channel.clone());
 
         let current_count = {
             let mutex = app.state::<StateMutex>();
             let state = mutex.lock().expect("poisoned");
-            let AppState::Scored { sheet_images, .. } = &*state else {
+            let AppState::Scored { answer_sheets, .. } = &*state else {
                 unreachable!()
             };
-            sheet_images.len()
+            answer_sheets.len()
         };
 
-        upload_sheet_images_impl(&app, Some(vec![test_images()[0].clone()]));
+        upload_sheet_images_impl(&app, Some(vec![test_images()[0].clone()]), sheet_channel);
 
         let mutex = app.state::<StateMutex>();
         let state = mutex.lock().unwrap();
-        if let AppState::Scored { sheet_images, .. } = &*state {
-            assert_ne!(current_count, sheet_images.len());
+        if let AppState::Scored { answer_sheets, .. } = &*state {
+            assert_ne!(current_count, answer_sheets.len());
         } else {
             unreachable!()
         }
@@ -466,28 +475,34 @@ mod unit_tests {
     #[test]
     fn test_app_sheets_canceled_upload() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(test_key_image()));
-        upload_sheet_images_impl(&app, None);
+        let (key_channel, key_msgs) = setup_channel_msgs::<KeyUpload>();
+        let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel);
+        upload_sheet_images_impl(&app, None, sheet_channel);
 
         assert_state!(app, AppState::WithKey { .. });
     }
     #[test]
     fn test_app_sheets_invalid_upload() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(test_key_image()));
-        upload_sheet_images_impl(&app, Some(vec![not_image()]));
+        let (key_channel, key_msgs) = setup_channel_msgs::<KeyUpload>();
+        let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel);
+        upload_sheet_images_impl(&app, Some(vec![not_image()]), sheet_channel);
 
         assert_state!(app, AppState::WithKey { .. });
     }
     #[test]
     fn test_app_sheets_clear() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(test_key_image()));
-        upload_sheet_images_impl(&app, Some(test_images()));
+        let (key_channel, key_msgs) = setup_channel_msgs::<KeyUpload>();
+        let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel);
+        upload_sheet_images_impl(&app, Some(test_images()), sheet_channel.clone());
 
         assert_state!(app, AppState::Scored { .. });
 
-        AppState::clear_answer_sheets(&app);
+        AppState::clear_answer_sheets(&app, sheet_channel);
 
         assert_state!(app, AppState::WithKey { .. });
     }
@@ -495,12 +510,14 @@ mod unit_tests {
     #[test]
     fn test_clear_key_on_with_key_and_sheets_does_nothing() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(test_key_image()));
-        upload_sheet_images_impl(&app, Some(test_images()));
+        let (key_channel, key_msgs) = setup_channel_msgs::<KeyUpload>();
+        let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel.clone());
+        upload_sheet_images_impl(&app, Some(test_images()), sheet_channel);
 
         assert_state!(app, AppState::Scored { .. });
 
-        AppState::clear_key(&app);
+        AppState::clear_key(&app, key_channel);
 
         // Should still be in WithKeyAndSheets
         assert_state!(app, AppState::Scored { .. });
@@ -508,24 +525,28 @@ mod unit_tests {
     #[test]
     fn test_clear_answer_sheets_on_init_does_nothing() {
         let app = mock_app_with_state(AppState::Init);
-        AppState::clear_answer_sheets(&app);
+        let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
+        AppState::clear_answer_sheets(&app, sheet_channel);
         assert_state!(app, AppState::Init);
     }
     #[test]
     fn test_clear_answer_sheets_on_with_key_does_nothing() {
         let app = mock_app_with_state(AppState::Init);
-        upload_key_image_impl(&app, Some(test_key_image()));
+        let (key_channel, key_msgs) = setup_channel_msgs::<KeyUpload>();
+        let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel);
 
         assert_state!(app, AppState::WithKey { .. });
 
-        AppState::clear_answer_sheets(&app);
+        AppState::clear_answer_sheets(&app, sheet_channel);
 
         assert_state!(app, AppState::WithKey { .. });
     }
     #[test]
     fn test_upload_sheets_without_key_does_nothing() {
         let app = mock_app_with_state(AppState::Init);
-        upload_sheet_images_impl(&app, Some(test_images()));
+        let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
+        upload_sheet_images_impl(&app, Some(test_images()), sheet_channel);
 
         // Should remain in Init because upload_sheets does nothing without a key
         assert_state!(app, AppState::Init);
