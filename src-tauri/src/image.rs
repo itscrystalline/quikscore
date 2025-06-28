@@ -149,7 +149,6 @@ fn handle_upload(path: FilePath) -> Result<(String, Mat, AnswerSheet), UploadErr
     //let _ = show_img(&aligned_for_processing, "resized & aligned image");
     let base64 = mat_to_base64_png(&aligned_for_display).map_err(UploadError::from)?;
     let answer_sheet: AnswerSheet = (subject_id, student_id, answer_sheet).try_into()?;
-    println!("{answer_sheet:?}");
     Ok((base64, aligned_for_display, answer_sheet))
 }
 
