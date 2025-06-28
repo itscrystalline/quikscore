@@ -7,7 +7,7 @@ pub struct AnswerSheetResult {
     pub correct: u32,
     pub incorrect: u32,
     pub not_answered: u32,
-    pub graded_questions: [CheckedQuestionGroup; 36],
+    pub _graded_questions: [CheckedQuestionGroup; 36],
 }
 
 #[allow(non_snake_case)]
@@ -38,7 +38,7 @@ impl Answer {
                     CheckedAnswer::Incorrect
                 }
             }
-            (None, Some(_)) => CheckedAnswer::Incorrect,
+            (None, Some(_)) => CheckedAnswer::Missing,
             (Some(_), None) | (None, None) => CheckedAnswer::NotCounted,
         }
     }
@@ -116,7 +116,7 @@ impl AnswerSheet {
             correct,
             incorrect,
             not_answered,
-            graded_questions,
+            _graded_questions: graded_questions,
         }
     }
 }
@@ -216,7 +216,7 @@ mod unit_tests {
         };
 
         let key_sheet = AnswerKeySheet {
-            subject_code: 1001.to_string(),
+            _subject_code: 1001.to_string(),
             answers: array::from_fn(|_| correct_group.clone()),
         };
 
@@ -226,7 +226,7 @@ mod unit_tests {
         assert_eq!(result.correct, 2 * 36);
         assert_eq!(result.incorrect, 3 * 36);
         assert_eq!(result.not_answered, 0);
-        assert_eq!(result.graded_questions.len(), 36);
+        assert_eq!(result._graded_questions.len(), 36);
     }
 
     #[test]

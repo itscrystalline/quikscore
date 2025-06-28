@@ -1,9 +1,6 @@
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex, RwLock},
-};
+use std::{collections::HashMap, sync::Mutex};
 use tauri::{ipc::Channel, Emitter, Manager, Runtime};
 
 use opencv::core::Mat;
@@ -11,7 +8,7 @@ use opencv::core::Mat;
 use crate::{
     errors::{SheetError, UploadError},
     image,
-    scoring::{AnswerSheetResult, CheckedAnswer},
+    scoring::AnswerSheetResult,
 };
 
 pub type StateMutex = Mutex<AppState>;
@@ -38,7 +35,7 @@ pub enum AppState {
         key_image: Mat,
         key: AnswerKeySheet,
         subject_code: String,
-        answer_sheets: HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>,
+        _answer_sheets: HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>,
     },
 }
 
@@ -157,7 +154,7 @@ impl AppState {
                     key_image: key_image.clone(),
                     key,
                     subject_code: subject_code.clone(),
-                    answer_sheets,
+                    _answer_sheets: answer_sheets,
                 };
                 signal!(channel, AnswerUpload::Done { uploaded: to_send });
             }
@@ -196,13 +193,13 @@ pub struct AnswerSheet {
 
 #[derive(Debug, Clone)]
 pub struct AnswerKeySheet {
-    pub subject_code: String,
+    pub _subject_code: String,
     pub answers: [QuestionGroup; 36],
 }
 impl From<AnswerSheet> for AnswerKeySheet {
     fn from(value: AnswerSheet) -> Self {
         Self {
-            subject_code: value.subject_code,
+            _subject_code: value.subject_code,
             answers: value.answers,
         }
     }
@@ -493,7 +490,11 @@ mod unit_tests {
         let current_count = {
             let mutex = app.state::<StateMutex>();
             let state = mutex.lock().expect("poisoned");
-            let AppState::Scored { answer_sheets, .. } = &*state else {
+            let AppState::Scored {
+                _answer_sheets: answer_sheets,
+                ..
+            } = &*state
+            else {
                 unreachable!()
             };
             answer_sheets.len()
@@ -503,7 +504,11 @@ mod unit_tests {
 
         let mutex = app.state::<StateMutex>();
         let state = mutex.lock().unwrap();
-        if let AppState::Scored { answer_sheets, .. } = &*state {
+        if let AppState::Scored {
+            _answer_sheets: answer_sheets,
+            ..
+        } = &*state
+        {
             assert_ne!(current_count, answer_sheets.len());
         } else {
             unreachable!()
@@ -547,7 +552,11 @@ mod unit_tests {
         {
             let mutex = app.state::<StateMutex>();
             let state = mutex.lock().unwrap();
-            let AppState::Scored { answer_sheets, .. } = &*state else {
+            let AppState::Scored {
+                _answer_sheets: answer_sheets,
+                ..
+            } = &*state
+            else {
                 unreachable!()
             };
 

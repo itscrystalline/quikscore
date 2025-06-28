@@ -7,7 +7,7 @@ use base64::Engine;
 use itertools::Itertools;
 use opencv::core::{Mat, Rect_, Size, Vector};
 use opencv::imgproc::THRESH_BINARY;
-use opencv::{highgui, imgproc, prelude::*};
+use opencv::{imgproc, prelude::*};
 use rayon::prelude::*;
 use tauri_plugin_dialog::FilePath;
 
@@ -333,18 +333,14 @@ fn extract_digits_for_sub_stu(
     let digit_height = overall_height / 10;
     let digit_width = mat.cols() / num_digits;
     let temp: bool = is_student_id;
-    let rows;
-    if is_student_id {
-        rows = 8;
-    } else {
-        rows = 2;
-    }
+
+    let rows = if is_student_id { 8 } else { 2 };
     let cols = 10;
     let mut v: Vec<Vec<i32>> = vec![vec![0; cols]; rows];
 
     let mut digits = String::new();
 
-    for i in (0..num_digits as usize) {
+    for i in 0..num_digits as usize {
         if is_student_id {
             is_student_id = false;
             continue;
@@ -362,7 +358,7 @@ fn extract_digits_for_sub_stu(
         let mut min_sum = u32::MAX;
         let mut selected_digit = 0;
 
-        for j in (0..10 as usize) {
+        for j in 0..10usize {
             let y = (j as i32) * digit_height + the_height_from_above_to_bubble;
             let digit_roi = roi.roi(Rect_ {
                 x: 0,
@@ -374,10 +370,10 @@ fn extract_digits_for_sub_stu(
             let sum: u32 = digit_roi.data_bytes()?.iter().map(|&b| b as u32).sum();
             if temp {
                 if i > 0 {
-                    v[i - 1][j] = (sum as i32); //Skip first Index NaKub
+                    v[i - 1][j] = sum as i32; //Skip first Index NaKub
                 }
             } else {
-                v[i][j] = (sum as i32);
+                v[i][j] = sum as i32;
             }
 
             if sum < min_sum {
@@ -393,7 +389,7 @@ fn extract_digits_for_sub_stu(
         println!("Subject");
     }
     for (i, row) in v.iter().enumerate() {
-        println!("Row {}: {:?}", i, row);
+        println!("Row {i}: {row:?}");
     }
     Ok(digits)
 }
