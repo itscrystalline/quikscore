@@ -41,7 +41,7 @@ const answerEventHandler = (msg: AnswerUpload): void => {
       break;
     case "processing":
       const { total, started, finished } = msg.data;
-      answerStatus.value = `Processing ${started}/${total} sheets... ${(finished / total).toFixed(2)}% (${started - finished} in progress)`;
+      answerStatus.value = `Processing ${started}/${total} sheets... ${((finished / total) * 100).toFixed(2)}% (${started - finished} in progress)`;
       break;
     case "done":
       answerStatus.value = "";
