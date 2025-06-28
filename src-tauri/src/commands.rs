@@ -24,7 +24,7 @@ pub fn clear_key_image(app: AppHandle, channel: Channel<KeyUpload>) {
 pub fn upload_sheet_images(app: AppHandle, channel: Channel<AnswerUpload>) {
     println!("uploading sheet images");
     app.dialog().file().pick_files(move |file_paths| {
-        upload_sheet_images_impl(&app, channel, file_paths);
+        upload_sheet_images_impl(&app, file_paths, channel);
     });
 }
 #[tauri::command]

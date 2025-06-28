@@ -51,8 +51,8 @@ pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
 
 pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
-    channel: Channel<AnswerUpload>,
     paths: Option<Vec<FilePath>>,
+    channel: Channel<AnswerUpload>,
 ) {
     enum ProcessingState {
         Starting,
