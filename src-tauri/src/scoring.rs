@@ -147,7 +147,7 @@ mod unit_tests {
 
         assert_eq!(Answer::check_with(a1, a2), CheckedAnswer::Correct);
         assert_eq!(Answer::check_with(a1, a3), CheckedAnswer::Incorrect);
-        assert_eq!(Answer::check_with(None, a2), CheckedAnswer::Incorrect);
+        assert_eq!(Answer::check_with(None, a2), CheckedAnswer::Missing);
         assert_eq!(Answer::check_with(a2, None), CheckedAnswer::NotCounted);
         assert_eq!(Answer::check_with(None, None), CheckedAnswer::NotCounted);
     }
@@ -175,7 +175,7 @@ mod unit_tests {
         assert_eq!(checked.B, CheckedAnswer::Incorrect);
         assert_eq!(checked.C, CheckedAnswer::Correct);
         assert_eq!(checked.D, CheckedAnswer::NotCounted);
-        assert_eq!(checked.E, CheckedAnswer::Incorrect);
+        assert_eq!(checked.E, CheckedAnswer::Missing);
     }
 
     #[test]
@@ -199,14 +199,14 @@ mod unit_tests {
             B: answer(2),
             C: answer(3),
             D: answer(4),
-            E: answer(5),
+            E: none_answer(),
         };
         let student_group = QuestionGroup {
             A: answer(1),     // correct
             B: answer(9),     // incorrect
             C: answer(3),     // correct
-            D: none_answer(), // incorrect
-            E: none_answer(), // incorrect
+            D: none_answer(), // missing
+            E: answer(1),     // not counted
         };
 
         let answer_sheet = AnswerSheet {
@@ -224,8 +224,8 @@ mod unit_tests {
 
         // Per group: 2 correct, 3 incorrect (since missing is also considered incorrect here)
         assert_eq!(result.correct, 2 * 36);
-        assert_eq!(result.incorrect, 3 * 36);
-        assert_eq!(result.not_answered, 0);
+        assert_eq!(result.incorrect, 36);
+        assert_eq!(result.not_answered, 36);
         assert_eq!(result._graded_questions.len(), 36);
     }
 
