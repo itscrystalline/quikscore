@@ -123,27 +123,29 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     }
 }
 
-fn resize_img(src: Mat) -> opencv::Result<Mat> {
+pub fn resize_relative_img(src: &Mat, relative: f64) -> opencv::Result<Mat> {
     let mut dst = new_mat_copy!(src);
-    let new_size = Size::new(src.cols() / 3, src.rows() / 3);
+    let new_size = Size::new(
+        (src.cols() as f64 * relative).round() as i32,
+        (src.rows() as f64 * relative).round() as i32,
+    );
 
     imgproc::resize(&src, &mut dst, new_size, 0.0, 0.0, imgproc::INTER_LINEAR)?;
     Ok(dst)
 }
 
-fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
-    println!("showing window {window_name}");
-    highgui::named_window(window_name, 0)?;
-    highgui::imshow(window_name, mat)?;
-    highgui::wait_key(10000)?;
-    Ok(())
-}
+// fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
+//     println!("showing window {window_name}");
+//     highgui::named_window(window_name, 0)?;
+//     highgui::imshow(window_name, mat)?;
+//     highgui::wait_key(10000)?;
+//     Ok(())
+// }
 
 fn handle_upload(path: FilePath) -> Result<(String, Mat, AnswerSheet), UploadError> {
     let mat = read_from_path(path)?;
-    let resized = resize_img(mat).map_err(UploadError::from)?;
+    let resized = resize_relative_img(&mat, 0.333).map_err(UploadError::from)?;
     let (aligned_for_display, subject_id, student_id, answer_sheet) = fix_answer_sheet(resized)?;
-
     //testing
     //#[cfg(not(test))]
     //let _ = show_img(&aligned_for_processing, "resized & aligned image");
@@ -152,7 +154,7 @@ fn handle_upload(path: FilePath) -> Result<(String, Mat, AnswerSheet), UploadErr
     Ok((base64, aligned_for_display, answer_sheet))
 }
 
-fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
+pub fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
     let mut buf: Vector<u8> = Vec::new().into();
     imencode(".png", mat, &mut buf, &Vec::new().into())?;
     let base64 = base64::prelude::BASE64_STANDARD.encode(&buf);
@@ -524,7 +526,7 @@ mod unit_tests {
             Mat::new_rows_cols_with_default(height, width, core::CV_8UC1, core::Scalar::all(128.0))
                 .unwrap();
 
-        let resized = resize_img(mat);
+        let resized = resize_relative_img(&mat, 0.333);
         assert!(resized.is_ok());
 
         let resized = resized.unwrap();
@@ -580,7 +582,7 @@ mod unit_tests {
     fn check_extracted_ids_from_real_image() {
         let path = test_key_image();
         let mat = read_from_path(path).expect("Failed to read image");
-        let resized = resize_img(mat).expect("Resize failed");
+        let resized = resize_relative_img(&mat, 0.3333).expect("Resize failed");
         let (_cropped, subject_id_mat, student_id_mat, _answers) =
             fix_answer_sheet(resized).expect("Fixing sheet failed");
 

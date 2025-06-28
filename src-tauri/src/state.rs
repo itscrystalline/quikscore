@@ -10,6 +10,7 @@ use opencv::core::Mat;
 
 use crate::{
     errors::{SheetError, UploadError},
+    image,
     scoring::{AnswerSheetResult, CheckedAnswer},
 };
 
@@ -112,8 +113,8 @@ impl AppState {
                     .par_iter()
                     .map(|r| match r {
                         Ok((
-                            base64,
                             _,
+                            mat,
                             _,
                             AnswerSheetResult {
                                 correct,
@@ -121,12 +122,21 @@ impl AppState {
                                 not_answered,
                                 ..
                             },
-                        )) => AnswerScoreResult::Ok {
-                            base64: base64.clone(),
-                            correct: *correct,
-                            incorrect: *incorrect,
-                            not_answered: *not_answered,
-                        },
+                        )) => {
+                            let img_small = image::resize_relative_img(mat, 0.4)
+                                .and_then(|m| image::mat_to_base64_png(&m));
+                            match img_small {
+                                Ok(base64) => AnswerScoreResult::Ok {
+                                    base64,
+                                    correct: *correct,
+                                    incorrect: *incorrect,
+                                    not_answered: *not_answered,
+                                },
+                                Err(e) => AnswerScoreResult::Error {
+                                    error: format!("{e}"),
+                                },
+                            }
+                        }
                         Err(e) => AnswerScoreResult::Error {
                             error: format!("{e}"),
                         },
@@ -405,6 +415,11 @@ mod unit_tests {
         } else {
             unreachable!()
         }
+
+        let msgs = unwrap_msgs!(msgs);
+        let mut msgs = msgs.iter();
+        assert!(matches!(msgs.next(), Some(KeyUpload::Done { .. })));
+        assert!(matches!(msgs.next(), Some(KeyUpload::Done { .. })));
     }
     #[test]
     fn test_app_key_canceled_upload() {
@@ -413,6 +428,9 @@ mod unit_tests {
         upload_key_image_impl(&app, None, channel);
 
         assert_state!(app, AppState::Init);
+        let msgs = unwrap_msgs!(msgs);
+        let mut msgs = msgs.iter();
+        assert!(matches!(msgs.next(), Some(KeyUpload::Cancelled)));
     }
     #[test]
     fn test_app_key_invalid_upload() {
@@ -421,6 +439,9 @@ mod unit_tests {
         upload_key_image_impl(&app, Some(not_image()), channel);
 
         assert_state!(app, AppState::Init);
+        let msgs = unwrap_msgs!(msgs);
+        let mut msgs = msgs.iter();
+        assert!(matches!(msgs.next(), Some(KeyUpload::Error { .. })));
     }
     #[test]
     fn test_app_key_clear() {
@@ -433,6 +454,10 @@ mod unit_tests {
         AppState::clear_key(&app, channel);
 
         assert_state!(app, AppState::Init);
+        let msgs = unwrap_msgs!(msgs);
+        let mut msgs = msgs.iter();
+        assert!(matches!(msgs.next(), Some(KeyUpload::Done { .. })));
+        assert!(matches!(msgs.next(), Some(KeyUpload::Clear)));
     }
 
     #[test]
