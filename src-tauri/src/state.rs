@@ -115,7 +115,7 @@ impl AppState {
                         Ok((
                             _,
                             mat,
-                            _,
+                            AnswerSheet { student_id, .. },
                             AnswerSheetResult {
                                 correct,
                                 incorrect,
@@ -127,6 +127,7 @@ impl AppState {
                                 .and_then(|m| image::mat_to_base64_png(&m));
                             match img_small {
                                 Ok(base64) => AnswerScoreResult::Ok {
+                                    student_id: student_id.clone(),
                                     base64,
                                     correct: *correct,
                                     incorrect: *incorrect,
@@ -289,6 +290,7 @@ pub enum AnswerUpload {
 )]
 pub enum AnswerScoreResult {
     Ok {
+        student_id: String,
         base64: String,
         correct: u32,
         incorrect: u32,

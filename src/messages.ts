@@ -49,6 +49,7 @@ export type AnswerScoreResult =
   | {
       result: "ok";
       data: {
+        studentId: string;
         base64: string;
         correct: number;
         incorrect: number;
