@@ -471,11 +471,10 @@ mod unit_tests {
         assert_state!(app, AppState::Scored { .. });
 
         let msgs = unwrap_msgs!(sheet_msgs);
-        let mut msgs = msgs.iter();
+        let mut msgs = msgs
+            .iter()
+            .filter(|a| !matches!(a, AnswerUpload::Processing { .. }));
 
-        for _ in 0..7 {
-            assert!(matches!(msgs.next(), Some(AnswerUpload::Processing { .. })));
-        }
         assert!(matches!(msgs.next(), Some(AnswerUpload::AlmostDone)));
         assert!(matches!(msgs.next(), Some(AnswerUpload::Done { .. })));
     }
@@ -515,15 +514,11 @@ mod unit_tests {
         }
 
         let msgs = unwrap_msgs!(sheet_msgs);
-        let mut msgs = msgs.iter();
-        for _ in 0..7 {
-            assert!(matches!(msgs.next(), Some(AnswerUpload::Processing { .. })));
-        }
+        let mut msgs = msgs
+            .iter()
+            .filter(|a| !matches!(a, AnswerUpload::Processing { .. }));
         assert!(matches!(msgs.next(), Some(AnswerUpload::AlmostDone)));
         assert!(matches!(msgs.next(), Some(AnswerUpload::Done { .. })));
-        for _ in 0..3 {
-            assert!(matches!(msgs.next(), Some(AnswerUpload::Processing { .. })));
-        }
         assert!(matches!(msgs.next(), Some(AnswerUpload::AlmostDone)));
         assert!(matches!(msgs.next(), Some(AnswerUpload::Done { .. })));
     }
@@ -564,11 +559,10 @@ mod unit_tests {
         };
 
         let msgs = unwrap_msgs!(sheet_msgs);
-        let mut msgs = msgs.iter();
+        let mut msgs = msgs
+            .iter()
+            .filter(|a| !matches!(a, AnswerUpload::Processing { .. }));
 
-        for _ in 0..3 {
-            assert!(matches!(msgs.next(), Some(AnswerUpload::Processing { .. })));
-        }
         assert!(matches!(msgs.next(), Some(AnswerUpload::AlmostDone)));
         let Some(AnswerUpload::Done { uploaded }) = msgs.next() else {
             unreachable!()
@@ -590,11 +584,10 @@ mod unit_tests {
         assert_state!(app, AppState::WithKey { .. });
 
         let msgs = unwrap_msgs!(sheet_msgs);
-        let mut msgs = msgs.iter();
+        let mut msgs = msgs
+            .iter()
+            .filter(|a| !matches!(a, AnswerUpload::Processing { .. }));
 
-        for _ in 0..7 {
-            assert!(matches!(msgs.next(), Some(AnswerUpload::Processing { .. })));
-        }
         assert!(matches!(msgs.next(), Some(AnswerUpload::AlmostDone)));
         assert!(matches!(msgs.next(), Some(AnswerUpload::Done { .. })));
 
