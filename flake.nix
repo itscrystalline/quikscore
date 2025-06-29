@@ -50,6 +50,7 @@
           };
 
           buildAndTestSubdir = "src-tauri";
+          useNextest = true;
 
           buildInputs = with pkgs; (lib.optionals stdenv.hostPlatform.isLinux [
               glib
