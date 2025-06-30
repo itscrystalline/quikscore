@@ -14,7 +14,9 @@
         pkgs = import nixpkgs {inherit system;};
         inherit (pkgs) lib stdenv fetchYarnDeps;
         inherit (pkgs.rustPlatform) buildRustPackage;
-        package = buildRustPackage (finalAttrs: {
+        buildRustPackageStatic = pkgs.pkgsMusl.rustPlatform.buildRustPackage;
+
+        packageFn = finalAttrs: {
           pname = "quikscore";
           version = "0.1.0";
 
@@ -63,10 +65,14 @@
               libpng
               openssl
             ]);
-        });
+        };
+
+        package = buildRustPackage packageFn;
+        package-static = buildRustPackageStatic packageFn;
       in {
         packages = {
           quikscore = package;
+          quikscore-static = package-static;
           default = package;
         };
       }
