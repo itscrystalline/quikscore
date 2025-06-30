@@ -4441,8 +4441,7 @@ dependencies = [
 [[package]]
 name = "tesseract-rs"
 version = "0.1.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ddb542a2c9351c420fe21dec737db175e08d3dca869e95d0467b9843fec4839"
+source = "git+https://github.com/itscrystalline/tesseract-rs.git?rev=acc748084b54ae5a1f6a8678c3a050379950eca0#acc748084b54ae5a1f6a8678c3a050379950eca0"
 dependencies = [
  "cc",
  "cmake",
