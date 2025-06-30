@@ -7,7 +7,7 @@ pub struct AnswerSheetResult {
     pub correct: u32,
     pub incorrect: u32,
     pub not_answered: u32,
-    pub _graded_questions: [CheckedQuestionGroup; 36],
+    pub graded_questions: [CheckedQuestionGroup; 36],
 }
 
 #[allow(non_snake_case)]
@@ -18,6 +18,19 @@ pub struct CheckedQuestionGroup {
     pub C: CheckedAnswer,
     pub D: CheckedAnswer,
     pub E: CheckedAnswer,
+}
+
+impl CheckedQuestionGroup {
+    pub fn at(&self, idx: usize) -> Option<CheckedAnswer> {
+        match idx {
+            0 => Some(self.A),
+            1 => Some(self.B),
+            2 => Some(self.C),
+            3 => Some(self.D),
+            4 => Some(self.E),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -116,7 +129,7 @@ impl AnswerSheet {
             correct,
             incorrect,
             not_answered,
-            _graded_questions: graded_questions,
+            graded_questions,
         }
     }
 }
@@ -226,7 +239,7 @@ mod unit_tests {
         assert_eq!(result.correct, 2 * 36);
         assert_eq!(result.incorrect, 36);
         assert_eq!(result.not_answered, 36);
-        assert_eq!(result._graded_questions.len(), 36);
+        assert_eq!(result.graded_questions.len(), 36);
     }
 
     #[test]

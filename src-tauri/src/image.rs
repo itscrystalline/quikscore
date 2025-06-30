@@ -2,11 +2,12 @@ use std::array;
 use tauri::ipc::Channel;
 
 use crate::errors::{SheetError, UploadError};
+use crate::scoring::{AnswerSheetResult, CheckedAnswer};
 use crate::signal;
 use base64::Engine;
 use itertools::Itertools;
 use opencv::core::{Mat, Rect_, Size, Vector};
-use opencv::imgproc::THRESH_BINARY;
+use opencv::imgproc::{COLOR_GRAY2RGBA, FILLED, LINE_8, THRESH_BINARY};
 use opencv::{imgproc, prelude::*};
 use rayon::prelude::*;
 use tauri_plugin_dialog::FilePath;
@@ -25,6 +26,12 @@ macro_rules! new_mat_copy {
         mat
     }};
 }
+
+const ANSWER_WIDTH: i32 = 215;
+const ANSWER_WIDTH_GAP: i32 = 9;
+const ANSWER_HEIGHT: i32 = 73;
+const ANSWER_HEIGHT_GAP: i32 = 10;
+const MARKER_TRANSPARENCY: f64 = 0.3;
 
 pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
@@ -234,11 +241,6 @@ fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
     Ok((subject_area, student_id_area, answers_area))
 }
 
-const ANSWER_WIDTH: i32 = 215;
-const ANSWER_WIDTH_GAP: i32 = 9;
-const ANSWER_HEIGHT: i32 = 73;
-const ANSWER_HEIGHT_GAP: i32 = 10;
-
 fn extract_answers(answer_mat: &Mat) -> Result<[QuestionGroup; 36], SheetError> {
     // let mat_debug_cloned = answer_mat.try_clone()?;
     // let mut mat_debug = new_mat_copy!(answer_mat);
@@ -410,6 +412,72 @@ impl TryFrom<(Mat, Mat, Mat)> for AnswerSheet {
             student_id: student_id_string,
             answers: scanned_answers,
         })
+    }
+}
+
+impl AnswerSheetResult {
+    pub fn write_score_marks(&self, sheet: &mut Mat) -> Result<(), SheetError> {
+        let mut sheet_transparent = new_mat_copy!(sheet);
+        imgproc::cvt_color_def(sheet, &mut sheet_transparent, COLOR_GRAY2RGBA)?;
+        *sheet = sheet_transparent.clone();
+        for x_idx in 0..4 {
+            for y_idx in 0..9 {
+                let (x, y) = (
+                    206 + (ANSWER_WIDTH + ANSWER_WIDTH_GAP) * x_idx,
+                    14 + (ANSWER_HEIGHT + ANSWER_HEIGHT_GAP) * y_idx,
+                );
+                let (x, y) = (
+                    x.clamp(0, sheet.cols() - ANSWER_WIDTH),
+                    y.clamp(0, sheet.rows() - ANSWER_HEIGHT),
+                );
+                let rect = Rect_ {
+                    x,
+                    y,
+                    width: ANSWER_WIDTH,
+                    height: ANSWER_HEIGHT,
+                };
+                for row_idx in 0..5usize {
+                    let result_here =
+                        self.graded_questions[(x_idx * 9 + y_idx) as usize].at(row_idx);
+                    let row_y = y
+                        + ((ANSWER_HEIGHT / 5) * row_idx as i32)
+                            .clamp(0, rect.height - ANSWER_HEIGHT / 5);
+                    let row_rect = Rect_ {
+                        x: x + 24,
+                        y: row_y,
+                        width: ANSWER_WIDTH - 24,
+                        height: ANSWER_HEIGHT / 5,
+                    };
+                    let color: Option<opencv::core::Scalar> = result_here.and_then(|c| match c {
+                        CheckedAnswer::Correct => Some((43, 160, 64).into()),
+                        CheckedAnswer::Incorrect => Some((57, 15, 210).into()),
+                        CheckedAnswer::Missing => Some((29, 142, 223).into()),
+                        CheckedAnswer::NotCounted => None,
+                    });
+                    if let Some(color) = color {
+                        imgproc::rectangle(
+                            &mut sheet_transparent,
+                            row_rect,
+                            color,
+                            FILLED,
+                            LINE_8,
+                            0,
+                        )?;
+                    }
+                }
+            }
+        }
+        let mut res = new_mat_copy!(sheet);
+        opencv::core::add_weighted_def(
+            &sheet_transparent,
+            MARKER_TRANSPARENCY,
+            sheet,
+            1.0 - MARKER_TRANSPARENCY,
+            0.0,
+            &mut res,
+        )?;
+        *sheet = res;
+        Ok(())
     }
 }
 
