@@ -230,7 +230,9 @@ fn extract_digits_for_sub_stu(
                 height: digit_height,
             })?;
 
-            let sum: u32 = digit_roi.data_bytes()?.iter().map(|&b| b as u32).sum();
+            let mut bin = Mat::default();
+            opencv::imgproc::threshold(&digit_roi, &mut bin, 100.0, 255.0, opencv::imgproc::THRESH_BINARY_INV);
+            let sum: u32 = opencv::core::count_non_zero(&bin)? as u32;
             if temp {
                 if i > 0 {
                     v[i - 1][j] = (sum as i32); //Skip first Index NaKub
