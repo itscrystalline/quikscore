@@ -114,7 +114,7 @@ async function clearSheets() {
       <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ?
         "🧾 Upload Answer Sheets..." :
         "Change Answer Sheets"
-        }}</button>
+      }}</button>
       <button class="btn-clear" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄
         Clear
         Answer
@@ -122,13 +122,15 @@ async function clearSheets() {
     </div>
     <!-- 📦 Result Placeholder -->
     <div class="card">
-      <div v-for="{ result, data } in answerImages">
-        <div v-if="result == 'ok'">
+      <div v-for="{ result, data } in answerImages" class="pad">
+        <div v-if="result == 'ok'" class="result">
           <img :src="data.base64"></img>
-          <p>ID {{ data.studentId }}</p>
-          <p>score: {{ data.correct }}</p>
-          <p>incorrect: {{ data.incorrect }}</p>
-          <p>questions not answered: {{ data.notAnswered }}</p>
+          <div class="stats">
+            <p>ID {{ data.studentId }}</p>
+            <p>score: {{ data.correct }}</p>
+            <p>incorrect: {{ data.incorrect }}</p>
+            <p>questions not answered: {{ data.notAnswered }}</p>
+          </div>
         </div>
         <p v-else>
           {{ data.error }}
@@ -241,6 +243,21 @@ p.credits {
   padding: 0;
   height: fit-content;
 }
+
+.result {
+  display: flex;
+  align-items: start;
+}
+
+.stats {
+  text-align: left;
+  margin-left: 3vh;
+}
+
+.pad:not(:last-child) {
+  margin-bottom: 3vh;
+}
+
 
 button {
   border-radius: 8px;
