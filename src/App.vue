@@ -99,7 +99,7 @@ async function clearSheets() {
           ?
           "📥\nUpload Answer Key..." :
           "Change Answer Key" }}</button>
-      <button :class="`btn-key${answerImages.length !== 0 ? ' btn-disabled' : ''}`" @click="clearKey"
+      <button :class="`btn-clear${answerImages.length !== 0 ? ' btn-disabled' : ''}`" @click="clearKey"
         v-bind:disabled="answerImages.length !== 0" v-if="keyImage !== ''">🔄 Clear
         Answer Key</button>
     </div>
@@ -115,7 +115,7 @@ async function clearSheets() {
         "🧾 Upload Answer Sheets..." :
         "Change Answer Sheets"
         }}</button>
-      <button class="btn-sheet" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄
+      <button class="btn-clear" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄
         Clear
         Answer
         Sheets</button>
@@ -254,6 +254,7 @@ button {
   font-weight: 500;
   font-family: inherit;
   transition: border-color 0.25s;
+  transition: all 0.2s ease;
   box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
 }
 
@@ -293,8 +294,26 @@ button.btn-sheet {
   color: #ffffff;
 }
 
+button:hover:not(:disabled) {
+  transform: scale(0.98);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 button.btn-sheet:hover {
   background-color: #059669;
+}
+
+button.btn-clear {
+  background-color: #f87171;
+  color: #ffffff;
+}
+
+button.btn-clear:hover:not(:disabled) {
+  background-color: #ef4444;
 }
 
 #greet-input {
