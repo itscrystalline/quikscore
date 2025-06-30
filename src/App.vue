@@ -122,7 +122,6 @@ async function clearSheets() {
     </div>
     <!-- 📦 Result Placeholder -->
     <div class="card">
-
       <div v-for="{ result, data } in answerImages">
         <div v-if="result == 'ok'">
           <img :src="data.base64"></img>
@@ -135,7 +134,6 @@ async function clearSheets() {
           {{ data.error }}
         </p>
       </div>
-
       <p class="placeholder" v-if="answerImages.length === 0">{{ answerStatus === "" ?
         "Upload files to see results here" : answerStatus }}</p>
     </div>
