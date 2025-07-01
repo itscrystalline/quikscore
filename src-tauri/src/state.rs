@@ -100,8 +100,9 @@ impl AppState {
                 > = result
                     .into_par_iter()
                     .map(|r| {
-                        r.map(|(s, m, a)| {
+                        r.map(|(s, mut m, a)| {
                             let score = a.score(&key);
+                            _ = score.write_score_marks(&mut m);
                             (s, m, a, score)
                         })
                     })
