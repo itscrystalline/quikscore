@@ -11,7 +11,7 @@ use opencv::imgproc::{COLOR_GRAY2RGBA, FILLED, LINE_8, THRESH_BINARY};
 use opencv::{imgcodecs, imgproc, prelude::*};
 use rayon::prelude::*;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tauri_plugin_dialog::FilePath;
 use tesseract_rs::TesseractAPI;
 
@@ -40,12 +40,13 @@ pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
     path_maybe: Option<FilePath>,
     channel: Channel<KeyUpload>,
+    tessdata_path: PathBuf,
 ) {
     let Some(file_path) = path_maybe else {
         signal!(channel, KeyUpload::Cancelled);
         return;
     };
-    match handle_upload(file_path) {
+    match handle_upload(file_path, &tessdata_path) {
         Ok((base64_image, mat, key)) => {
             let subject = key.subject_code.clone();
             AppState::upload_key(app, channel, base64_image, mat, subject, key.into())
@@ -63,6 +64,7 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
     paths: Option<Vec<FilePath>>,
     channel: Channel<AnswerUpload>,
+    tessdata_path: PathBuf,
 ) {
     enum ProcessingState {
         Starting,
@@ -93,7 +95,7 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
             .into_par_iter()
             .map_with(tx.clone(), |tx, file_path| {
                 _ = tx.try_send(ProcessingState::Starting);
-                let res = handle_upload(file_path);
+                let res = handle_upload(file_path, &tessdata_path);
                 _ = tx.try_send(ProcessingState::Finishing);
                 res
             })
@@ -152,7 +154,10 @@ pub fn resize_relative_img(src: &Mat, relative: f64) -> opencv::Result<Mat> {
 //     Ok(())
 // }
 
-fn handle_upload(path: FilePath) -> Result<(String, Mat, AnswerSheet), UploadError> {
+fn handle_upload(
+    path: FilePath,
+    tessdata_path: &Path,
+) -> Result<(String, Mat, AnswerSheet), UploadError> {
     let mat = read_from_path(path)?;
     let resized = resize_relative_img(&mat, 0.3333).map_err(UploadError::from)?;
     let resized_for_fix = resized.clone();
@@ -166,7 +171,7 @@ fn handle_upload(path: FilePath) -> Result<(String, Mat, AnswerSheet), UploadErr
     //testing
     //#[cfg(not(test))]
     //let _ = show_img(&aligned_for_processing, "resized & aligned image");
-    let (name, subject, date, exam_room, seat) = extract_user_information(&resized)?;
+    let (name, subject, date, exam_room, seat) = extract_user_information(&resized, tessdata_path)?;
     println!("name: {name}");
     println!("name: {subject}");
     println!("name: {date}");
@@ -572,6 +577,7 @@ fn image_to_string(mat: &Mat, tesseract: &TesseractAPI) -> Result<String, SheetE
 
 fn extract_user_information(
     mat: &Mat,
+    tessdata_path: &Path,
 ) -> Result<(String, String, String, String, String), SheetError> {
     let temp_dir = "temp";
     _ = fs::create_dir_all(temp_dir);
@@ -588,7 +594,7 @@ fn extract_user_information(
     safe_imwrite("temp/debug_seat.png", &seat)?;
 
     let tess = TesseractAPI::new();
-    // FIXME: embed tesseract lang data
+    tess.init(tessdata_path, "eng")?;
 
     let name_string = image_to_string(&name, &tess)?;
     let subject_string = image_to_string(&subject, &tess)?;
@@ -639,6 +645,10 @@ mod unit_tests {
             FilePath::Path(PathBuf::from("tests/assets/image_002.jpg")),
             FilePath::Path(PathBuf::from("tests/assets/image_003.jpg")),
         ]
+    }
+
+    fn tessdata() -> &'static Path {
+        Path::new("tests/assets")
     }
 
     fn not_image() -> FilePath {
@@ -707,10 +717,10 @@ mod unit_tests {
     #[test]
     fn test_handle_upload_success() {
         let path = test_key_image();
-        let result = handle_upload(path);
+        let result = handle_upload(path, tessdata());
         assert!(result.is_ok());
 
-        let (base64_string, mat, answer_sheet) = result.unwrap();
+        let (base64_string, mat, _answer_sheet) = result.unwrap();
         assert!(base64_string.starts_with("data:image/png;base64,"));
         assert!(!mat.empty());
     }
@@ -718,7 +728,7 @@ mod unit_tests {
     #[test]
     fn test_handle_upload_failure() {
         let path = not_image();
-        let result = handle_upload(path);
+        let result = handle_upload(path, tessdata());
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), UploadError::NotImage));
     }
