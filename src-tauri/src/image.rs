@@ -369,7 +369,7 @@ fn extract_digits_for_sub_stu(
             })?;
 
             let mut bin = Mat::default();
-            opencv::imgproc::threshold(&digit_roi, &mut bin, 0.0, 255.0, opencv::imgproc::THRESH_BINARY_INV);
+            let _ = opencv::imgproc::threshold(&digit_roi, &mut bin, 0.0, 255.0, opencv::imgproc::THRESH_BINARY_INV);
             let sum: u32 = opencv::core::count_non_zero(&bin)? as u32;
             if temp {
                 if i > 0 {
