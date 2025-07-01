@@ -7,7 +7,6 @@ use crate::signal;
 use base64::Engine;
 use itertools::Itertools;
 use opencv::core::{Mat, Range, Rect_, Size, Vector};
-use opencv::imgproc::THRESH_BINARY;
 use opencv::imgproc::{COLOR_GRAY2RGBA, FILLED, LINE_8, THRESH_BINARY};
 use opencv::{highgui, imgcodecs, imgproc, prelude::*};
 use rayon::prelude::*;
