@@ -553,7 +553,7 @@ fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
     Ok((name, subject, date, exam_room, seat))
 }
 
-fn image_to_string(mat: &Mat) -> Result<String, SheetError> {
+fn image_to_string(mat: &Mat, tesseract: &TesseractAPI) -> Result<String, SheetError> {
     let width = mat.cols();
     let height = mat.rows();
     let bytes_per_pixel = 1;
@@ -563,10 +563,9 @@ fn image_to_string(mat: &Mat) -> Result<String, SheetError> {
 
     let image_data = mat.data_bytes()?;
 
-    let api = TesseractAPI::new();
-    api.set_image(image_data, width, height, bytes_per_pixel, bytes_per_line)?;
+    tesseract.set_image(image_data, width, height, bytes_per_pixel, bytes_per_line)?;
 
-    let text = api.get_utf8_text()?;
+    let text = tesseract.get_utf8_text()?;
 
     Ok(text.trim().to_string())
 }
@@ -588,11 +587,14 @@ fn extract_user_information(
     safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
     safe_imwrite("temp/debug_seat.png", &seat)?;
 
-    let name_string = image_to_string(&name)?;
-    let subject_string = image_to_string(&subject)?;
-    let date_string = image_to_string(&date)?;
-    let exam_room_string = image_to_string(&exam_room)?;
-    let seat_string = image_to_string(&seat)?;
+    let tess = TesseractAPI::new();
+    // FIXME: embed tesseract lang data
+
+    let name_string = image_to_string(&name, &tess)?;
+    let subject_string = image_to_string(&subject, &tess)?;
+    let date_string = image_to_string(&date, &tess)?;
+    let exam_room_string = image_to_string(&exam_room, &tess)?;
+    let seat_string = image_to_string(&seat, &tess)?;
 
     Ok((
         name_string,
