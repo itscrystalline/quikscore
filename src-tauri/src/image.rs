@@ -154,7 +154,7 @@ pub fn resize_relative_img(src: &Mat, relative: f64) -> opencv::Result<Mat> {
 
 fn handle_upload(path: FilePath) -> Result<(String, Mat, AnswerSheet), UploadError> {
     let mat = read_from_path(path)?;
-    let resized = resize_img(mat).map_err(UploadError::from)?;
+    let resized = resize_relative_img(&mat, 0.3333).map_err(UploadError::from)?;
     let resized_for_fix = resized.clone();
     let (aligned_for_display, subject_id, student_id, answer_sheet) =
         fix_answer_sheet(resized_for_fix)?;
