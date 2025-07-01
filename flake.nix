@@ -32,6 +32,7 @@
             rustPlatform.bindgenHook
             pkg-config
             clang
+            sccache
           ];
 
           # buildEnv = {

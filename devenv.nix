@@ -26,6 +26,7 @@ in {
       libllvm
       libclang
       opencv
+      sccache
 
       cargo-tarpaulin
       bacon
