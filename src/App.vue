@@ -12,7 +12,7 @@ async function ensureModel(textRef: Ref<string>): Promise<string> {
   if (!exists(await path.join(modelPath, "eng.traineddata"))) {
     textRef.value = "Downloading Tesseract OCR model...";
     download(
-      'https://raw.githubusercontent.com/itscrystalline/quikscore/refs/heads/Extract-User-Information/src-tauri/tests/assets/eng.traineddata',
+      'https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/refs/heads/main/eng.traineddata',
       modelPath + '/eng.traineddata',
     );
   }
@@ -130,7 +130,7 @@ async function clearSheets() {
       <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ?
         "🧾 Upload Answer Sheets..." :
         "Change Answer Sheets"
-        }}</button>
+      }}</button>
       <button class="btn-clear" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄
         Clear
         Answer
