@@ -574,7 +574,7 @@ fn extract_user_information(
     mat: &Mat,
 ) -> Result<(String, String, String, String, String), SheetError> {
     let temp_dir = "temp";
-    fs::create_dir_all(temp_dir);
+    _ = fs::create_dir_all(temp_dir);
 
     println!("Working directory: {:?}", std::env::current_dir());
 
