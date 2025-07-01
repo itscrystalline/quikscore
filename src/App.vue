@@ -1,9 +1,23 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { Ref, ref } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { AnswerScoreResult, AnswerUpload, KeyUpload } from "./messages";
+import { download } from '@tauri-apps/plugin-upload';
+import * as path from '@tauri-apps/api/path';
+import { exists } from "@tauri-apps/plugin-fs";
 
-
+async function ensureModel(textRef: Ref<string>): Promise<string> {
+  const cache = await path.cacheDir();
+  const modelPath = await path.join(cache, "quikscore");
+  if (!exists(await path.join(modelPath, "eng.traineddata"))) {
+    textRef.value = "Downloading Tesseract OCR model...";
+    download(
+      'https://raw.githubusercontent.com/itscrystalline/quikscore/refs/heads/Extract-User-Information/src-tauri/tests/assets/eng.traineddata',
+      modelPath + '/eng.traineddata',
+    );
+  }
+  return modelPath;
+}
 
 const keyEventHandler = (msg: KeyUpload): void => {
   switch (msg.event) {
@@ -60,9 +74,10 @@ const answerImages = ref<AnswerScoreResult[]>([]);
 const answerStatus = ref("");
 
 async function uploadKey() {
+  const path = await ensureModel(keyStatus);
   const keyEventChannel = new Channel<KeyUpload>();
   keyEventChannel.onmessage = keyEventHandler;
-  await invoke("upload_key_image", { channel: keyEventChannel });
+  await invoke("upload_key_image", { channel: keyEventChannel, tessdataPath: path });
 }
 async function clearKey() {
   const keyEventChannel = new Channel<KeyUpload>();
@@ -71,9 +86,10 @@ async function clearKey() {
 }
 
 async function uploadSheets() {
+  const path = await ensureModel(answerStatus);
   const answerEventChannel = new Channel<AnswerUpload>();
   answerEventChannel.onmessage = answerEventHandler;
-  await invoke("upload_sheet_images", { channel: answerEventChannel });
+  await invoke("upload_sheet_images", { channel: answerEventChannel, tessdataPath: path });
 }
 async function clearSheets() {
   const answerEventChannel = new Channel<AnswerUpload>();
@@ -114,7 +130,7 @@ async function clearSheets() {
       <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ?
         "🧾 Upload Answer Sheets..." :
         "Change Answer Sheets"
-      }}</button>
+        }}</button>
       <button class="btn-clear" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄
         Clear
         Answer
