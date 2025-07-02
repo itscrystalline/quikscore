@@ -14,6 +14,12 @@
         pkgs = import nixpkgs {inherit system;};
         inherit (pkgs) lib stdenv fetchYarnDeps;
         inherit (pkgs.rustPlatform) buildRustPackage;
+
+        loaderPath =
+          if stdenv.isx86_64
+          then "/lib64/ld-linux-x86-64.so.2"
+          else "/lib/ld-linux-aarch64.so.1";
+
         package = buildRustPackage (finalAttrs: {
           pname = "quikscore";
           version = "0.1.0";
@@ -32,6 +38,7 @@
             rustPlatform.bindgenHook
             pkg-config
             clang
+            patchelf
           ];
 
           # buildEnv = {
@@ -63,6 +70,11 @@
               libpng
               openssl
             ]);
+
+          postFixup = lib.optionalString stdenv.hostPlatform.isLinux ''
+            echo Patching ELF loader to a non-nix path...
+            patchelf --set-interpreter ${loaderPath} $out/bin/quikscore
+          '';
         });
       in {
         packages = {
