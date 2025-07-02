@@ -40,7 +40,7 @@
           # };
           env = {
             OPENCV_LINK_PATHS = "+${pkgs.opencv}/lib";
-            OPENCV_LINK_LIBS = "+opencv_core,opencv_calib3d,opencv_dnn,opencv_features2d,opencv_imgproc,opencv_video,opencv_flann,opencv_imgcodecs,opencv_objdetect,opencv_stitching,png";
+            OPENCV_LINK_LIBS = "+opencv_core,opencv_imgproc,opencv_imgcodecs,png";
             OPENCV_INCLUDE_PATHS = "+${pkgs.opencv}/include";
           };
 
