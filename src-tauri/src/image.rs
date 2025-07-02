@@ -587,11 +587,13 @@ fn extract_user_information(
     let user_information = crop_user_information(mat)?;
     let (name, subject, date, exam_room, seat) = crop_each_part(&user_information)?;
 
-    safe_imwrite("temp/debug_name.png", &name)?;
-    safe_imwrite("temp/debug_subject.png", &subject)?;
-    safe_imwrite("temp/debug_date.png", &date)?;
-    safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
-    safe_imwrite("temp/debug_seat.png", &seat)?;
+    if cfg!(debug_assertions) {
+        safe_imwrite("temp/debug_name.png", &name)?;
+        safe_imwrite("temp/debug_subject.png", &subject)?;
+        safe_imwrite("temp/debug_date.png", &date)?;
+        safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
+        safe_imwrite("temp/debug_seat.png", &seat)?;
+    }
 
     let tess = TesseractAPI::new();
     tess.init(tessdata_path, "eng")?;
