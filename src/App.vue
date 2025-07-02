@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Ref, ref } from "vue";
+import { ref } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { AnswerScoreResult, AnswerUpload, KeyUpload } from "./messages";
 import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
@@ -67,7 +67,7 @@ const keyProgressBar = ref(false);
 
 const answerImages = ref<AnswerScoreResult[]>([]);
 const answerStatus = ref("");
-const answerProgressBar: Ref<undefined | ProgressBarProps> = ref(undefined);
+const answerProgressBar = ref<undefined | ProgressBarProps>(undefined);
 
 async function uploadKey() {
   keyProgressBar.value = true;
