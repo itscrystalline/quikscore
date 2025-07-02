@@ -2,28 +2,30 @@
 import { ref } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { AnswerScoreResult, AnswerUpload, KeyUpload } from "./messages";
-
-
+import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
 
 const keyEventHandler = (msg: KeyUpload): void => {
   switch (msg.event) {
     case "cancelled":
       keyStatus.value = "User cancelled upload";
+      keyProgressBar.value = false;
       break;
 
     case "clear":
-      console.log("clear key (ts)")
       keyImage.value = "";
       keyStatus.value = "";
+      keyProgressBar.value = false;
       break;
 
     case "done":
       keyImage.value = msg.data.base64;
       keyStatus.value = "";
+      keyProgressBar.value = false;
       break;
 
     case "error":
       keyStatus.value = msg.data.error;
+      keyProgressBar.value = false;
       break;
   }
 }
@@ -31,35 +33,44 @@ const answerEventHandler = (msg: AnswerUpload): void => {
   switch (msg.event) {
     case "cancelled":
       answerStatus.value = "User cancelled upload";
+      answerProgressBar.value = undefined;
       break;
     case "clear":
       answerStatus.value = "";
       answerImages.value = [];
+      answerProgressBar.value = undefined;
       break;
     case "almostDone":
       answerStatus.value = "Publishing results...";
+      answerProgressBar.value = { type: "indeterminate" };
       break;
     case "processing":
       const { total, started, finished } = msg.data;
-      answerStatus.value = `Processing ${started}/${total} sheets... ${((finished / total) * 100).toFixed(2)}% (${started - finished} in progress)`;
+      answerStatus.value = `Processing ${started}/${total} sheets... (${started - finished} in progress)`;
+      answerProgressBar.value = { type: "progress", max: total, progressTop: finished, progressBottom: started };
       break;
     case "done":
       answerStatus.value = "";
       answerImages.value = msg.data.uploaded;
+      answerProgressBar.value = undefined;
       break;
     case "error":
       answerStatus.value = `Error uploading sheets: ${msg.data.error}`;
+      answerProgressBar.value = undefined;
       break;
   }
 }
 
 const keyImage = ref("");
 const keyStatus = ref("");
+const keyProgressBar = ref(false);
 
 const answerImages = ref<AnswerScoreResult[]>([]);
 const answerStatus = ref("");
+const answerProgressBar = ref<undefined | ProgressBarProps>(undefined);
 
 async function uploadKey() {
+  keyProgressBar.value = true;
   const keyEventChannel = new Channel<KeyUpload>();
   keyEventChannel.onmessage = keyEventHandler;
   await invoke("upload_key_image", { channel: keyEventChannel });
@@ -71,6 +82,7 @@ async function clearKey() {
 }
 
 async function uploadSheets() {
+  answerProgressBar.value = { type: "indeterminate" };
   const answerEventChannel = new Channel<AnswerUpload>();
   answerEventChannel.onmessage = answerEventHandler;
   await invoke("upload_sheet_images", { channel: answerEventChannel });
@@ -107,6 +119,7 @@ async function clearSheets() {
       <img v-bind:src="keyImage" :style="keyImage == '' ? 'display: none;' : ''"></img>
       <p class="placeholder" v-if="!keyImage && answerImages.length === 0">{{ keyStatus === "" ? "Upload a key..." :
         keyStatus }}</p>
+      <StackedProgressBar v-if="keyProgressBar" type="indeterminate" />
     </div>
 
     <div class="header">
@@ -114,7 +127,7 @@ async function clearSheets() {
       <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ?
         "🧾 Upload Answer Sheets..." :
         "Change Answer Sheets"
-      }}</button>
+        }}</button>
       <button class="btn-clear" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄
         Clear
         Answer
@@ -138,6 +151,7 @@ async function clearSheets() {
       </div>
       <p class="placeholder" v-if="answerImages.length === 0">{{ answerStatus === "" ?
         "Upload files to see results here" : answerStatus }}</p>
+      <StackedProgressBar v-if="answerProgressBar" v-bind="answerProgressBar" />
     </div>
   </main>
 </template>
