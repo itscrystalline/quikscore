@@ -2,7 +2,7 @@
 import { Ref, ref } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { AnswerScoreResult, AnswerUpload, KeyUpload } from "./messages";
-import StackedProgressBar, { ProgressBarProps } from "./assets/StackedProgressBar.vue";
+import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
 
 const keyEventHandler = (msg: KeyUpload): void => {
   switch (msg.event) {
@@ -127,7 +127,7 @@ async function clearSheets() {
       <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ?
         "🧾 Upload Answer Sheets..." :
         "Change Answer Sheets"
-      }}</button>
+        }}</button>
       <button class="btn-clear" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄
         Clear
         Answer
