@@ -72,14 +72,10 @@ jobs:
       with: 
         toolchain: nightly
 
-    - name: Install OpenCV
+    - name: Install OpenCV & Other dependencies (sccache, cmake, llvm)
       run: | 
-        choco install opencv -y
-
-    - name: Install LLVM
-      uses: KyleMayes/install-llvm-action@v2
-      with:
-        version: '19.1.7'
+        choco install opencv sccache cmake -y
+        choco install llvm --version=19.1.7 --force
 
     - name: Set up Environment variables
       run: |
