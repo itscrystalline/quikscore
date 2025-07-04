@@ -20,6 +20,8 @@ pub enum SheetError {
     OpenCvError(#[from] opencv::Error),
     #[error("Detected less than 5 answers (this should not happen)")]
     TooLittleAnswers,
+    #[error("Tesseract Instance Missing")]
+    NoTesseract,
     #[error("Tesseract Error: {0}")]
     TesseractError(#[from] tesseract_rs::TesseractError),
 }
