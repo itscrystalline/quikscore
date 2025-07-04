@@ -3,7 +3,7 @@ use tauri::ipc::Channel;
 
 use crate::errors::{SheetError, UploadError};
 use crate::scoring::{AnswerSheetResult, CheckedAnswer};
-use crate::signal;
+use crate::{signal, state};
 use base64::Engine;
 use itertools::Itertools;
 use opencv::core::{Mat, Rect_, Size, Vector};
@@ -19,9 +19,7 @@ use tauri::{Emitter, Manager, Runtime};
 
 use opencv::imgcodecs::{imencode, imread, ImreadModes};
 
-use crate::state::{
-    Answer, AnswerSheet, AnswerUpload, AppState, KeyUpload, QuestionGroup, TESSERACT,
-};
+use crate::state::{Answer, AnswerSheet, AnswerUpload, AppState, KeyUpload, QuestionGroup};
 
 macro_rules! new_mat_copy {
     ($orig: ident) => {{
@@ -47,7 +45,7 @@ pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         signal!(channel, KeyUpload::Cancelled);
         return;
     };
-    match handle_upload(file_path) {
+    match handle_upload(file_path, &state::init_thread_tesseract()) {
         Ok((base64_image, mat, key)) => {
             let subject = key.subject_code.clone();
             AppState::upload_key(app, channel, base64_image, mat, subject, key.into())
@@ -93,12 +91,15 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     let processing_thread = tauri::async_runtime::spawn(async move {
         let base64_list: Vec<Result<(String, Mat, AnswerSheet), UploadError>> = paths
             .into_par_iter()
-            .map_with(tx.clone(), |tx, file_path| {
-                _ = tx.try_send(ProcessingState::Starting);
-                let res = handle_upload(file_path);
-                _ = tx.try_send(ProcessingState::Finishing);
-                res
-            })
+            .map_with(
+                (tx.clone(), state::init_thread_tesseract()),
+                |(tx, tess), file_path| {
+                    _ = tx.try_send(ProcessingState::Starting);
+                    let res = handle_upload(file_path, tess);
+                    _ = tx.try_send(ProcessingState::Finishing);
+                    res
+                },
+            )
             .collect();
         _ = tx.send(ProcessingState::Done(base64_list)).await;
     });
@@ -154,7 +155,10 @@ pub fn resize_relative_img(src: &Mat, relative: f64) -> opencv::Result<Mat> {
 //     Ok(())
 // }
 
-fn handle_upload(path: FilePath) -> Result<(String, Mat, AnswerSheet), UploadError> {
+fn handle_upload(
+    path: FilePath,
+    tess: &TesseractAPI,
+) -> Result<(String, Mat, AnswerSheet), UploadError> {
     let mat = read_from_path(path)?;
     let resized = resize_relative_img(&mat, 0.3333).map_err(UploadError::from)?;
     let resized_for_fix = resized.clone();
@@ -168,7 +172,7 @@ fn handle_upload(path: FilePath) -> Result<(String, Mat, AnswerSheet), UploadErr
     //testing
     //#[cfg(not(test))]
     //let _ = show_img(&aligned_for_processing, "resized & aligned image");
-    let (name, subject, date, exam_room, seat) = extract_user_information(&resized)?;
+    let (name, subject, date, exam_room, seat) = extract_user_information(&resized, tess)?;
     println!("name: {name}");
     println!("name: {subject}");
     println!("name: {date}");
@@ -574,6 +578,7 @@ fn image_to_string(mat: &Mat, tesseract: &TesseractAPI) -> Result<String, SheetE
 
 fn extract_user_information(
     mat: &Mat,
+    tess: &TesseractAPI,
 ) -> Result<(String, String, String, String, String), SheetError> {
     let temp_dir = "temp";
     _ = fs::create_dir_all(temp_dir);
@@ -591,7 +596,6 @@ fn extract_user_information(
         safe_imwrite("temp/debug_seat.png", &seat)?;
     }
 
-    let tess = TESSERACT.get().ok_or(SheetError::NoTesseract)?;
     let name_string = image_to_string(&name, tess)?;
     let subject_string = image_to_string(&subject, tess)?;
     let date_string = image_to_string(&date, tess)?;
@@ -646,7 +650,7 @@ mod unit_tests {
     }
 
     fn setup_tessdata() {
-        state::init_tesseract(PathBuf::from("tests/assets")).unwrap()
+        state::init_tessdata(PathBuf::from("tests/assets"));
     }
 
     fn not_image() -> FilePath {
@@ -716,7 +720,7 @@ mod unit_tests {
     fn test_handle_upload_success() {
         setup_tessdata();
         let path = test_key_image();
-        let result = handle_upload(path);
+        let result = handle_upload(path, &state::init_thread_tesseract());
         assert!(result.is_ok());
 
         let (base64_string, mat, _answer_sheet) = result.unwrap();
@@ -728,7 +732,7 @@ mod unit_tests {
     fn test_handle_upload_failure() {
         setup_tessdata();
         let path = not_image();
-        let result = handle_upload(path);
+        let result = handle_upload(path, &state::init_thread_tesseract());
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), UploadError::NotImage));
     }

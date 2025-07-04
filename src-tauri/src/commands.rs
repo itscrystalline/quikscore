@@ -1,4 +1,3 @@
-use crate::signal;
 use crate::state;
 use std::path::PathBuf;
 
@@ -13,14 +12,7 @@ use tauri_plugin_dialog::DialogExt;
 
 #[tauri::command]
 pub fn upload_key_image(app: AppHandle, channel: Channel<KeyUpload>, tessdata_path: PathBuf) {
-    if let Err(e) = state::init_tesseract(tessdata_path) {
-        signal!(
-            channel,
-            KeyUpload::Error {
-                error: format!("{e}")
-            }
-        );
-    };
+    state::init_tessdata(tessdata_path);
     println!("uploading key image");
     app.dialog().file().pick_file(move |file_path| {
         upload_key_image_impl(&app, file_path, channel);
@@ -34,14 +26,7 @@ pub fn clear_key_image(app: AppHandle, channel: Channel<KeyUpload>) {
 
 #[tauri::command]
 pub fn upload_sheet_images(app: AppHandle, channel: Channel<AnswerUpload>, tessdata_path: PathBuf) {
-    if let Err(e) = state::init_tesseract(tessdata_path) {
-        signal!(
-            channel,
-            AnswerUpload::Error {
-                error: format!("{e}")
-            }
-        );
-    };
+    state::init_tessdata(tessdata_path);
     println!("uploading sheet images");
     app.dialog().file().pick_files(move |file_paths| {
         upload_sheet_images_impl(&app, file_paths, channel);

@@ -6,7 +6,7 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 use tauri::{ipc::Channel, Emitter, Manager, Runtime};
-use tesseract_rs::{TesseractAPI, TesseractError};
+use tesseract_rs::TesseractAPI;
 
 use opencv::core::Mat;
 
@@ -17,15 +17,19 @@ use crate::{
 };
 
 pub type StateMutex = Mutex<AppState>;
-pub static TESSERACT: OnceLock<TesseractAPI> = OnceLock::new();
+pub static TESSDATA: OnceLock<PathBuf> = OnceLock::new();
 
-pub fn init_tesseract(tessdata_path: PathBuf) -> Result<(), TesseractError> {
-    if TESSERACT.get().is_none() {
-        let tess = TesseractAPI::new();
-        tess.init(&tessdata_path, "eng")?;
-        _ = TESSERACT.set(tess);
-    }
-    Ok(())
+pub fn init_tessdata(tessdata_path: PathBuf) {
+    _ = TESSDATA.set(tessdata_path);
+}
+pub fn init_thread_tesseract() -> TesseractAPI {
+    let tess = TesseractAPI::new();
+    tess.init(
+        TESSDATA.get().expect("should have path at this point"),
+        "eng",
+    )
+    .expect("Tesseract Init failed");
+    tess
 }
 
 #[macro_export]
@@ -354,7 +358,7 @@ mod unit_tests {
     }
 
     fn setup_tessdata() {
-        init_tesseract(PathBuf::from("tests/assets")).unwrap()
+        init_tessdata(PathBuf::from("tests/assets"))
     }
 
     fn compare_mats(a: &Mat, b: &Mat) -> bool {
