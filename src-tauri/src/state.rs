@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{Mutex, OnceLock},
 };
 use tauri::{ipc::Channel, Emitter, Manager, Runtime};
 // use tesseract_rs::TesseractAPI;
@@ -20,10 +20,10 @@ use crate::{
 pub type StateMutex = Mutex<AppState>;
 pub static MODELS: OnceLock<PathBuf> = OnceLock::new();
 
-pub fn init_model_dir(tessdata_path: PathBuf) {
-    _ = MODELS.set(tessdata_path);
+pub fn init_model_dir(models_path: PathBuf) {
+    _ = MODELS.set(models_path);
 }
-pub fn init_thread_ocr() -> Arc<OcrEngine> {
+pub fn init_thread_ocr() -> OcrEngine {
     // let tess = TesseractAPI::new();
     // tess.init(
     //     MODELS.get().expect("should have path at this point"),

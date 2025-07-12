@@ -1,6 +1,5 @@
 use ocrs::OcrEngine;
 use std::array;
-use std::sync::Arc;
 use tauri::ipc::Channel;
 
 use crate::errors::{SheetError, UploadError};
@@ -47,7 +46,7 @@ pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         signal!(channel, KeyUpload::Cancelled);
         return;
     };
-    match handle_upload(file_path, state::init_thread_ocr()) {
+    match handle_upload(file_path, &state::init_thread_ocr()) {
         Ok((base64_image, mat, key)) => {
             let subject = key.subject_code.clone();
             AppState::upload_key(app, channel, base64_image, mat, subject, key.into())
@@ -93,11 +92,11 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     let processing_thread = tauri::async_runtime::spawn(async move {
         let base64_list: Vec<Result<(String, Mat, AnswerSheet), UploadError>> = paths
             .into_par_iter()
-            .map_with(
-                (tx.clone(), state::init_thread_ocr()),
+            .map_init(
+                || (tx.clone(), state::init_thread_ocr()),
                 |(tx, ocr), file_path| {
                     _ = tx.try_send(ProcessingState::Starting);
-                    let res = handle_upload(file_path, ocr.clone());
+                    let res = handle_upload(file_path, ocr);
                     _ = tx.try_send(ProcessingState::Finishing);
                     res
                 },
@@ -159,7 +158,7 @@ pub fn resize_relative_img(src: &Mat, relative: f64) -> opencv::Result<Mat> {
 
 fn handle_upload(
     path: FilePath,
-    ocr: Arc<OcrEngine>,
+    ocr: &OcrEngine,
 ) -> Result<(String, Mat, AnswerSheet), UploadError> {
     let mat = read_from_path(path)?;
     let resized = resize_relative_img(&mat, 0.3333).map_err(UploadError::from)?;
@@ -561,7 +560,7 @@ fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
     Ok((name, subject, date, exam_room, seat))
 }
 
-fn image_to_string(mat: &Mat, ocr: &Arc<OcrEngine>) -> Result<String, SheetError> {
+fn image_to_string(mat: &Mat, ocr: &OcrEngine) -> Result<String, SheetError> {
     let width = mat.cols();
     let height = mat.rows();
     let bytes_per_pixel = 1;
@@ -581,7 +580,7 @@ fn image_to_string(mat: &Mat, ocr: &Arc<OcrEngine>) -> Result<String, SheetError
 
 fn extract_user_information(
     mat: &Mat,
-    ocr: Arc<OcrEngine>,
+    ocr: &OcrEngine,
 ) -> Result<(String, String, String, String, String), SheetError> {
     let temp_dir = "temp";
     _ = fs::create_dir_all(temp_dir);
@@ -599,11 +598,11 @@ fn extract_user_information(
         safe_imwrite("temp/debug_seat.png", &seat)?;
     }
 
-    let name_string = image_to_string(&name, &ocr)?;
-    let subject_string = image_to_string(&subject, &ocr)?;
-    let date_string = image_to_string(&date, &ocr)?;
-    let exam_room_string = image_to_string(&exam_room, &ocr)?;
-    let seat_string = image_to_string(&seat, &ocr)?;
+    let name_string = image_to_string(&name, ocr)?;
+    let subject_string = image_to_string(&subject, ocr)?;
+    let date_string = image_to_string(&date, ocr)?;
+    let exam_room_string = image_to_string(&exam_room, ocr)?;
+    let seat_string = image_to_string(&seat, ocr)?;
 
     Ok((
         name_string,
@@ -723,7 +722,7 @@ mod unit_tests {
     fn test_handle_upload_success() {
         setup_tessdata();
         let path = test_key_image();
-        let result = handle_upload(path, state::init_thread_ocr());
+        let result = handle_upload(path, &state::init_thread_ocr());
         assert!(result.is_ok());
 
         let (base64_string, mat, _answer_sheet) = result.unwrap();
@@ -735,7 +734,7 @@ mod unit_tests {
     fn test_handle_upload_failure() {
         setup_tessdata();
         let path = not_image();
-        let result = handle_upload(path, state::init_thread_ocr());
+        let result = handle_upload(path, &state::init_thread_ocr());
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), UploadError::NotImage));
     }

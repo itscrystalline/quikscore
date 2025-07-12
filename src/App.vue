@@ -9,13 +9,23 @@ import { exists } from "@tauri-apps/plugin-fs";
 async function ensureModel(textRef: Ref<string>): Promise<string> {
   const cache = await path.cacheDir();
   const modelPath = await path.join(cache, "quikscore");
-  if (!exists(await path.join(modelPath, "eng.traineddata"))) {
-    textRef.value = "Downloading Tesseract OCR model...";
+
+  textRef.value = "Verifying OCR models...";
+  if (!exists(await path.join(modelPath, "text-detection.rten"))) {
+    textRef.value = "Downloading Detection Model...";
     download(
-      'https://raw.githubusercontent.com/tesseract-ocr/tessdata_best/refs/heads/main/eng.traineddata',
-      modelPath + '/eng.traineddata',
+      'https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.rten',
+      modelPath + '/text-detection.rten',
     );
   }
+  if (!exists(await path.join(modelPath, "text-recognition.rten"))) {
+    textRef.value = "Downloading Recognition Model...";
+    download(
+      'https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.rten',
+      modelPath + '/text-recognition.rten',
+    );
+  }
+
   return modelPath;
 }
 
@@ -77,7 +87,7 @@ async function uploadKey() {
   const path = await ensureModel(keyStatus);
   const keyEventChannel = new Channel<KeyUpload>();
   keyEventChannel.onmessage = keyEventHandler;
-  await invoke("upload_key_image", { channel: keyEventChannel, tessdataPath: path });
+  await invoke("upload_key_image", { channel: keyEventChannel, modelsPath: path });
 }
 async function clearKey() {
   const keyEventChannel = new Channel<KeyUpload>();
@@ -89,7 +99,7 @@ async function uploadSheets() {
   const path = await ensureModel(answerStatus);
   const answerEventChannel = new Channel<AnswerUpload>();
   answerEventChannel.onmessage = answerEventHandler;
-  await invoke("upload_sheet_images", { channel: answerEventChannel, tessdataPath: path });
+  await invoke("upload_sheet_images", { channel: answerEventChannel, modelsPath: path });
 }
 async function clearSheets() {
   const answerEventChannel = new Channel<AnswerUpload>();
@@ -130,7 +140,7 @@ async function clearSheets() {
       <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ?
         "🧾 Upload Answer Sheets..." :
         "Change Answer Sheets"
-      }}</button>
+        }}</button>
       <button class="btn-clear" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄
         Clear
         Answer
