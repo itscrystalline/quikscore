@@ -17,6 +17,18 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [features]
 avx512 = ["ocrs/avx512"]
 
+# https://github.com/robertknight/ocrs/issues/117#issuecomment-2362314977
+[profile.dev.package."rten"]
+opt-level = 3
+[profile.dev.package."rten-simd"]
+opt-level = 3
+[profile.dev.package."rten-tensor"]
+opt-level = 3
+[profile.dev.package."rten-vecmath"]
+opt-level = 3
+[profile.dev.package."rten-imageproc"]
+opt-level = 3
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
