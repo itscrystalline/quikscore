@@ -1,12 +1,13 @@
+use ocrs::OcrEngine;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{Mutex, OnceLock},
+    sync::{Arc, Mutex, OnceLock},
 };
 use tauri::{ipc::Channel, Emitter, Manager, Runtime};
-use tesseract_rs::TesseractAPI;
+// use tesseract_rs::TesseractAPI;
 
 use opencv::core::Mat;
 
@@ -17,19 +18,20 @@ use crate::{
 };
 
 pub type StateMutex = Mutex<AppState>;
-pub static TESSDATA: OnceLock<PathBuf> = OnceLock::new();
+pub static MODELS: OnceLock<PathBuf> = OnceLock::new();
 
-pub fn init_tessdata(tessdata_path: PathBuf) {
-    _ = TESSDATA.set(tessdata_path);
+pub fn init_model_dir(tessdata_path: PathBuf) {
+    _ = MODELS.set(tessdata_path);
 }
-pub fn init_thread_tesseract() -> TesseractAPI {
-    let tess = TesseractAPI::new();
-    tess.init(
-        TESSDATA.get().expect("should have path at this point"),
-        "eng",
-    )
-    .expect("Tesseract Init failed");
-    tess
+pub fn init_thread_ocr() -> Arc<OcrEngine> {
+    // let tess = TesseractAPI::new();
+    // tess.init(
+    //     MODELS.get().expect("should have path at this point"),
+    //     "eng",
+    // )
+    // .expect("Tesseract Init failed");
+    // tess
+    todo!()
 }
 
 #[macro_export]
@@ -358,7 +360,7 @@ mod unit_tests {
     }
 
     fn setup_tessdata() {
-        init_tessdata(PathBuf::from("tests/assets"))
+        init_model_dir(PathBuf::from("tests/assets"))
     }
 
     fn compare_mats(a: &Mat, b: &Mat) -> bool {
