@@ -16,7 +16,7 @@ next, install [rust](https://www.rust-lang.org/) from https://rustup.rs
 
 then, in the project folder, run `yarn install` to install all the dependencies.
 
-### OpenCV & Tesseract setup (Windows)
+### OpenCV setup (Windows)
 
 install [chocolatey](https://chocolatey.org/install) by running
 
@@ -29,7 +29,7 @@ Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManage
 then, run
 
 ```powershell
-choco install llvm opencv sccache cmake -y
+choco install llvm opencv -y
 ```
 
 to install OpenCV and LLVM libraries.
