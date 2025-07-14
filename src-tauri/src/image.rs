@@ -1,4 +1,5 @@
 use ocrs::{OcrEngine, ImageSource};
+use serde_json::to_string;
 use tauri::image::Image;
 use std::array;
 use tauri::ipc::Channel;
@@ -550,14 +551,14 @@ fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
     Ok((name, subject, date, exam_room, seat))
 }
 
-fn image_to_string(mat: &Mat, ocr: &OcrEngine) -> Result<String, SheetError> {
-    let img = image::open(&args.image).map(|image| image.into_rgb8())?;
-    let img_src = ImageSource::from_bytes(img.as_raw(), img.dimensions())?;
-    let ocr_input = ocr.prepare_input(img_src)?;
-
-    let text = ocr.get_text(&ocr_input);
-    Ok((text)?)
-}
+//fn image_to_string(mat: &Mat, ocr: &OcrEngine) -> Result<String, SheetError> {
+//    let img = image::open(&args.image).map(|image| image.into_rgb8())?;
+//    let img_src = ImageSource::from_bytes(img.as_raw(), img.dimensions())?;
+//    let ocr_input = ocr.prepare_input(img_src)?;
+//
+//    let text = ocr.get_text(&ocr_input);
+//    Ok((text)?)
+//}
 
 fn extract_user_information(
     mat: &Mat,
@@ -578,11 +579,17 @@ fn extract_user_information(
         safe_imwrite("temp/debug_seat.png", &seat)?;
     }
 
-    let name_string = image_to_string(&name, ocr)?;
-    let subject_string = image_to_string(&subject, ocr)?;
-    let date_string = image_to_string(&date, ocr)?;
-    let exam_room_string = image_to_string(&exam_room, ocr)?;
-    let seat_string = image_to_string(&seat, ocr)?;
+    //let name_string = image_to_string(&name, ocr)?;
+    //let subject_string = image_to_string(&subject, ocr)?;
+    //let date_string = image_to_string(&date, ocr)?;
+    //let exam_room_string = image_to_string(&exam_room, ocr)?;
+    //let seat_string = image_to_string(&seat, ocr)?;
+
+    let name_string = String::new();
+    let subject_string = String::new();
+    let date_string = String::new();
+    let exam_room_string = String::new();
+    let seat_string = String::new(); 
 
     Ok((
         name_string,

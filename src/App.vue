@@ -4,26 +4,29 @@ import { invoke, Channel } from "@tauri-apps/api/core";
 import { AnswerScoreResult, AnswerUpload, KeyUpload } from "./messages";
 import { download } from '@tauri-apps/plugin-upload';
 import * as path from '@tauri-apps/api/path';
-import { exists } from "@tauri-apps/plugin-fs";
+import { exists, mkdir } from "@tauri-apps/plugin-fs";
 
 async function ensureModel(textRef: Ref<string>): Promise<string> {
   const cache = await path.cacheDir();
   const modelPath = await path.join(cache, "quikscore");
+  if (!await exists("quickscore", {baseDir: path.BaseDirectory.Cache})) {
+    await mkdir("quickscore", {baseDir: path.BaseDirectory.Cache});
+  }
 
   textRef.value = "Verifying OCR models...";
-  if (!await exists(await path.join(modelPath, "/text-detection.rten"))) {
+  if (!await exists(await path.join(modelPath, "text-detection.rten"))) {
     console.log("downlaod detecti")
     textRef.value = "Downloading Detection Model...";
     await download(
       'https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.rten',
-      modelPath + '/text-detection.rten',
+      await path.join(modelPath, "text-detection.rten"),
     );
   }
-  if (!await exists(await path.join(modelPath, "/text-recognition.rten"))) {
+  if (!await exists(await path.join(modelPath, "text-recognition.rten"))) {
     textRef.value = "Downloading Recognition Model...";
     await download(
       'https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.rten',
-      modelPath + '/text-recognition.rten',
+      await path.join(modelPath, "text-recognition.rten"),
     );
   }
   textRef.value = "Please upload an image...";
