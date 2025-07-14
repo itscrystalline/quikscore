@@ -26,6 +26,14 @@
         }
       ]
     },
+    {
+      "identifier": "fs:allow-mkdir",
+      "allow": [
+        {
+          "path": "$CACHE/**/*"
+        }
+      ]
+    },
     "upload:default"
   ]
 }
