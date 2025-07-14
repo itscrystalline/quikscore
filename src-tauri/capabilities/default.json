@@ -9,8 +9,23 @@
     "core:default",
     "opener:default",
     "dialog:default",
-    "dialog:default",
     "fs:default",
+    {
+      "identifier": "fs:allow-create",
+      "allow": [
+        {
+          "path": "$CACHE/**/*"
+        }
+      ]
+    },
+    {
+      "identifier": "fs:allow-exists",
+      "allow": [
+        {
+          "path": "$CACHE/**/*"
+        }
+      ]
+    },
     "upload:default"
   ]
 }

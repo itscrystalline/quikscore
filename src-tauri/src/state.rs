@@ -24,14 +24,24 @@ pub fn init_model_dir(models_path: PathBuf) {
     _ = MODELS.set(models_path);
 }
 pub fn init_thread_ocr() -> OcrEngine {
-    // let tess = TesseractAPI::new();
-    // tess.init(
-    //     MODELS.get().expect("should have path at this point"),
-    //     "eng",
-    // )
-    // .expect("Tesseract Init failed");
-    // tess
-    todo!()
+    println!("initializing thread OcrEngine");
+    let model_path = MODELS
+        .get()
+        .expect("model path should be set at this point");
+    let detection_model = model_path.join("text-detection.rten");
+    let recognition_model = model_path.join("text-recognition.rten");
+
+    let detection =
+        rten::Model::load_file(detection_model).expect("should succeed in loading detection model");
+    let recognition = rten::Model::load_file(recognition_model)
+        .expect("should succeed in loading recognition model");
+
+    OcrEngine::new(ocrs::OcrEngineParams {
+        detection_model: Some(detection),
+        recognition_model: Some(recognition),
+        ..Default::default()
+    })
+    .expect("should be able to start the engine")
 }
 
 #[macro_export]

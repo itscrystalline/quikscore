@@ -47,4 +47,5 @@ rayon = "1.10.0"
 tauri-plugin-upload = "2"
 ocrs = "0.10.3"
 anyhow = "1.0.98"
+rten = "0.18.0"
 
