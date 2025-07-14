@@ -508,8 +508,8 @@ impl AnswerSheetResult {
 fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
     let name = mat
         .roi(Rect_ {
-            x: 45,
-            y: 0,
+            x: 46,
+            y: 91,
             width: 150,
             height: 17,
         })?
@@ -517,7 +517,7 @@ fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
     let subject = mat
         .roi(Rect_ {
             x: 21,
-            y: 30,
+            y: 116,
             width: 176,
             height: 14,
         })?
@@ -525,7 +525,7 @@ fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
     let date = mat
         .roi(Rect_ {
             x: 95,
-            y: 49,
+            y: 142,
             width: 102,
             height: 18,
         })?
@@ -533,7 +533,7 @@ fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
     let exam_room = mat
         .roi(Rect_ {
             x: 41,
-            y: 71,
+            y: 164,
             width: 60,
             height: 18,
         })?
@@ -541,7 +541,7 @@ fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
     let seat = mat
         .roi(Rect_ {
             x: 152,
-            y: 72,
+            y: 165,
             width: 45,
             height: 17,
         })?
