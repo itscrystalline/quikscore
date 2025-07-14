@@ -46,4 +46,5 @@ itertools = "0.14.0"
 rayon = "1.10.0"
 tauri-plugin-upload = "2"
 ocrs = "0.10.3"
+rten = "0.18.0"
 

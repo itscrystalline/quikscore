@@ -11,20 +11,22 @@ async function ensureModel(textRef: Ref<string>): Promise<string> {
   const modelPath = await path.join(cache, "quikscore");
 
   textRef.value = "Verifying OCR models...";
-  if (!exists(await path.join(modelPath, "text-detection.rten"))) {
+  if (!await exists(await path.join(modelPath, "/text-detection.rten"))) {
+    console.log("downlaod detecti")
     textRef.value = "Downloading Detection Model...";
-    download(
+    await download(
       'https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.rten',
       modelPath + '/text-detection.rten',
     );
   }
-  if (!exists(await path.join(modelPath, "text-recognition.rten"))) {
+  if (!await exists(await path.join(modelPath, "/text-recognition.rten"))) {
     textRef.value = "Downloading Recognition Model...";
-    download(
+    await download(
       'https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.rten',
       modelPath + '/text-recognition.rten',
     );
   }
+  textRef.value = "Please upload an image...";
 
   return modelPath;
 }
@@ -87,7 +89,7 @@ async function uploadKey() {
   const path = await ensureModel(keyStatus);
   const keyEventChannel = new Channel<KeyUpload>();
   keyEventChannel.onmessage = keyEventHandler;
-  await invoke("upload_key_image", { channel: keyEventChannel, modelsPath: path });
+  await invoke("upload_key_image", { channel: keyEventChannel, modelDir: path });
 }
 async function clearKey() {
   const keyEventChannel = new Channel<KeyUpload>();
@@ -99,7 +101,7 @@ async function uploadSheets() {
   const path = await ensureModel(answerStatus);
   const answerEventChannel = new Channel<AnswerUpload>();
   answerEventChannel.onmessage = answerEventHandler;
-  await invoke("upload_sheet_images", { channel: answerEventChannel, modelsPath: path });
+  await invoke("upload_sheet_images", { channel: answerEventChannel, modelDir: path });
 }
 async function clearSheets() {
   const answerEventChannel = new Channel<AnswerUpload>();
