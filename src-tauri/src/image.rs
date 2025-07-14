@@ -1,11 +1,12 @@
-use ocrs::OcrEngine;
+use ocrs::{OcrEngine, ImageSource};
+use tauri::image::Image;
 use std::array;
 use tauri::ipc::Channel;
 
 use crate::errors::{SheetError, UploadError};
 use crate::scoring::{AnswerSheetResult, CheckedAnswer};
 use crate::{signal, state};
-use base64::Engine;
+use base64::{engine, Engine};
 use itertools::Itertools;
 use opencv::core::{Mat, Rect_, Size, Vector};
 use opencv::imgproc::{COLOR_GRAY2RGBA, FILLED, LINE_8, THRESH_BINARY};
@@ -503,17 +504,6 @@ impl AnswerSheetResult {
         Ok(())
     }
 }
-fn crop_user_information(mat: &Mat) -> Result<Mat, SheetError> {
-    let user_information = mat
-        .roi(Rect_ {
-            x: 0,
-            y: 92,
-            width: 200,
-            height: 90,
-        })?
-        .clone_pointee();
-    Ok(user_information)
-}
 
 fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
     let name = mat
@@ -561,21 +551,12 @@ fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
 }
 
 fn image_to_string(mat: &Mat, ocr: &OcrEngine) -> Result<String, SheetError> {
-    let width = mat.cols();
-    let height = mat.rows();
-    let bytes_per_pixel = 1;
-    let bytes_per_line = width;
+    let img = image::open(&args.image).map(|image| image.into_rgb8())?;
+    let img_src = ImageSource::from_bytes(img.as_raw(), img.dimensions())?;
+    let ocr_input = ocr.prepare_input(img_src)?;
 
-    //println!("is_continuous: {}", mat.is_continuous());
-
-    let image_data = mat.data_bytes()?;
-
-    todo!()
-    // tesseract.set_image(image_data, width, height, bytes_per_pixel, bytes_per_line)?;
-    //
-    // let text = tesseract.get_utf8_text()?;
-    //
-    // Ok(text.trim().to_string())
+    let text = ocr.get_text(&ocr_input);
+    Ok((text)?)
 }
 
 fn extract_user_information(
@@ -587,8 +568,7 @@ fn extract_user_information(
 
     println!("Working directory: {:?}", std::env::current_dir());
 
-    let user_information = crop_user_information(mat)?;
-    let (name, subject, date, exam_room, seat) = crop_each_part(&user_information)?;
+    let (name, subject, date, exam_room, seat) = crop_each_part(&mat)?;
 
     if cfg!(debug_assertions) {
         safe_imwrite("temp/debug_name.png", &name)?;
