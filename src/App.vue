@@ -9,24 +9,26 @@ import { exists, mkdir } from "@tauri-apps/plugin-fs";
 async function ensureModel(textRef: Ref<string>): Promise<string> {
   const cache = await path.cacheDir();
   const modelPath = await path.join(cache, "quikscore");
-  if (!await exists("quickscore", {baseDir: path.BaseDirectory.Cache})) {
-    await mkdir("quickscore", {baseDir: path.BaseDirectory.Cache});
+  if (!await exists("quikscore", { baseDir: path.BaseDirectory.Cache })) {
+    await mkdir("quikscore", { baseDir: path.BaseDirectory.Cache });
   }
 
+  const detectionPath = await path.join(modelPath, "text-detection.rten");
+  const recognitionPath = await path.join(modelPath, "text-recognition.rten");
+
   textRef.value = "Verifying OCR models...";
-  if (!await exists(await path.join(modelPath, "text-detection.rten"))) {
-    console.log("downlaod detecti")
+  if (!await exists(detectionPath)) {
     textRef.value = "Downloading Detection Model...";
     await download(
       'https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.rten',
-      await path.join(modelPath, "text-detection.rten"),
+      detectionPath,
     );
   }
-  if (!await exists(await path.join(modelPath, "text-recognition.rten"))) {
+  if (!await exists(recognitionPath)) {
     textRef.value = "Downloading Recognition Model...";
     await download(
       'https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.rten',
-      await path.join(modelPath, "text-recognition.rten"),
+      recognitionPath,
     );
   }
   textRef.value = "Please upload an image...";
@@ -145,7 +147,7 @@ async function clearSheets() {
       <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ?
         "🧾 Upload Answer Sheets..." :
         "Change Answer Sheets"
-        }}</button>
+      }}</button>
       <button class="btn-clear" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄
         Clear
         Answer
