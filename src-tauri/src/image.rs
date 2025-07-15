@@ -1,13 +1,11 @@
 use ocrs::{OcrEngine, ImageSource};
-use serde_json::to_string;
-use tauri::image::Image;
 use std::array;
 use tauri::ipc::Channel;
 
 use crate::errors::{SheetError, UploadError};
 use crate::scoring::{AnswerSheetResult, CheckedAnswer};
 use crate::{signal, state};
-use base64::{engine, Engine};
+use base64::{Engine};
 use itertools::Itertools;
 use opencv::core::{Mat, Rect_, Size, Vector};
 use opencv::imgproc::{COLOR_GRAY2RGBA, FILLED, LINE_8, THRESH_BINARY};
@@ -511,7 +509,7 @@ fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
         .roi(Rect_ {
             x: 77,
             y: 120,
-            width: 150,
+            width: 165,
             height: 17,
         })?
         .clone_pointee();
@@ -597,21 +595,21 @@ fn extract_user_information(
     ))
 }
 
-fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Error> {
-    if mat.empty() {
-        println!(
-            "Warning: attempting to write an empty Mat to {:?}",
-            path.as_ref()
-        );
-    } else {
-        println!("Writing debug image to {:?}", path.as_ref());
-    }
-    imgcodecs::imwrite(
-        path.as_ref().to_str().unwrap(),
-        mat,
-        &opencv::core::Vector::new(),
-    )
-}
+//fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Error> {
+//    if mat.empty() {
+//        println!(
+//            "Warning: attempting to write an empty Mat to {:?}",
+//            path.as_ref()
+//        );
+//    } else {
+//        println!("Writing debug image to {:?}", path.as_ref());
+//    }
+//    imgcodecs::imwrite(
+//        path.as_ref().to_str().unwrap(),
+//        mat,
+//        &opencv::core::Vector::new(),
+//    )
+//}
 
 #[cfg(test)]
 mod unit_tests {
@@ -800,5 +798,40 @@ mod unit_tests {
             student_id, "65010001",
             "Student ID does not match expected value"
         );
+    }
+
+    #[test]
+    fn check_ocr_function() -> Result<(), SheetError> {
+        let ocr = &state::init_thread_ocr();
+        let mut i = 0;
+
+        for path in test_images() {
+            let mat = read_from_path(path).expect("Failed to read image");
+            let resized = resize_relative_img(&mat, 0.3333).expect("Resize failed");
+
+            let (name, subject, date, exam_room, seat) = extract_user_information(&resized, ocr)?;
+            if i == 0 {
+                assert_eq!(name, "Elize Howells", "Name does not match expected value");
+                assert_eq!(subject, "Mathematics", "Subject does not match expected value");
+                assert_eq!(date, "2021-01-01", "Date does not match expected value");
+                assert_eq!(exam_room, "608", "Exam room does not match expected value");
+                assert_eq!(seat, "A02", "Seat does not match expected value");
+            } else if i == 1 {
+                assert_eq!(name, "Marcia Cole", "Name does not match expected value");
+                assert_eq!(subject, "Mathematics", "Subject does not match expected value");
+                assert_eq!(date, "2021-01-01", "Date does not match expected value");
+                assert_eq!(exam_room, "608", "Exam room does not match expected value");
+                assert_eq!(seat, "A03", "Seat does not match expected value");
+            } else {
+                assert_eq!(name, "Sophie-Louise Greene", "Name does not match expected value");
+                assert_eq!(subject, "Mathematics", "Subject does not match expected value");
+                assert_eq!(date, "2021-01-01", "Date does not match expected value");
+                assert_eq!(exam_room, "608", "Exam room does not match expected value");
+                assert_eq!(seat, "A04", "Seat does not match expected value");                
+            }
+            i += 1;
+        }
+
+        Ok(())
     }
 }
