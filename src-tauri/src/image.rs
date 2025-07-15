@@ -11,7 +11,7 @@ use base64::{engine, Engine};
 use itertools::Itertools;
 use opencv::core::{Mat, Rect_, Size, Vector};
 use opencv::imgproc::{COLOR_GRAY2RGBA, FILLED, LINE_8, THRESH_BINARY};
-use opencv::{imgcodecs, imgproc, prelude::*};
+use opencv::{core::MatTraitConstManual , imgcodecs, imgproc, prelude::*};
 use rayon::prelude::*;
 use std::fs;
 use std::path::Path;
@@ -551,14 +551,17 @@ fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
     Ok((name, subject, date, exam_room, seat))
 }
 
-//fn image_to_string(mat: &Mat, ocr: &OcrEngine) -> Result<String, SheetError> {
-//    let img = image::open(&args.image).map(|image| image.into_rgb8())?;
-//    let img_src = ImageSource::from_bytes(img.as_raw(), img.dimensions())?;
-//    let ocr_input = ocr.prepare_input(img_src)?;
-//
-//    let text = ocr.get_text(&ocr_input);
-//    Ok((text)?)
-//}
+fn image_to_string(mat: &Mat, ocr: &OcrEngine) -> Result<String, SheetError> {
+    let total_bytes = mat.total() * mat.elem_size()? as usize;
+    let raw_bytes = unsafe {
+        std::slice::from_raw_parts(mat.data() as *const u8, total_bytes)
+    };
+    let img_src = ImageSource::from_bytes(raw_bytes, (mat.cols() as u32, mat.rows() as u32)).map_err(|e| anyhow::anyhow!(e))?;
+    let ocr_input = ocr.prepare_input(img_src)?;
+    let text = ocr.get_text(&ocr_input)?;
+
+    Ok(text)
+}
 
 fn extract_user_information(
     mat: &Mat,
@@ -579,17 +582,11 @@ fn extract_user_information(
     //    safe_imwrite("temp/debug_seat.png", &seat)?;
     //}
 
-    //let name_string = image_to_string(&name, ocr)?;
-    //let subject_string = image_to_string(&subject, ocr)?;
-    //let date_string = image_to_string(&date, ocr)?;
-    //let exam_room_string = image_to_string(&exam_room, ocr)?;
-    //let seat_string = image_to_string(&seat, ocr)?;
-
-    let name_string = String::new();
-    let subject_string = String::new();
-    let date_string = String::new();
-    let exam_room_string = String::new();
-    let seat_string = String::new(); 
+    let name_string = image_to_string(&name, ocr)?;
+    let subject_string = image_to_string(&subject, ocr)?;
+    let date_string = image_to_string(&date, ocr)?;
+    let exam_room_string = image_to_string(&exam_room, ocr)?;
+    let seat_string = image_to_string(&seat, ocr)?;
 
     Ok((
         name_string,
