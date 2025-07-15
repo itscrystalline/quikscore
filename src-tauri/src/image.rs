@@ -177,10 +177,10 @@ fn handle_upload(
     //let _ = show_img(&aligned_for_processing, "resized & aligned image");
     let (name, subject, date, exam_room, seat) = extract_user_information(&resized, ocr)?;
     println!("name: {name}");
-    println!("name: {subject}");
-    println!("name: {date}");
-    println!("name: {exam_room}");
-    println!("name: {seat}");
+    println!("subject: {subject}");
+    println!("date: {date}");
+    println!("exam_room: {exam_room}");
+    println!("seat: {seat}");
     let base64 = mat_to_base64_png(&aligned_for_display).map_err(UploadError::from)?;
     let answer_sheet: AnswerSheet = (subject_id, student_id, answer_sheet).try_into()?;
     Ok((base64, aligned_for_display, answer_sheet))
@@ -411,7 +411,7 @@ fn extract_digits_for_sub_stu(
         digits.push_str(&selected_digit.to_string());
     }
     if temp {
-        println!("Stundet:");
+        println!("Student:");
     } else {
         println!("Subject");
     }
@@ -571,13 +571,13 @@ fn extract_user_information(
 
     let (name, subject, date, exam_room, seat) = crop_each_part(&mat)?;
 
-    if cfg!(debug_assertions) {
-        safe_imwrite("temp/debug_name.png", &name)?;
-        safe_imwrite("temp/debug_subject.png", &subject)?;
-        safe_imwrite("temp/debug_date.png", &date)?;
-        safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
-        safe_imwrite("temp/debug_seat.png", &seat)?;
-    }
+    //if cfg!(debug_assertions) {
+    //    safe_imwrite("temp/debug_name.png", &name)?;
+    //    safe_imwrite("temp/debug_subject.png", &subject)?;
+    //    safe_imwrite("temp/debug_date.png", &date)?;
+    //    safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
+    //    safe_imwrite("temp/debug_seat.png", &seat)?;
+    //}
 
     //let name_string = image_to_string(&name, ocr)?;
     //let subject_string = image_to_string(&subject, ocr)?;
