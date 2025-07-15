@@ -509,40 +509,40 @@ impl AnswerSheetResult {
 fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
     let name = mat
         .roi(Rect_ {
-            x: 46,
-            y: 91,
+            x: 77,
+            y: 120,
             width: 150,
             height: 17,
         })?
         .clone_pointee();
     let subject = mat
         .roi(Rect_ {
-            x: 21,
-            y: 116,
+            x: 55,
+            y: 150,
             width: 176,
             height: 14,
         })?
         .clone_pointee();
     let date = mat
         .roi(Rect_ {
-            x: 95,
-            y: 142,
+            x: 130,
+            y: 170,
             width: 102,
             height: 18,
         })?
         .clone_pointee();
     let exam_room = mat
         .roi(Rect_ {
-            x: 41,
-            y: 164,
+            x: 75,
+            y: 190,
             width: 60,
             height: 18,
         })?
         .clone_pointee();
     let seat = mat
         .roi(Rect_ {
-            x: 152,
-            y: 165,
+            x: 190,
+            y: 193,
             width: 45,
             height: 17,
         })?
