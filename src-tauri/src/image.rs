@@ -507,42 +507,42 @@ impl AnswerSheetResult {
 fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
     let name = mat
         .roi(Rect_ {
-            x: 77,
-            y: 120,
-            width: 165,
-            height: 17,
+            x: 237,
+            y: 351,
+            width: 477,
+            height: 62,
         })?
         .clone_pointee();
     let subject = mat
         .roi(Rect_ {
-            x: 55,
-            y: 150,
-            width: 176,
-            height: 14,
+            x: 174,
+            y: 434,
+            width: 538,
+            height: 58,
         })?
         .clone_pointee();
     let date = mat
         .roi(Rect_ {
-            x: 130,
-            y: 170,
-            width: 102,
-            height: 18,
+            x: 392,
+            y: 500,
+            width: 314,
+            height: 60,
         })?
         .clone_pointee();
     let exam_room = mat
         .roi(Rect_ {
-            x: 75,
-            y: 190,
-            width: 60,
-            height: 18,
+            x: 234,
+            y: 575,
+            width: 175,
+            height: 57,
         })?
         .clone_pointee();
     let seat = mat
         .roi(Rect_ {
-            x: 190,
-            y: 193,
-            width: 45,
-            height: 17,
+            x: 568,
+            y: 575,
+            width: 139,
+            height: 57,
         })?
         .clone_pointee();
 
