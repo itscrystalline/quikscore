@@ -550,9 +550,8 @@ fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
 }
 
 fn image_to_string(mat: &Mat, ocr: &OcrEngine) -> Result<String, SheetError> {
-    let total_bytes = mat.total() * mat.elem_size()? as usize;
-    let raw_bytes = unsafe { std::slice::from_raw_parts(mat.data() as *const u8, total_bytes) };
-    let img_src = ImageSource::from_bytes(raw_bytes, (mat.cols() as u32, mat.rows() as u32))
+    let bytes = mat.data_bytes()?;
+    let img_src = ImageSource::from_bytes(bytes, (mat.cols() as u32, mat.rows() as u32))
         .map_err(|e| anyhow::anyhow!(e))?;
     let ocr_input = ocr.prepare_input(img_src)?;
     let text = ocr.get_text(&ocr_input)?;
