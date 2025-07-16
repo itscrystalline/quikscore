@@ -5,11 +5,11 @@ use tauri::ipc::Channel;
 use crate::errors::{SheetError, UploadError};
 use crate::scoring::{AnswerSheetResult, CheckedAnswer};
 use crate::{signal, state};
-use base64::{Engine};
+use base64::Engine;
 use itertools::Itertools;
 use opencv::core::{Mat, Rect_, Size, Vector};
 use opencv::imgproc::{COLOR_GRAY2RGBA, FILLED, LINE_8, THRESH_BINARY};
-use opencv::{core::MatTraitConstManual , imgcodecs, imgproc, prelude::*};
+use opencv::{core::MatTraitConstManual, imgcodecs, imgproc, prelude::*};
 use rayon::prelude::*;
 use std::fs;
 use std::path::Path;
@@ -551,10 +551,9 @@ fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
 
 fn image_to_string(mat: &Mat, ocr: &OcrEngine) -> Result<String, SheetError> {
     let total_bytes = mat.total() * mat.elem_size()? as usize;
-    let raw_bytes = unsafe {
-        std::slice::from_raw_parts(mat.data() as *const u8, total_bytes)
-    };
-    let img_src = ImageSource::from_bytes(raw_bytes, (mat.cols() as u32, mat.rows() as u32)).map_err(|e| anyhow::anyhow!(e))?;
+    let raw_bytes = unsafe { std::slice::from_raw_parts(mat.data() as *const u8, total_bytes) };
+    let img_src = ImageSource::from_bytes(raw_bytes, (mat.cols() as u32, mat.rows() as u32))
+        .map_err(|e| anyhow::anyhow!(e))?;
     let ocr_input = ocr.prepare_input(img_src)?;
     let text = ocr.get_text(&ocr_input)?;
 
@@ -572,13 +571,13 @@ fn extract_user_information(
 
     let (name, subject, date, exam_room, seat) = crop_each_part(&mat)?;
 
-    //if cfg!(debug_assertions) {
-    //    safe_imwrite("temp/debug_name.png", &name)?;
-    //    safe_imwrite("temp/debug_subject.png", &subject)?;
-    //    safe_imwrite("temp/debug_date.png", &date)?;
-    //    safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
-    //    safe_imwrite("temp/debug_seat.png", &seat)?;
-    //}
+    if cfg!(debug_assertions) {
+        safe_imwrite("temp/debug_name.png", &name)?;
+        safe_imwrite("temp/debug_subject.png", &subject)?;
+        safe_imwrite("temp/debug_date.png", &date)?;
+        safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
+        safe_imwrite("temp/debug_seat.png", &seat)?;
+    }
 
     let name_string = image_to_string(&name, ocr)?;
     let subject_string = image_to_string(&subject, ocr)?;
@@ -595,21 +594,21 @@ fn extract_user_information(
     ))
 }
 
-//fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Error> {
-//    if mat.empty() {
-//        println!(
-//            "Warning: attempting to write an empty Mat to {:?}",
-//            path.as_ref()
-//        );
-//    } else {
-//        println!("Writing debug image to {:?}", path.as_ref());
-//    }
-//    imgcodecs::imwrite(
-//        path.as_ref().to_str().unwrap(),
-//        mat,
-//        &opencv::core::Vector::new(),
-//    )
-//}
+fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Error> {
+    if mat.empty() {
+        println!(
+            "Warning: attempting to write an empty Mat to {:?}",
+            path.as_ref()
+        );
+    } else {
+        println!("Writing debug image to {:?}", path.as_ref());
+    }
+    imgcodecs::imwrite(
+        path.as_ref().to_str().unwrap(),
+        mat,
+        &opencv::core::Vector::new(),
+    )
+}
 
 #[cfg(test)]
 mod unit_tests {
