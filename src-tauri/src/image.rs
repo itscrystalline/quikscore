@@ -1,4 +1,4 @@
-use ocrs::{OcrEngine, ImageSource};
+use ocrs::{ImageSource, OcrEngine};
 use std::array;
 use tauri::ipc::Channel;
 
@@ -632,7 +632,7 @@ mod unit_tests {
         ]
     }
 
-    fn setup_tessdata() {
+    fn setup_ocr_data() {
         state::init_model_dir(PathBuf::from("tests/assets"));
     }
 
@@ -701,7 +701,7 @@ mod unit_tests {
 
     #[test]
     fn test_handle_upload_success() {
-        setup_tessdata();
+        setup_ocr_data();
         let path = test_key_image();
         let result = handle_upload(path, &state::init_thread_ocr());
         assert!(result.is_ok());
@@ -713,7 +713,7 @@ mod unit_tests {
 
     #[test]
     fn test_handle_upload_failure() {
-        setup_tessdata();
+        setup_ocr_data();
         let path = not_image();
         let result = handle_upload(path, &state::init_thread_ocr());
         assert!(result.is_err());
@@ -801,34 +801,45 @@ mod unit_tests {
 
     #[test]
     fn check_ocr_function() -> Result<(), SheetError> {
+        setup_ocr_data();
         let ocr = &state::init_thread_ocr();
-        let mut i = 0;
 
-        for path in test_images() {
+        for (i, path) in test_images().into_iter().enumerate() {
             let mat = read_from_path(path).expect("Failed to read image");
             let resized = resize_relative_img(&mat, 0.3333).expect("Resize failed");
 
             let (name, subject, date, exam_room, seat) = extract_user_information(&resized, ocr)?;
             if i == 0 {
                 assert_eq!(name, "Elize Howells", "Name does not match expected value");
-                assert_eq!(subject, "Mathematics", "Subject does not match expected value");
+                assert_eq!(
+                    subject, "Mathematics",
+                    "Subject does not match expected value"
+                );
                 assert_eq!(date, "2021-01-01", "Date does not match expected value");
                 assert_eq!(exam_room, "608", "Exam room does not match expected value");
                 assert_eq!(seat, "A02", "Seat does not match expected value");
             } else if i == 1 {
                 assert_eq!(name, "Marcia Cole", "Name does not match expected value");
-                assert_eq!(subject, "Mathematics", "Subject does not match expected value");
+                assert_eq!(
+                    subject, "Mathematics",
+                    "Subject does not match expected value"
+                );
                 assert_eq!(date, "2021-01-01", "Date does not match expected value");
                 assert_eq!(exam_room, "608", "Exam room does not match expected value");
                 assert_eq!(seat, "A03", "Seat does not match expected value");
             } else {
-                assert_eq!(name, "Sophie-Louise Greene", "Name does not match expected value");
-                assert_eq!(subject, "Mathematics", "Subject does not match expected value");
+                assert_eq!(
+                    name, "Sophie-Louise Greene",
+                    "Name does not match expected value"
+                );
+                assert_eq!(
+                    subject, "Mathematics",
+                    "Subject does not match expected value"
+                );
                 assert_eq!(date, "2021-01-01", "Date does not match expected value");
                 assert_eq!(exam_room, "608", "Exam room does not match expected value");
-                assert_eq!(seat, "A04", "Seat does not match expected value");                
+                assert_eq!(seat, "A04", "Seat does not match expected value");
             }
-            i += 1;
         }
 
         Ok(())
