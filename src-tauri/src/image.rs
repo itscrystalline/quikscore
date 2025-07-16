@@ -1,15 +1,15 @@
-use ocrs::{OcrEngine, ImageSource};
+use ocrs::{ImageSource, OcrEngine};
 use std::array;
 use tauri::ipc::Channel;
 
 use crate::errors::{SheetError, UploadError};
 use crate::scoring::{AnswerSheetResult, CheckedAnswer};
 use crate::{signal, state};
-use base64::{Engine};
+use base64::Engine;
 use itertools::Itertools;
 use opencv::core::{Mat, Rect_, Size, Vector};
 use opencv::imgproc::{COLOR_GRAY2RGBA, FILLED, LINE_8, THRESH_BINARY};
-use opencv::{core::MatTraitConstManual , imgcodecs, imgproc, prelude::*};
+use opencv::{core::MatTraitConstManual, imgcodecs, imgproc, prelude::*};
 use rayon::prelude::*;
 use std::fs;
 use std::path::Path;
@@ -551,10 +551,9 @@ fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
 
 fn image_to_string(mat: &Mat, ocr: &OcrEngine) -> Result<String, SheetError> {
     let total_bytes = mat.total() * mat.elem_size()? as usize;
-    let raw_bytes = unsafe {
-        std::slice::from_raw_parts(mat.data() as *const u8, total_bytes)
-    };
-    let img_src = ImageSource::from_bytes(raw_bytes, (mat.cols() as u32, mat.rows() as u32)).map_err(|e| anyhow::anyhow!(e))?;
+    let raw_bytes = unsafe { std::slice::from_raw_parts(mat.data() as *const u8, total_bytes) };
+    let img_src = ImageSource::from_bytes(raw_bytes, (mat.cols() as u32, mat.rows() as u32))
+        .map_err(|e| anyhow::anyhow!(e))?;
     let ocr_input = ocr.prepare_input(img_src)?;
     let text = ocr.get_text(&ocr_input)?;
 
@@ -572,13 +571,13 @@ fn extract_user_information(
 
     let (name, subject, date, exam_room, seat) = crop_each_part(&mat)?;
 
-    //if cfg!(debug_assertions) {
-    //    safe_imwrite("temp/debug_name.png", &name)?;
-    //    safe_imwrite("temp/debug_subject.png", &subject)?;
-    //    safe_imwrite("temp/debug_date.png", &date)?;
-    //    safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
-    //    safe_imwrite("temp/debug_seat.png", &seat)?;
-    //}
+    if cfg!(debug_assertions) {
+        safe_imwrite("temp/debug_name.png", &name)?;
+        safe_imwrite("temp/debug_subject.png", &subject)?;
+        safe_imwrite("temp/debug_date.png", &date)?;
+        safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
+        safe_imwrite("temp/debug_seat.png", &seat)?;
+    }
 
     let name_string = image_to_string(&name, ocr)?;
     let subject_string = image_to_string(&subject, ocr)?;
@@ -595,21 +594,21 @@ fn extract_user_information(
     ))
 }
 
-//fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Error> {
-//    if mat.empty() {
-//        println!(
-//            "Warning: attempting to write an empty Mat to {:?}",
-//            path.as_ref()
-//        );
-//    } else {
-//        println!("Writing debug image to {:?}", path.as_ref());
-//    }
-//    imgcodecs::imwrite(
-//        path.as_ref().to_str().unwrap(),
-//        mat,
-//        &opencv::core::Vector::new(),
-//    )
-//}
+fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Error> {
+    if mat.empty() {
+        println!(
+            "Warning: attempting to write an empty Mat to {:?}",
+            path.as_ref()
+        );
+    } else {
+        println!("Writing debug image to {:?}", path.as_ref());
+    }
+    imgcodecs::imwrite(
+        path.as_ref().to_str().unwrap(),
+        mat,
+        &opencv::core::Vector::new(),
+    )
+}
 
 #[cfg(test)]
 mod unit_tests {
@@ -633,7 +632,7 @@ mod unit_tests {
         ]
     }
 
-    fn setup_tessdata() {
+    fn setup_ocr_data() {
         state::init_model_dir(PathBuf::from("tests/assets"));
     }
 
@@ -702,7 +701,7 @@ mod unit_tests {
 
     #[test]
     fn test_handle_upload_success() {
-        setup_tessdata();
+        setup_ocr_data();
         let path = test_key_image();
         let result = handle_upload(path, &state::init_thread_ocr());
         assert!(result.is_ok());
@@ -714,7 +713,7 @@ mod unit_tests {
 
     #[test]
     fn test_handle_upload_failure() {
-        setup_tessdata();
+        setup_ocr_data();
         let path = not_image();
         let result = handle_upload(path, &state::init_thread_ocr());
         assert!(result.is_err());
@@ -802,34 +801,45 @@ mod unit_tests {
 
     #[test]
     fn check_ocr_function() -> Result<(), SheetError> {
+        setup_ocr_data();
         let ocr = &state::init_thread_ocr();
-        let mut i = 0;
 
-        for path in test_images() {
+        for (i, path) in test_images().into_iter().enumerate() {
             let mat = read_from_path(path).expect("Failed to read image");
             let resized = resize_relative_img(&mat, 0.3333).expect("Resize failed");
 
             let (name, subject, date, exam_room, seat) = extract_user_information(&resized, ocr)?;
             if i == 0 {
                 assert_eq!(name, "Elize Howells", "Name does not match expected value");
-                assert_eq!(subject, "Mathematics", "Subject does not match expected value");
+                assert_eq!(
+                    subject, "Mathematics",
+                    "Subject does not match expected value"
+                );
                 assert_eq!(date, "2021-01-01", "Date does not match expected value");
                 assert_eq!(exam_room, "608", "Exam room does not match expected value");
                 assert_eq!(seat, "A02", "Seat does not match expected value");
             } else if i == 1 {
                 assert_eq!(name, "Marcia Cole", "Name does not match expected value");
-                assert_eq!(subject, "Mathematics", "Subject does not match expected value");
+                assert_eq!(
+                    subject, "Mathematics",
+                    "Subject does not match expected value"
+                );
                 assert_eq!(date, "2021-01-01", "Date does not match expected value");
                 assert_eq!(exam_room, "608", "Exam room does not match expected value");
                 assert_eq!(seat, "A03", "Seat does not match expected value");
             } else {
-                assert_eq!(name, "Sophie-Louise Greene", "Name does not match expected value");
-                assert_eq!(subject, "Mathematics", "Subject does not match expected value");
+                assert_eq!(
+                    name, "Sophie-Louise Greene",
+                    "Name does not match expected value"
+                );
+                assert_eq!(
+                    subject, "Mathematics",
+                    "Subject does not match expected value"
+                );
                 assert_eq!(date, "2021-01-01", "Date does not match expected value");
                 assert_eq!(exam_room, "608", "Exam room does not match expected value");
-                assert_eq!(seat, "A04", "Seat does not match expected value");                
+                assert_eq!(seat, "A04", "Seat does not match expected value");
             }
-            i += 1;
         }
 
         Ok(())

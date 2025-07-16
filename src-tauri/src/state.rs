@@ -369,7 +369,7 @@ mod unit_tests {
         FilePath::Path(PathBuf::from("tests/assets/sample_invalid_image.jpg"))
     }
 
-    fn setup_tessdata() {
+    fn setup_ocr_data() {
         init_model_dir(PathBuf::from("tests/assets"))
     }
 
@@ -415,7 +415,7 @@ mod unit_tests {
 
     #[test]
     fn test_app_key_upload() {
-        setup_tessdata();
+        setup_ocr_data();
         let app = mock_app_with_state(AppState::Init);
         let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
         upload_key_image_impl(&app, Some(test_key_image()), channel);
@@ -426,7 +426,7 @@ mod unit_tests {
     }
     #[test]
     fn test_app_change_key_upload() {
-        setup_tessdata();
+        setup_ocr_data();
         let path = test_key_image();
         let path2 = test_images()[1].clone();
 
@@ -461,7 +461,7 @@ mod unit_tests {
     }
     #[test]
     fn test_app_key_canceled_upload() {
-        setup_tessdata();
+        setup_ocr_data();
         let app = mock_app_with_state(AppState::Init);
         let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
         upload_key_image_impl(&app, None, channel);
@@ -473,7 +473,7 @@ mod unit_tests {
     }
     #[test]
     fn test_app_key_invalid_upload() {
-        setup_tessdata();
+        setup_ocr_data();
         let app = mock_app_with_state(AppState::Init);
         let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
         upload_key_image_impl(&app, Some(not_image()), channel);
@@ -485,7 +485,7 @@ mod unit_tests {
     }
     #[test]
     fn test_app_key_clear() {
-        setup_tessdata();
+        setup_ocr_data();
         let app = mock_app_with_state(AppState::Init);
         let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
         upload_key_image_impl(&app, Some(test_key_image()), channel.clone());
@@ -503,7 +503,7 @@ mod unit_tests {
 
     #[test]
     fn test_app_sheets_upload() {
-        setup_tessdata();
+        setup_ocr_data();
         let app = mock_app_with_state(AppState::Init);
         let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
         let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
@@ -522,7 +522,7 @@ mod unit_tests {
     }
     #[test]
     fn test_app_change_sheets_upload() {
-        setup_tessdata();
+        setup_ocr_data();
         let app = mock_app_with_state(AppState::Init);
         let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
         let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
@@ -567,7 +567,7 @@ mod unit_tests {
     }
     #[test]
     fn test_app_sheets_canceled_upload() {
-        setup_tessdata();
+        setup_ocr_data();
         let app = mock_app_with_state(AppState::Init);
         let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
         let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
@@ -582,7 +582,7 @@ mod unit_tests {
     }
     #[test]
     fn test_app_sheets_invalid_upload() {
-        setup_tessdata();
+        setup_ocr_data();
         let app = mock_app_with_state(AppState::Init);
         let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
         let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
@@ -616,7 +616,7 @@ mod unit_tests {
     }
     #[test]
     fn test_app_sheets_clear() {
-        setup_tessdata();
+        setup_ocr_data();
         let app = mock_app_with_state(AppState::Init);
         let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
         let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
@@ -642,7 +642,7 @@ mod unit_tests {
 
     #[test]
     fn test_clear_key_on_with_key_and_sheets_does_nothing() {
-        setup_tessdata();
+        setup_ocr_data();
         let app = mock_app_with_state(AppState::Init);
         let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
         let (sheet_channel, _) = setup_channel_msgs::<AnswerUpload>();
@@ -668,7 +668,7 @@ mod unit_tests {
     }
     #[test]
     fn test_clear_answer_sheets_on_with_key_does_nothing() {
-        setup_tessdata();
+        setup_ocr_data();
         let app = mock_app_with_state(AppState::Init);
         let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
         let (sheet_channel, _) = setup_channel_msgs::<AnswerUpload>();
@@ -682,7 +682,7 @@ mod unit_tests {
     }
     #[test]
     fn test_upload_sheets_without_key_does_nothing() {
-        setup_tessdata();
+        setup_ocr_data();
         let app = mock_app_with_state(AppState::Init);
         let (sheet_channel, _) = setup_channel_msgs::<AnswerUpload>();
         upload_sheet_images_impl(&app, Some(test_images()), sheet_channel);
