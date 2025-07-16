@@ -509,7 +509,7 @@ fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
         .roi(Rect_ {
             x: 237,
             y: 351,
-            width: 477,
+            width: 485,
             height: 62,
         })?
         .clone_pointee();
