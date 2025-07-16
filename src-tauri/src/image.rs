@@ -509,7 +509,7 @@ fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
         .roi(Rect_ {
             x: 237,
             y: 351,
-            width: 485,
+            width: 495,
             height: 62,
         })?
         .clone_pointee();
@@ -518,7 +518,7 @@ fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
             x: 174,
             y: 434,
             width: 538,
-            height: 58,
+            height: 50,
         })?
         .clone_pointee();
     let date = mat
