@@ -173,7 +173,7 @@ fn handle_upload(
     //testing
     //#[cfg(not(test))]
     //let _ = show_img(&aligned_for_processing, "resized & aligned image");
-    let (name, subject, date, exam_room, seat) = extract_user_information(&resized, ocr)?;
+    let (name, subject, date, exam_room, seat) = extract_user_information(&mat, ocr)?;
     println!("name: {name}");
     println!("subject: {subject}");
     println!("date: {date}");
