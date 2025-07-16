@@ -18,6 +18,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 avx512 = ["ocrs/avx512"]
 
 # https://github.com/robertknight/ocrs/issues/117#issuecomment-2362314977
+[profile.dev.package."ocrs"]
+opt-level = 3
 [profile.dev.package."rten"]
 opt-level = 3
 [profile.dev.package."rten-simd"]
