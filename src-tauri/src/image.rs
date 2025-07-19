@@ -391,7 +391,13 @@ fn extract_digits_for_sub_stu(
             })?;
 
             let mut bin = Mat::default();
-            let _ = opencv::imgproc::threshold(&digit_roi, &mut bin, 0.0, 255.0, opencv::imgproc::THRESH_BINARY_INV);
+            let _ = opencv::imgproc::threshold(
+                &digit_roi,
+                &mut bin,
+                0.0,
+                255.0,
+                opencv::imgproc::THRESH_BINARY_INV,
+            );
             let sum: u32 = opencv::core::count_non_zero(&bin)? as u32;
             if temp {
                 if i > 0 {
@@ -805,6 +811,7 @@ mod unit_tests {
         let ocr = &state::init_thread_ocr();
 
         for (i, path) in test_images().into_iter().enumerate() {
+            println!("image #{i}");
             let mat = read_from_path(path).expect("Failed to read image");
 
             let (name, subject, date, exam_room, seat) = extract_user_information(&mat, ocr)?;

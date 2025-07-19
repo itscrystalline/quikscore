@@ -87,14 +87,14 @@ in {
     "quikscore:check".exec = "cd $DEVENV_ROOT/src-tauri; cargo check";
     "quikscore:lint".exec = "cd $DEVENV_ROOT/src-tauri; RUSTFLAGS=\"-Dwarnings\" cargo-clippy";
     "quikscore:test".exec = "cd $DEVENV_ROOT/src-tauri; cargo nextest run";
-    "quikscore:coverage".exec = "cd $DEVENV_ROOT/src-tauri; ${pkgs.cargo-tarpaulin}/bin/cargo-tarpaulin --color always --verbose --all-features --workspace --timeout 120 --out xml --no-dead-code --engine llvm";
+    "quikscore:coverage".exec = "cd $DEVENV_ROOT/src-tauri; ${pkgs.cargo-tarpaulin}/bin/cargo-tarpaulin --color always --verbose --all-features --workspace --timeout 120 --out xml --no-dead-code --engine llvm --release";
   };
   #
   # # https://devenv.sh/tests/
   enterTest = ''
     echo "Running tests"
     cd $DEVENV_ROOT/src-tauri
-    cargo tarpaulin --color always --skip-clean --no-dead-code --engine llvm
+    cargo tarpaulin --color always --skip-clean --no-dead-code --engine llvm --release
   '';
   #
   # # https://devenv.sh/git-hooks/
