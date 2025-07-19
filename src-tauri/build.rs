@@ -4,7 +4,7 @@ fn main() {
     // see https://github.com/tauri-apps/tauri/pull/4383#issuecomment-1212221864
     let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
     let target_env = std::env::var("CARGO_CFG_TARGET_ENV");
-    let is_tauri_workspace = std::env::var("__TAURI_WORKSPACE__").map_or(false, |v| v == "true");
+    let is_tauri_workspace = std::env::var("__TAURI_WORKSPACE__").is_ok_and(|v| v == "true");
     if is_tauri_workspace && target_os == "windows" && Ok("msvc") == target_env.as_deref() {
         embed_manifest_for_tests();
     }
@@ -12,10 +12,7 @@ fn main() {
     fn embed_manifest_for_tests() {
         static WINDOWS_MANIFEST_FILE: &str = "windows-app-manifest.xml";
 
-        let manifest = std::env::current_dir()
-            .unwrap()
-            .join("../../../crates/tauri-build/src")
-            .join(WINDOWS_MANIFEST_FILE);
+        let manifest = std::env::current_dir().unwrap().join(WINDOWS_MANIFEST_FILE);
 
         println!("cargo:rerun-if-changed={}", manifest.display());
         // Embed the Windows application manifest file.
