@@ -18,9 +18,17 @@
       system: let
         pkgs = import nixpkgs {inherit system;};
         inherit (pkgs) lib stdenv fetchYarnDeps;
-        nightlyPlatform = pkgs.makeRustPlatform {inherit (fenix.packages.${system}.minimal) cargo rustc;};
+        nightlyPlatform = pkgs.makeRustPlatform {
+          inherit (fenix.packages.${system}.minimal) cargo rustc;
+        };
+
+        loaderPath =
+          if stdenv.isx86_64
+          then "/lib64/ld-linux-x86-64.so.2"
+          else "/lib/ld-linux-aarch64.so.1";
 
         package = nightlyPlatform.buildRustPackage (finalAttrs: {
+
           pname = "quikscore";
           version = "0.1.0";
 
@@ -39,12 +47,21 @@
             nodejs
             pkg-config
             clang
+            patchelf
           ];
 
-          RUSTFLAGS = "-Z threads=8";
-          OPENCV_LINK_PATHS = "+${pkgs.opencv}/lib";
-          OPENCV_LINK_LIBS = "+opencv_core,opencv_calib3d,opencv_dnn,opencv_features2d,opencv_imgproc,opencv_video,opencv_flann,opencv_imgcodecs,opencv_objdetect,opencv_stitching,png";
-          OPENCV_INCLUDE_PATHS = "+${pkgs.opencv}/include";
+          env = {
+            RUSTFLAGS = "-Z threads=8";
+            OPENCV_LINK_PATHS = "+${pkgs.opencv}/lib";
+            OPENCV_LINK_LIBS = "+opencv_core,opencv_calib3d,opencv_dnn,opencv_features2d,opencv_imgproc,opencv_video,opencv_flann,opencv_imgcodecs,opencv_objdetect,opencv_stitching,png";
+            OPENCV_INCLUDE_PATHS = "+${pkgs.opencv}/include";
+          };
+
+          # Optional: uncomment if needed
+          # buildEnv = {
+          #   LIBCLANG_PATH = "${pkgs.libclang}/lib";
+          #   CPLUS_INCLUDE_PATH = "${pkgs.llvmPackages.libcxx.dev}/include/c++";
+          # };
 
           cargoRoot = "src-tauri";
           cargoLock = {
@@ -67,6 +84,11 @@
               libpng
               openssl
             ]);
+
+          postFixup = lib.optionalString stdenv.hostPlatform.isLinux ''
+            echo Patching ELF loader to a non-nix path...
+            patchelf --set-interpreter ${loaderPath} $out/bin/quikscore
+          '';
         });
       in {
         packages = {
