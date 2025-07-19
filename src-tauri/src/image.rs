@@ -352,10 +352,9 @@ fn extract_digits_for_sub_stu(
     num_digits: i32,
     mut is_student_id: bool,
 ) -> Result<String, opencv::Error> {
-    let the_height_from_above_to_bubble = 40;
-    let overall_height = mat.rows() - the_height_from_above_to_bubble;
-    let digit_height = overall_height / 10;
-    let digit_width = mat.cols() / num_digits;
+    let the_height_from_above_to_bubble = 47;
+    let digit_height = 16;
+    let digit_width = 15;
     let temp: bool = is_student_id;
 
     let rows = if is_student_id { 8 } else { 2 };
@@ -379,7 +378,7 @@ fn extract_digits_for_sub_stu(
             })?
             .clone_pointee();
 
-        let mut min_sum = u32::MAX;
+        let mut max_num = u32::MIN;
         let mut selected_digit = 0;
 
         for j in 0..10usize {
@@ -391,7 +390,9 @@ fn extract_digits_for_sub_stu(
                 height: digit_height,
             })?;
 
-            let sum: u32 = digit_roi.data_bytes()?.iter().map(|&b| b as u32).sum();
+            let mut bin = Mat::default();
+            let _ = opencv::imgproc::threshold(&digit_roi, &mut bin, 0.0, 255.0, opencv::imgproc::THRESH_BINARY_INV);
+            let sum: u32 = opencv::core::count_non_zero(&bin)? as u32;
             if temp {
                 if i > 0 {
                     v[i - 1][j] = sum as i32; //Skip first Index NaKub
@@ -400,8 +401,8 @@ fn extract_digits_for_sub_stu(
                 v[i][j] = sum as i32;
             }
 
-            if sum < min_sum {
-                min_sum = sum;
+            if sum > max_num {
+                max_num = sum;
                 selected_digit = j;
             }
         }
