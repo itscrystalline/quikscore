@@ -21,7 +21,7 @@ pub fn upload_key_image(app: AppHandle, channel: Channel<KeyUpload>, model_dir: 
 
 #[tauri::command]
 pub fn clear_key_image(app: AppHandle, channel: Channel<KeyUpload>) {
-    AppState::clear_key(&app, channel);
+    AppState::clear_key(&app, &channel);
 }
 
 #[tauri::command]
@@ -34,5 +34,5 @@ pub fn upload_sheet_images(app: AppHandle, channel: Channel<AnswerUpload>, model
 }
 #[tauri::command]
 pub fn clear_sheet_images(app: AppHandle, channel: Channel<AnswerUpload>) {
-    AppState::clear_answer_sheets(&app, channel);
+    AppState::clear_answer_sheets(&app, &channel);
 }

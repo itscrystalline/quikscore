@@ -162,7 +162,7 @@ async function clearSheets() {
       <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ?
         "🧾 Upload Answer Sheets..." :
         "Change Answer Sheets"
-        }}</button>
+      }}</button>
       <button class="btn-clear" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄
         Clear
         Answer
@@ -206,6 +206,7 @@ async function clearSheets() {
   font-size: 19px;
   line-height: 60px;
   font-weight: 400;
+  animation-duration: 0.1s;
 
   color: #cdd6f4;
   background-color: #111827;

@@ -3,6 +3,7 @@ use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterato
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    fmt::Display,
     path::PathBuf,
     sync::{Mutex, OnceLock},
 };
@@ -56,12 +57,12 @@ macro_rules! signal {
 #[derive(Default)]
 pub struct AppState {
     state: AppStatePipeline,
-    options: Options,
+    _options: Options,
 }
 
 #[derive(Default)]
 pub struct Options {
-    ocr: bool,
+    _ocr: bool,
 }
 
 #[derive(Default)]
@@ -73,12 +74,23 @@ pub enum AppStatePipeline {
         key: AnswerKeySheet,
         subject_code: String,
     },
+    Scoring,
     Scored {
         key_image: Mat,
         key: AnswerKeySheet,
         subject_code: String,
-        answer_sheets: HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>,
+        _answer_sheets: HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>,
     },
+}
+impl Display for AppStatePipeline {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Init => "Init",
+            Self::WithKey { .. } => "WithKey",
+            Self::Scoring => "Scoring",
+            Self::Scored { .. } => "Scored",
+        })
+    }
 }
 
 impl AppState {
@@ -92,7 +104,7 @@ impl AppState {
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        match state.state {
+        match &state.state {
             AppStatePipeline::Init | AppStatePipeline::WithKey { .. } => {
                 state.state = AppStatePipeline::WithKey {
                     key_image: image,
@@ -106,10 +118,18 @@ impl AppState {
                     }
                 );
             }
-            _ => (),
+            s => signal!(
+                channel,
+                KeyUpload::Error {
+                    error: format!("Unexpected state: {s}")
+                }
+            ),
         }
     }
-    pub fn clear_key<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A, channel: Channel<KeyUpload>) {
+    pub fn clear_key<R: Runtime, A: Emitter<R> + Manager<R>>(
+        app: &A,
+        channel: &Channel<KeyUpload>,
+    ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
         if let AppStatePipeline::WithKey { .. } = state.state {
@@ -117,9 +137,26 @@ impl AppState {
             signal!(channel, KeyUpload::Clear);
         }
     }
+    pub fn mark_scoring<R: Runtime, A: Emitter<R> + Manager<R>>(
+        app: &A,
+        channel: &Channel<AnswerUpload>,
+        images_count: usize,
+    ) {
+        let mutex = app.state::<StateMutex>();
+        let mut state = mutex.lock().expect("poisoned");
+        state.state = AppStatePipeline::Scoring;
+        signal!(
+            channel,
+            AnswerUpload::Processing {
+                total: images_count,
+                started: 0,
+                finished: 0
+            }
+        );
+    }
     pub fn upload_answer_sheets<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,
-        channel: Channel<AnswerUpload>,
+        channel: &Channel<AnswerUpload>,
         result: Vec<Result<(String, Mat, AnswerSheet), UploadError>>,
     ) {
         let mutex = app.state::<StateMutex>();
@@ -136,14 +173,13 @@ impl AppState {
                 subject_code,
                 ..
             } => {
-                let key = key.clone();
                 let scored: Vec<
                     Result<(String, Mat, AnswerSheet, AnswerSheetResult), UploadError>,
                 > = result
                     .into_par_iter()
                     .map(|r| {
                         r.map(|(s, mut m, a)| {
-                            let score = a.score(&key);
+                            let score = a.score(key);
                             _ = score.write_score_marks(&mut m);
                             (s, m, a, score)
                         })
@@ -195,18 +231,23 @@ impl AppState {
                     .collect();
                 state.state = AppStatePipeline::Scored {
                     key_image: key_image.clone(),
-                    key,
+                    key: key.clone(),
                     subject_code: subject_code.clone(),
-                    answer_sheets,
+                    _answer_sheets: answer_sheets,
                 };
                 signal!(channel, AnswerUpload::Done { uploaded: to_send });
             }
-            _ => (),
+            s => signal!(
+                channel,
+                AnswerUpload::Error {
+                    error: format!("Unexpected state: {s}")
+                }
+            ),
         }
     }
     pub fn clear_answer_sheets<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,
-        channel: Channel<AnswerUpload>,
+        channel: &Channel<AnswerUpload>,
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
@@ -506,7 +547,7 @@ mod unit_tests {
 
         assert_state!(app, AppStatePipeline::WithKey { .. });
 
-        AppState::clear_key(&app, channel);
+        AppState::clear_key(&app, &channel);
 
         assert_state!(app, AppStatePipeline::Init);
         let msgs = unwrap_msgs!(msgs);
@@ -546,7 +587,11 @@ mod unit_tests {
         let current_count = {
             let mutex = app.state::<StateMutex>();
             let state = mutex.lock().expect("poisoned");
-            let AppStatePipeline::Scored { answer_sheets, .. } = &state.state else {
+            let AppStatePipeline::Scored {
+                _answer_sheets: answer_sheets,
+                ..
+            } = &state.state
+            else {
                 unreachable!()
             };
             answer_sheets.len()
@@ -556,7 +601,11 @@ mod unit_tests {
 
         let mutex = app.state::<StateMutex>();
         let state = mutex.lock().unwrap();
-        if let AppStatePipeline::Scored { answer_sheets, .. } = &state.state {
+        if let AppStatePipeline::Scored {
+            _answer_sheets: answer_sheets,
+            ..
+        } = &state.state
+        {
             assert_ne!(current_count, answer_sheets.len());
         } else {
             unreachable!()
@@ -598,7 +647,11 @@ mod unit_tests {
         {
             let mutex = app.state::<StateMutex>();
             let state = mutex.lock().unwrap();
-            let AppStatePipeline::Scored { answer_sheets, .. } = &state.state else {
+            let AppStatePipeline::Scored {
+                _answer_sheets: answer_sheets,
+                ..
+            } = &state.state
+            else {
                 unreachable!()
             };
 
@@ -627,7 +680,7 @@ mod unit_tests {
 
         assert_state!(app, AppStatePipeline::Scored { .. });
 
-        AppState::clear_answer_sheets(&app, sheet_channel);
+        AppState::clear_answer_sheets(&app, &sheet_channel);
 
         assert_state!(app, AppStatePipeline::WithKey { .. });
 
@@ -653,7 +706,7 @@ mod unit_tests {
 
         assert_state!(app, AppStatePipeline::Scored { .. });
 
-        AppState::clear_key(&app, key_channel);
+        AppState::clear_key(&app, &key_channel);
 
         // Should still be in WithKeyAndSheets
         assert_state!(app, AppStatePipeline::Scored { .. });
@@ -662,7 +715,7 @@ mod unit_tests {
     fn test_clear_answer_sheets_on_init_does_nothing() {
         let app = mock_app_with_state(AppStatePipeline::Init);
         let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
-        AppState::clear_answer_sheets(&app, sheet_channel);
+        AppState::clear_answer_sheets(&app, &sheet_channel);
         assert_state!(app, AppStatePipeline::Init);
 
         let msgs = unwrap_msgs!(sheet_msgs);
@@ -678,7 +731,7 @@ mod unit_tests {
 
         assert_state!(app, AppStatePipeline::WithKey { .. });
 
-        AppState::clear_answer_sheets(&app, sheet_channel);
+        AppState::clear_answer_sheets(&app, &sheet_channel);
 
         assert_state!(app, AppStatePipeline::WithKey { .. });
     }
