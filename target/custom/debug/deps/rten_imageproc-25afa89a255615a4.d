@@ -1,0 +1,11 @@
+C:\PBL\quikscore\target/custom\debug\deps\librten_imageproc-25afa89a255615a4.rmeta: C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\lib.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\contours.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\drawing.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\math.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\normalize.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\poly_algos.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\shapes.rs
+
+C:\PBL\quikscore\target/custom\debug\deps\rten_imageproc-25afa89a255615a4.d: C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\lib.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\contours.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\drawing.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\math.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\normalize.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\poly_algos.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\shapes.rs
+
+C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\lib.rs:
+C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\contours.rs:
+C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\drawing.rs:
+C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\math.rs:
+C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\normalize.rs:
+C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\poly_algos.rs:
+C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\rten-imageproc-0.18.0\src\shapes.rs:

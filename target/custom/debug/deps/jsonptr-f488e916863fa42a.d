@@ -1,0 +1,13 @@
+C:\PBL\quikscore\target/custom\debug\deps\libjsonptr-f488e916863fa42a.rmeta: C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\lib.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\assign.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\delete.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\resolve.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\pointer.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\token.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\index.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\component.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\../README.md
+
+C:\PBL\quikscore\target/custom\debug\deps\jsonptr-f488e916863fa42a.d: C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\lib.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\assign.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\delete.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\resolve.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\pointer.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\token.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\index.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\component.rs C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\../README.md
+
+C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\lib.rs:
+C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\assign.rs:
+C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\delete.rs:
+C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\resolve.rs:
+C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\pointer.rs:
+C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\token.rs:
+C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\index.rs:
+C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\component.rs:
+C:\Users\User\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\jsonptr-0.6.3\src\../README.md:

@@ -1,0 +1,265 @@
+=== Crate version: 0.94.4
+=== Environment configuration:
+===   OPENCV_PACKAGE_NAME = None
+===   OPENCV_PKGCONFIG_NAME = None
+===   OPENCV_CMAKE_NAME = None
+===   OPENCV_CMAKE_BIN = None
+===   OPENCV_VCPKG_NAME = None
+===   OPENCV_LINK_LIBS = Some("+opencv_world4110")
+===   OPENCV_LINK_PATHS = Some("+C:\\tools\\opencv\\build\\x64\\vc16\\lib\n")
+===   OPENCV_INCLUDE_PATHS = Some("C:\\tools\\opencv\\build\\include")
+===   OPENCV_DISABLE_PROBES = None
+===   OPENCV_MSVC_CRT = None
+===   CMAKE_PREFIX_PATH = None
+===   OpenCV_DIR = None
+===   PKG_CONFIG_PATH = None
+===   VCPKG_ROOT = None
+===   VCPKGRS_DYNAMIC = None
+===   VCPKGRS_TRIPLET = None
+===   OCVRS_DOCS_GENERATE_DIR = None
+===   DOCS_RS = None
+===   PATH = Some("C:\\PBL\\quikscore\\target/custom\\debug\\deps;C:\\PBL\\quikscore\\target/custom\\debug;C:\\Users\\User\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\lib\\rustlib\\x86_64-pc-windows-msvc\\lib;C:\\Program Files\\Common Files\\Oracle\\Java\\javapath;C:\\Program Files (x86)\\Common Files\\Intel\\Shared Libraries\\redist\\intel64\\compiler;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Windows\\System32\\OpenSSH\\;C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common;C:\\WINDOWS\\system32;C:\\WINDOWS;C:\\WINDOWS\\System32\\Wbem;C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\;C:\\WINDOWS\\System32\\OpenSSH\\;C:\\Program Files\\dotnet\\;C:\\Program Files\\Go\\bin;C:\\Program Files\\PuTTY\\;C:\\Program Files (x86)\\Codebox\\BitMeterOS;C:\\Program Files\\Git\\cmd;C:\\Program Files\\Git\\mingw64\\bin;C:\\Program Files\\Git\\usr\\bin;C:\\Program Files\\NVIDIA Corporation\\NVIDIA app\\NvDLISR;C:\\Program Files\\MySQL\\MySQL Server 8.0\\bin;C:\\Program Files\\MongoDB\\Server\\8.0\\bin;C:\\Program Files\\Java\\jdk-24\\bin;C:\\Program Files\\nodejs\\;C:\\Program Files\\CMake\\bin;C:\\ProgramData\\chocolatey\\bin;C:\\Program Files\\LLVM\\bin;C:\\Program Files (x86)\\LLVM\\bin;C:\\tools\\opencv\\build\\x64\\vc16\\bin;C:\\Users\\User\\.cargo\\bin;C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\;C:\\flutter\\bin;C:\\Users\\User\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\msys64\\mingw64\\bin;C:\\MinGW\\bin;C:\\Users\\User\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Program Files\\Java\\jdk-24\\bin;C:\\Users\\User\\AppData\\Roaming\\npm;C:\\Program Files\\LLVM\\bin;C:\\tools\\opencv\\build\\x64\\vc16\\bin;;C:\\Program Files\\Tesseract-OCR;C:\\Users\\User\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin")
+=== Enabled features:
+===   3D
+===   ALPHAMAT
+===   ARUCO
+===   ARUCO_DETECTOR
+===   BARCODE
+===   BGSEGM
+===   BIOINSPIRED
+===   CALIB
+===   CALIB3D
+===   CCALIB
+===   CLANG_RUNTIME
+===   CUDAARITHM
+===   CUDABGSEGM
+===   CUDACODEC
+===   CUDAFEATURES2D
+===   CUDAFILTERS
+===   CUDAIMGPROC
+===   CUDALEGACY
+===   CUDAOBJDETECT
+===   CUDAOPTFLOW
+===   CUDASTEREO
+===   CUDAWARPING
+===   CVV
+===   DEFAULT
+===   DNN
+===   DNN_SUPERRES
+===   DPM
+===   FACE
+===   FEATURES
+===   FEATURES2D
+===   FLANN
+===   FREETYPE
+===   FUZZY
+===   GAPI
+===   HDF
+===   HFS
+===   HIGHGUI
+===   IMGCODECS
+===   IMGPROC
+===   IMG_HASH
+===   INTENSITY_TRANSFORM
+===   LINE_DESCRIPTOR
+===   MCC
+===   ML
+===   OBJDETECT
+===   OPTFLOW
+===   OVIS
+===   PHASE_UNWRAPPING
+===   PHOTO
+===   PLOT
+===   QUALITY
+===   RAPID
+===   RGBD
+===   SALIENCY
+===   SFM
+===   SHAPE
+===   SIGNAL
+===   STEREO
+===   STITCHING
+===   STRUCTURED_LIGHT
+===   SUPERRES
+===   SURFACE_MATCHING
+===   TEXT
+===   TRACKING
+===   VIDEO
+===   VIDEOIO
+===   VIDEOSTAB
+===   VIZ
+===   WECHAT_QRCODE
+===   XFEATURES2D
+===   XIMGPROC
+===   XOBJDETECT
+===   XPHOTO
+===   XSTEREO
+=== Detected probe priority boost based on environment vars: pkg_config: false, cmake: false, vcpkg: false
+=== Probing the OpenCV library in the following order: environment, pkg_config, cmake, vcpkg_cmake, vcpkg
+=== Configuring OpenCV library from the environment:
+===   include_paths: C:\tools\opencv\build\include
+===   link_paths: +C:\tools\opencv\build\x64\vc16\lib
+
+===   link_libs: +opencv_world4110
+=== Successfully probed using: environment
+=== OpenCV library configuration: Library {
+    include_paths: [
+        "C:\\tools\\opencv\\build\\include",
+    ],
+    version: Version {
+        major: 4,
+        minor: 11,
+        patch: 0,
+    },
+    enabled_features: [
+        "directx",
+        "directx_nv12",
+        "d3d11",
+        "d3d10",
+        "d3d9",
+        "inttypes_h 1",
+        "ipp",
+        "ipp_icv",
+        "ipp_iw",
+        "ipp_iw_ll",
+        "openjpeg",
+        "jpeg",
+        "opencl",
+        "opencl_d3d11_nv",
+        "openexr",
+        "png",
+        "tiff",
+    ],
+    cargo_metadata: [
+        "cargo::rustc-link-search=C:\\tools\\opencv\\build\\x64\\vc16\\lib\n",
+        "cargo::rustc-link-lib=opencv_world4110",
+    ],
+}
+=== Found OpenCV version: 4.11.0 in headers located at: C:\tools\opencv\build\include
+=== Detected OpenCV module header dir at: C:\tools\opencv\build\include\opencv2
+=== Generating code in: C:\PBL\quikscore\target/custom\debug\build\opencv-85df413b686cb801\out
+=== Placing generated bindings into: C:\PBL\quikscore\target/custom\debug\build\opencv-85df413b686cb801\out\opencv
+=== Using OpenCV headers from: C:\tools\opencv\build\include
+=== Clang: clang version 20.1.4
+=== Clang command line args: [
+    "-isystemC:\\Program Files\\LLVM\\lib\\clang\\20\\include",
+    "-isystemC:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\include",
+    "-isystemC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\ucrt",
+    "-isystemC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\shared",
+    "-isystemC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\um",
+    "-isystemC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\winrt",
+    "-isystemC:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.26100.0\\cppwinrt",
+    "-IC:\\tools\\opencv\\build\\include",
+    "-FC:\\tools\\opencv\\build\\include",
+    "-IC:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp",
+    "-FC:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp",
+    "-DOCVRS_PARSING_HEADERS",
+    "-includeocvrs_common.hpp",
+    "-std=c++17",
+]
+=== Using environment job server with the the amount of available jobs: 18
+=== Generating 15 modules
+=== Running: "C:\\PBL\\quikscore\\target\\custom\\debug\\build\\opencv-f94ba547d934525c\\build-script-build.exe" "C:\\tools\\opencv\\build\\include" "C:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp" "C:\\PBL\\quikscore\\target/custom\\debug\\build\\opencv-85df413b686cb801\\out" "core" ""
+=== Running: "C:\\PBL\\quikscore\\target\\custom\\debug\\build\\opencv-f94ba547d934525c\\build-script-build.exe" "C:\\tools\\opencv\\build\\include" "C:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp" "C:\\PBL\\quikscore\\target/custom\\debug\\build\\opencv-85df413b686cb801\\out" "highgui" ""
+=== Running: "C:\\PBL\\quikscore\\target\\custom\\debug\\build\\opencv-f94ba547d934525c\\build-script-build.exe" "C:\\tools\\opencv\\build\\include" "C:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp" "C:\\PBL\\quikscore\\target/custom\\debug\\build\\opencv-85df413b686cb801\\out" "imgcodecs" ""
+=== Running: "C:\\PBL\\quikscore\\target\\custom\\debug\\build\\opencv-f94ba547d934525c\\build-script-build.exe" "C:\\tools\\opencv\\build\\include" "C:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp" "C:\\PBL\\quikscore\\target/custom\\debug\\build\\opencv-85df413b686cb801\\out" "imgproc" ""
+=== Running: "C:\\PBL\\quikscore\\target\\custom\\debug\\build\\opencv-f94ba547d934525c\\build-script-build.exe" "C:\\tools\\opencv\\build\\include" "C:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp" "C:\\PBL\\quikscore\\target/custom\\debug\\build\\opencv-85df413b686cb801\\out" "features2d" ""
+=== Running: "C:\\PBL\\quikscore\\target\\custom\\debug\\build\\opencv-f94ba547d934525c\\build-script-build.exe" "C:\\tools\\opencv\\build\\include" "C:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp" "C:\\PBL\\quikscore\\target/custom\\debug\\build\\opencv-85df413b686cb801\\out" "calib3d" ""
+=== Running: "C:\\PBL\\quikscore\\target\\custom\\debug\\build\\opencv-f94ba547d934525c\\build-script-build.exe" "C:\\tools\\opencv\\build\\include" "C:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp" "C:\\PBL\\quikscore\\target/custom\\debug\\build\\opencv-85df413b686cb801\\out" "dnn" ""
+=== Running: "C:\\PBL\\quikscore\\target\\custom\\debug\\build\\opencv-f94ba547d934525c\\build-script-build.exe" "C:\\tools\\opencv\\build\\include" "C:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp" "C:\\PBL\\quikscore\\target/custom\\debug\\build\\opencv-85df413b686cb801\\out" "flann" ""
+=== Running: "C:\\PBL\\quikscore\\target\\custom\\debug\\build\\opencv-f94ba547d934525c\\build-script-build.exe" "C:\\tools\\opencv\\build\\include" "C:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp" "C:\\PBL\\quikscore\\target/custom\\debug\\build\\opencv-85df413b686cb801\\out" "ml" ""
+=== Running: "C:\\PBL\\quikscore\\target\\custom\\debug\\build\\opencv-f94ba547d934525c\\build-script-build.exe" "C:\\tools\\opencv\\build\\include" "C:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp" "C:\\PBL\\quikscore\\target/custom\\debug\\build\\opencv-85df413b686cb801\\out" "gapi" ""
+=== Running: "C:\\PBL\\quikscore\\target\\custom\\debug\\build\\opencv-f94ba547d934525c\\build-script-build.exe" "C:\\tools\\opencv\\build\\include" "C:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp" "C:\\PBL\\quikscore\\target/custom\\debug\\build\\opencv-85df413b686cb801\\out" "video" ""
+=== Running: "C:\\PBL\\quikscore\\target\\custom\\debug\\build\\opencv-f94ba547d934525c\\build-script-build.exe" "C:\\tools\\opencv\\build\\include" "C:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp" "C:\\PBL\\quikscore\\target/custom\\debug\\build\\opencv-85df413b686cb801\\out" "photo" ""
+=== Running: "C:\\PBL\\quikscore\\target\\custom\\debug\\build\\opencv-f94ba547d934525c\\build-script-build.exe" "C:\\tools\\opencv\\build\\include" "C:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp" "C:\\PBL\\quikscore\\target/custom\\debug\\build\\opencv-85df413b686cb801\\out" "objdetect" ""
+=== Running: "C:\\PBL\\quikscore\\target\\custom\\debug\\build\\opencv-f94ba547d934525c\\build-script-build.exe" "C:\\tools\\opencv\\build\\include" "C:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp" "C:\\PBL\\quikscore\\target/custom\\debug\\build\\opencv-85df413b686cb801\\out" "stitching" ""
+=== Running: "C:\\PBL\\quikscore\\target\\custom\\debug\\build\\opencv-f94ba547d934525c\\build-script-build.exe" "C:\\tools\\opencv\\build\\include" "C:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp" "C:\\PBL\\quikscore\\target/custom\\debug\\build\\opencv-85df413b686cb801\\out" "videoio" ""
+=== Windows + clang-runtime + clang version is known to be problematic, skipping drop of Generator
+=== Windows + clang-runtime + clang version is known to be problematic, skipping drop of Generator
+=== Generated: highgui in 2.165884s
+=== Generated: imgcodecs in 2.1942269s
+=== Windows + clang-runtime + clang version is known to be problematic, skipping drop of Generator
+=== Generated: flann in 2.4542066s
+=== Windows + clang-runtime + clang version is known to be problematic, skipping drop of Generator
+=== Generated: videoio in 2.736582s
+=== Windows + clang-runtime + clang version is known to be problematic, skipping drop of Generator
+=== Generated: video in 2.9847323s
+=== Windows + clang-runtime + clang version is known to be problematic, skipping drop of Generator
+=== Generated: photo in 3.0662846s
+=== Windows + clang-runtime + clang version is known to be problematic, skipping drop of Generator
+=== Generated: ml in 3.2651524s
+=== Windows + clang-runtime + clang version is known to be problematic, skipping drop of Generator
+=== Windows + clang-runtime + clang version is known to be problematic, skipping drop of Generator
+=== Generated: features2d in 3.3648626s
+=== Generated: calib3d in 3.4320409s
+=== Windows + clang-runtime + clang version is known to be problematic, skipping drop of Generator
+=== Windows + clang-runtime + clang version is known to be problematic, skipping drop of Generator
+=== Generated: imgproc in 3.5274646s
+=== Generated: objdetect in 3.5231129s
+=== Windows + clang-runtime + clang version is known to be problematic, skipping drop of Generator
+=== Generated: gapi in 3.6596617s
+=== Windows + clang-runtime + clang version is known to be problematic, skipping drop of Generator
+=== Generated: stitching in 4.0073104s
+=== Windows + clang-runtime + clang version is known to be problematic, skipping drop of Generator
+=== Generated: core in 5.0590757s
+=== Windows + clang-runtime + clang version is known to be problematic, skipping drop of Generator
+=== Generated: dnn in 6.8603571s
+=== Total binding generation time: 6.8657505s
+=== Windows + clang-runtime + clang version is known to be problematic, skipping drop of Generator
+=== Total binding collection time: 576.1674ms
+=== Compiler information: Tool {
+    path: "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64\\cl.exe",
+    cc_wrapper_path: None,
+    cc_wrapper_args: [],
+    args: [
+        "-nologo",
+        "-MD",
+        "-Z7",
+        "-Brepro",
+        "-std:c++17",
+        "-I",
+        "C:\\Users\\User\\.cargo\\registry\\src\\index.crates.io-1949cf8c6b5b557f\\opencv-0.94.4\\src_cpp",
+        "-I",
+        "C:\\PBL\\quikscore\\target/custom\\debug\\build\\opencv-85df413b686cb801\\out",
+        "-I",
+        ".",
+        "-I",
+        "C:\\tools\\opencv\\build\\include",
+        "-W4",
+        "-EHsc",
+        "-bigobj",
+        "-utf-8",
+        "-wd4996",
+        "-wd5054",
+        "-wd4190",
+        "-wd4702",
+        "-wd4100",
+        "-wd4127",
+        "-DOCVRS_FFI_EXPORT_SUFFIX=_0_94_4",
+    ],
+    env: [
+        (
+            "LIB",
+            "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\lib\\x64;C:\\Program Files (x86)\\Windows Kits\\10\\lib\\10.0.26100.0\\ucrt\\x64;C:\\Program Files (x86)\\Windows Kits\\10\\lib\\10.0.26100.0\\um\\x64;",
+        ),
+        (
+            "PATH",
+            "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64;C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\bin\\HostX64\\x64;C:\\Program Files (x86)\\Windows Kits\\10\\bin\\10.0.26100.0\\x64;C:\\Program Files (x86)\\Windows Kits\\10\\bin\\x64;C:\\PBL\\quikscore\\target/custom\\debug\\deps;C:\\PBL\\quikscore\\target/custom\\debug;C:\\Users\\User\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\lib\\rustlib\\x86_64-pc-windows-msvc\\lib;C:\\Program Files\\Common Files\\Oracle\\Java\\javapath;C:\\Program Files (x86)\\Common Files\\Intel\\Shared Libraries\\redist\\intel64\\compiler;C:\\Windows\\system32;C:\\Windows;C:\\Windows\\System32\\Wbem;C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\;C:\\Windows\\System32\\OpenSSH\\;C:\\Program Files (x86)\\NVIDIA Corporation\\PhysX\\Common;C:\\WINDOWS\\system32;C:\\WINDOWS;C:\\WINDOWS\\System32\\Wbem;C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\;C:\\WINDOWS\\System32\\OpenSSH\\;C:\\Program Files\\dotnet\\;C:\\Program Files\\Go\\bin;C:\\Program Files\\PuTTY\\;C:\\Program Files (x86)\\Codebox\\BitMeterOS;C:\\Program Files\\Git\\cmd;C:\\Program Files\\Git\\mingw64\\bin;C:\\Program Files\\Git\\usr\\bin;C:\\Program Files\\NVIDIA Corporation\\NVIDIA app\\NvDLISR;C:\\Program Files\\MySQL\\MySQL Server 8.0\\bin;C:\\Program Files\\MongoDB\\Server\\8.0\\bin;C:\\Program Files\\Java\\jdk-24\\bin;C:\\Program Files\\nodejs\\;C:\\Program Files\\CMake\\bin;C:\\ProgramData\\chocolatey\\bin;C:\\Program Files\\LLVM\\bin;C:\\Program Files (x86)\\LLVM\\bin;C:\\tools\\opencv\\build\\x64\\vc16\\bin;C:\\Users\\User\\.cargo\\bin;C:\\Program Files\\MySQL\\MySQL Shell 8.0\\bin\\;C:\\flutter\\bin;C:\\Users\\User\\AppData\\Local\\Programs\\Microsoft VS Code\\bin;C:\\msys64\\mingw64\\bin;C:\\MinGW\\bin;C:\\Users\\User\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Program Files\\Java\\jdk-24\\bin;C:\\Users\\User\\AppData\\Roaming\\npm;C:\\Program Files\\LLVM\\bin;C:\\tools\\opencv\\build\\x64\\vc16\\bin;;C:\\Program Files\\Tesseract-OCR;C:\\Users\\User\\.rustup\\toolchains\\stable-x86_64-pc-windows-msvc\\bin",
+        ),
+        (
+            "INCLUDE",
+            "C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\VC\\Tools\\MSVC\\14.44.35207\\include;C:\\Program Files (x86)\\Windows Kits\\10\\include\\10.0.26100.0\\ucrt;C:\\Program Files (x86)\\Windows Kits\\10\\include\\10.0.26100.0\\um;C:\\Program Files (x86)\\Windows Kits\\10\\include\\10.0.26100.0\\cppwinrt;C:\\Program Files (x86)\\Windows Kits\\10\\include\\10.0.26100.0\\winrt;C:\\Program Files (x86)\\Windows Kits\\10\\include\\10.0.26100.0\\shared;",
+        ),
+        (
+            "VSLANG",
+            "1033",
+        ),
+    ],
+    family: Msvc {
+        clang_cl: false,
+    },
+    cuda: false,
+    removed_args: [],
+    has_internal_target_arg: false,
+}
+=== Total cpp build time: 5.0737443s
