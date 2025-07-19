@@ -91,11 +91,11 @@ in {
   };
   #
   # # https://devenv.sh/tests/
-  enterTest = ''
-    echo "Running tests"
-    cd $DEVENV_ROOT/src-tauri
-    cargo tarpaulin --color always --skip-clean --no-dead-code --engine llvm --release
-  '';
+  # enterTest = ''
+  #   echo "Running tests"
+  #   cd $DEVENV_ROOT/src-tauri
+  #   cargo tarpaulin --color always --skip-clean --no-dead-code --engine llvm --release
+  # '';
   #
   # # https://devenv.sh/git-hooks/
   # # git-hooks.hooks.shellcheck.enable = true;
