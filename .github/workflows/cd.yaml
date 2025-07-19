@@ -5,6 +5,13 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'flake.nix'  
+      - 'flake.lock'  
+      - 'package.json'
+      - 'yarn.lock'
+      - 'src/**/*'  
+      - 'src-tauri/**/*'  
 
 jobs:
   nix-build:
