@@ -864,6 +864,48 @@ mod unit_tests {
     }
 
     #[test]
+    fn check_extracted_ids_ocr() -> Result<(), SheetError> {
+        setup_ocr_data();
+        let ocr = &state::init_thread_ocr();
+
+        for (i, path) in test_images().into_iter().enumerate() {
+            let mat = read_from_path(path).expect("Failed to read image");
+            let resized = resize_relative_img(&mat, 0.3333).expect("Resize failed");
+            let (subject_id,student_id) = extract_subject_student_from_written_field(&resized, ocr)?;
+
+            if i == 0 {
+                assert_eq!(
+                    subject_id, "10",
+                    "Subject ID does not match expected value"
+                );
+                assert_eq!(
+                    student_id, "65991002",
+                    "Student ID does not match expected value"
+                );
+            } else if i == 1 {
+                assert_eq!(
+                    subject_id, "10",
+                    "Subject ID does not match expected value"
+                );
+                assert_eq!(
+                    student_id, "65991003",
+                    "Student ID does not match expected value"
+                );
+            } else {
+                assert_eq!(
+                    subject_id, "10",
+                    "Subject ID does not match expected value"
+                );
+                assert_eq!(
+                    student_id, "65991004",
+                    "Student ID does not match expected value"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
     fn check_ocr_function() -> Result<(), SheetError> {
         setup_ocr_data();
         let ocr = &state::init_thread_ocr();
