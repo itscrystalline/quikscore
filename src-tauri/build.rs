@@ -1,27 +1,39 @@
 fn main() {
-    tauri_build::build();
-    // workaround needed to prevent `STATUS_ENTRYPOINT_NOT_FOUND` error in tests
-    // see https://github.com/tauri-apps/tauri/pull/4383#issuecomment-1212221864
-    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap();
-    let target_env = std::env::var("CARGO_CFG_TARGET_ENV");
-    let is_tauri_workspace = std::env::var("__TAURI_WORKSPACE__").is_ok_and(|v| v == "true");
-    if is_tauri_workspace && target_os == "windows" && Ok("msvc") == target_env.as_deref() {
-        embed_manifest_for_tests();
+    #[allow(unused_mut)]
+    let mut attributes = tauri_build::Attributes::new();
+
+    #[cfg(windows)]
+    {
+        attributes = attributes
+            .windows_attributes(tauri_build::WindowsAttributes::new_without_app_manifest());
     }
 
-    fn embed_manifest_for_tests() {
-        static WINDOWS_MANIFEST_FILE: &str = "windows-app-manifest.xml";
+    tauri_build::try_build(attributes).expect("failed to run tauri-build");
 
-        let manifest = std::env::current_dir().unwrap().join(WINDOWS_MANIFEST_FILE);
-
-        println!("cargo:rerun-if-changed={}", manifest.display());
-        // Embed the Windows application manifest file.
-        println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
-        println!(
-            "cargo:rustc-link-arg=/MANIFESTINPUT:{}",
-            manifest.to_str().unwrap()
-        );
-        // Turn linker warnings into errors.
-        println!("cargo:rustc-link-arg=/WX");
+    #[cfg(windows)]
+    {
+        let target_os = std::env::var("CARGO_CFG_TARGET_OS");
+        let target_env = std::env::var("CARGO_CFG_TARGET_ENV");
+        if Ok("windows") == target_os.as_deref() && Ok("msvc") == target_env.as_deref() {
+            add_manifest();
+        }
     }
+}
+
+#[cfg(windows)]
+fn add_manifest() {
+    static WINDOWS_MANIFEST_FILE: &str = "windows-app-manifest.xml";
+
+    let mut manifest = std::env::current_dir().unwrap();
+    manifest.push(WINDOWS_MANIFEST_FILE);
+
+    println!("cargo:rerun-if-changed={}", WINDOWS_MANIFEST_FILE);
+    // Embed the Windows application manifest file.
+    println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
+    println!(
+        "cargo:rustc-link-arg=/MANIFESTINPUT:{}",
+        manifest.to_str().unwrap()
+    );
+    // Turn linker warnings into errors.
+    println!("cargo:rustc-link-arg=/WX");
 }

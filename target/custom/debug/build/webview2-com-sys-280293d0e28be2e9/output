@@ -1,2 +1,0 @@
-cargo:rustc-link-search=native=C:\PBL\quikscore\target/custom\debug\build\webview2-com-sys-280293d0e28be2e9\out\x64
-cargo:rustc-link-lib=advapi32
