@@ -23,7 +23,7 @@ pub fn run() {
             commands::clear_sheet_images
         ])
         .setup(|app| {
-            app.manage(Mutex::new(AppState::Init));
+            app.manage(Mutex::new(AppState::default()));
             Ok(())
         })
         .run(tauri::generate_context!())
