@@ -28,7 +28,6 @@
           else "/lib/ld-linux-aarch64.so.1";
 
         package = nightlyPlatform.buildRustPackage (finalAttrs: {
-
           pname = "quikscore";
           version = "0.1.0";
 
@@ -36,7 +35,7 @@
 
           yarnOfflineCache = fetchYarnDeps {
             yarnLock = finalAttrs.src + "/yarn.lock";
-            hash = "sha256-287hUCyVI1o4D1iCLqBp42KHDT+bLmRyt3qrf8TN++A=";
+            hash = "sha256-bnSADccuQUUuvQE7TnQgEujfUGJF0BXdWzH4ZKxy+OM=";
           };
 
           nativeBuildInputs = with pkgs; [
