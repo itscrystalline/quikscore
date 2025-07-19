@@ -14,6 +14,23 @@ edition = "2021"
 name = "quikscore_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+avx512 = ["ocrs/avx512"]
+
+# https://github.com/robertknight/ocrs/issues/117#issuecomment-2362314977
+[profile.dev.package."ocrs"]
+opt-level = 3
+[profile.dev.package."rten"]
+opt-level = 3
+[profile.dev.package."rten-simd"]
+opt-level = 3
+[profile.dev.package."rten-tensor"]
+opt-level = 3
+[profile.dev.package."rten-vecmath"]
+opt-level = 3
+[profile.dev.package."rten-imageproc"]
+opt-level = 3
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -22,11 +39,14 @@ tauri = { version = "2", features = ["test"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-opencv = "0.94.4"
+opencv = {version = "0.94.4", features = ["clang-runtime"] }
 tauri-plugin-dialog = "2"
 base64 = "0.22.1"
 thiserror = "2.0.12"
 tauri-plugin-fs = "2"
 itertools = "0.14.0"
 rayon = "1.10.0"
-
+tauri-plugin-upload = "2"
+ocrs = "0.10.3"
+anyhow = "1.0.98"
+rten = "0.18.0"

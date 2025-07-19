@@ -1,7 +1,40 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { Ref, ref } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { AnswerScoreResult, AnswerUpload, KeyUpload } from "./messages";
+import { download } from '@tauri-apps/plugin-upload';
+import * as path from '@tauri-apps/api/path';
+import { exists, mkdir } from "@tauri-apps/plugin-fs";
+
+async function ensureModel(textRef: Ref<string>): Promise<string> {
+  const cache = await path.cacheDir();
+  const modelPath = await path.join(cache, "quikscore");
+  if (!await exists("quikscore", { baseDir: path.BaseDirectory.Cache })) {
+    await mkdir("quikscore", { baseDir: path.BaseDirectory.Cache });
+  }
+
+  const detectionPath = await path.join(modelPath, "text-detection.rten");
+  const recognitionPath = await path.join(modelPath, "text-recognition.rten");
+
+  textRef.value = "Verifying OCR models...";
+  if (!await exists(detectionPath)) {
+    textRef.value = "Downloading Detection Model...";
+    await download(
+      'https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.rten',
+      detectionPath,
+    );
+  }
+  if (!await exists(recognitionPath)) {
+    textRef.value = "Downloading Recognition Model...";
+    await download(
+      'https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.rten',
+      recognitionPath,
+    );
+  }
+  textRef.value = "Please upload an image...";
+
+  return modelPath;
+}
 import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
 
 const keyEventHandler = (msg: KeyUpload): void => {
@@ -70,10 +103,11 @@ const answerStatus = ref("");
 const answerProgressBar = ref<undefined | ProgressBarProps>(undefined);
 
 async function uploadKey() {
+  const path = await ensureModel(keyStatus);
   keyProgressBar.value = true;
   const keyEventChannel = new Channel<KeyUpload>();
   keyEventChannel.onmessage = keyEventHandler;
-  await invoke("upload_key_image", { channel: keyEventChannel });
+  await invoke("upload_key_image", { channel: keyEventChannel, modelDir: path });
 }
 async function clearKey() {
   const keyEventChannel = new Channel<KeyUpload>();
@@ -82,10 +116,11 @@ async function clearKey() {
 }
 
 async function uploadSheets() {
+  const path = await ensureModel(answerStatus);
   answerProgressBar.value = { type: "indeterminate" };
   const answerEventChannel = new Channel<AnswerUpload>();
   answerEventChannel.onmessage = answerEventHandler;
-  await invoke("upload_sheet_images", { channel: answerEventChannel });
+  await invoke("upload_sheet_images", { channel: answerEventChannel, modelDir: path });
 }
 async function clearSheets() {
   const answerEventChannel = new Channel<AnswerUpload>();

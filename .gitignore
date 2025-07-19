@@ -38,4 +38,9 @@ answer sheet*
 *.profraw
 *debug-images*
 
+/src-tauri/temp
+target*
+
+.yarn
 result*
+

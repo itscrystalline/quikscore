@@ -1,16 +1,19 @@
+use ocrs::{ImageSource, OcrEngine};
 use std::array;
 use tauri::ipc::Channel;
 
 use crate::errors::{SheetError, UploadError};
 use crate::scoring::{AnswerSheetResult, CheckedAnswer};
-use crate::signal;
+use crate::{signal, state};
 use base64::Engine;
 use itertools::Itertools;
 use opencv::core::{Mat, Rect_, Size, Vector};
 use opencv::imgproc::{COLOR_GRAY2RGBA, FILLED, LINE_8, THRESH_BINARY};
-use opencv::{imgproc, prelude::*};
+use opencv::{core::MatTraitConstManual, imgproc, prelude::*};
 use rayon::prelude::*;
+use std::fs;
 use tauri_plugin_dialog::FilePath;
+// use tesseract_rs::TesseractAPI;
 
 use tauri::{Emitter, Manager, Runtime};
 
@@ -42,7 +45,7 @@ pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         signal!(channel, KeyUpload::Cancelled);
         return;
     };
-    match handle_upload(file_path) {
+    match handle_upload(file_path, &state::init_thread_ocr()) {
         Ok((base64_image, mat, key)) => {
             let subject = key.subject_code.clone();
             AppState::upload_key(app, channel, base64_image, mat, subject, key.into())
@@ -88,12 +91,15 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     let processing_thread = tauri::async_runtime::spawn(async move {
         let base64_list: Vec<Result<(String, Mat, AnswerSheet), UploadError>> = paths
             .into_par_iter()
-            .map_with(tx.clone(), |tx, file_path| {
-                _ = tx.try_send(ProcessingState::Starting);
-                let res = handle_upload(file_path);
-                _ = tx.try_send(ProcessingState::Finishing);
-                res
-            })
+            .map_init(
+                || (tx.clone(), state::init_thread_ocr()),
+                |(tx, ocr), file_path| {
+                    _ = tx.try_send(ProcessingState::Starting);
+                    let res = handle_upload(file_path, ocr);
+                    _ = tx.try_send(ProcessingState::Finishing);
+                    res
+                },
+            )
             .collect();
         _ = tx.send(ProcessingState::Done(base64_list)).await;
     });
@@ -149,13 +155,29 @@ pub fn resize_relative_img(src: &Mat, relative: f64) -> opencv::Result<Mat> {
 //     Ok(())
 // }
 
-fn handle_upload(path: FilePath) -> Result<(String, Mat, AnswerSheet), UploadError> {
+fn handle_upload(
+    path: FilePath,
+    ocr: &OcrEngine,
+) -> Result<(String, Mat, AnswerSheet), UploadError> {
     let mat = read_from_path(path)?;
-    let resized = resize_relative_img(&mat, 0.333).map_err(UploadError::from)?;
-    let (aligned_for_display, subject_id, student_id, answer_sheet) = fix_answer_sheet(resized)?;
+    let resized = resize_relative_img(&mat, 0.3333).map_err(UploadError::from)?;
+    let resized_for_fix = resized.clone();
+    let (aligned_for_display, subject_id, student_id, answer_sheet) =
+        fix_answer_sheet(resized_for_fix)?;
+
+    let subject_id_string = extract_digits_for_sub_stu(&subject_id, 2, false)?;
+    let student_id_string = extract_digits_for_sub_stu(&student_id, 9, true)?;
+    println!("subject_id: {subject_id_string}");
+    println!("subject_id: {student_id_string}");
     //testing
     //#[cfg(not(test))]
     //let _ = show_img(&aligned_for_processing, "resized & aligned image");
+    let (name, subject, date, exam_room, seat) = extract_user_information(&mat, ocr)?;
+    println!("name: {name}");
+    println!("subject: {subject}");
+    println!("date: {date}");
+    println!("exam_room: {exam_room}");
+    println!("seat: {seat}");
     let base64 = mat_to_base64_png(&aligned_for_display).map_err(UploadError::from)?;
     let answer_sheet: AnswerSheet = (subject_id, student_id, answer_sheet).try_into()?;
     Ok((base64, aligned_for_display, answer_sheet))
@@ -369,7 +391,13 @@ fn extract_digits_for_sub_stu(
             })?;
 
             let mut bin = Mat::default();
-            let _ = opencv::imgproc::threshold(&digit_roi, &mut bin, 0.0, 255.0, opencv::imgproc::THRESH_BINARY_INV);
+            let _ = opencv::imgproc::threshold(
+                &digit_roi,
+                &mut bin,
+                0.0,
+                255.0,
+                opencv::imgproc::THRESH_BINARY_INV,
+            );
             let sum: u32 = opencv::core::count_non_zero(&bin)? as u32;
             if temp {
                 if i > 0 {
@@ -387,7 +415,7 @@ fn extract_digits_for_sub_stu(
         digits.push_str(&selected_digit.to_string());
     }
     if temp {
-        println!("Stundet:");
+        println!("Student:");
     } else {
         println!("Subject");
     }
@@ -482,9 +510,117 @@ impl AnswerSheetResult {
     }
 }
 
+fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
+    let name = mat
+        .roi(Rect_ {
+            x: 237,
+            y: 351,
+            width: 495,
+            height: 62,
+        })?
+        .clone_pointee();
+    let subject = mat
+        .roi(Rect_ {
+            x: 174,
+            y: 434,
+            width: 538,
+            height: 50,
+        })?
+        .clone_pointee();
+    let date = mat
+        .roi(Rect_ {
+            x: 392,
+            y: 500,
+            width: 314,
+            height: 60,
+        })?
+        .clone_pointee();
+    let exam_room = mat
+        .roi(Rect_ {
+            x: 234,
+            y: 575,
+            width: 175,
+            height: 57,
+        })?
+        .clone_pointee();
+    let seat = mat
+        .roi(Rect_ {
+            x: 568,
+            y: 575,
+            width: 139,
+            height: 57,
+        })?
+        .clone_pointee();
+
+    Ok((name, subject, date, exam_room, seat))
+}
+
+fn image_to_string(mat: &Mat, ocr: &OcrEngine) -> Result<String, SheetError> {
+    let bytes = mat.data_bytes()?;
+    let img_src = ImageSource::from_bytes(bytes, (mat.cols() as u32, mat.rows() as u32))
+        .map_err(|e| anyhow::anyhow!(e))?;
+    let ocr_input = ocr.prepare_input(img_src)?;
+    let text = ocr.get_text(&ocr_input)?;
+    let rem_nl = text.lines().next().unwrap_or("").to_string();
+
+    Ok(rem_nl)
+}
+
+fn extract_user_information(
+    mat: &Mat,
+    ocr: &OcrEngine,
+) -> Result<(String, String, String, String, String), SheetError> {
+    let temp_dir = "temp";
+    _ = fs::create_dir_all(temp_dir);
+
+    println!("Working directory: {:?}", std::env::current_dir());
+
+    let (name, subject, date, exam_room, seat) = crop_each_part(mat)?;
+
+    //if cfg!(debug_assertions) {
+    //    safe_imwrite("temp/debug_name.png", &name)?;
+    //    safe_imwrite("temp/debug_subject.png", &subject)?;
+    //    safe_imwrite("temp/debug_date.png", &date)?;
+    //    safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
+    //    safe_imwrite("temp/debug_seat.png", &seat)?;
+    //}
+
+    let name_string = image_to_string(&name, ocr)?;
+    let subject_string = image_to_string(&subject, ocr)?;
+    let date_string = image_to_string(&date, ocr)?;
+    let exam_room_string = image_to_string(&exam_room, ocr)?;
+    let seat_string = image_to_string(&seat, ocr)?;
+
+    Ok((
+        name_string,
+        subject_string,
+        date_string,
+        exam_room_string,
+        seat_string,
+    ))
+}
+
+//fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Error> {
+//    if mat.empty() {
+//        println!(
+//            "Warning: attempting to write an empty Mat to {:?}",
+//            path.as_ref()
+//        );
+//    } else {
+//        println!("Writing debug image to {:?}", path.as_ref());
+//    }
+//    imgcodecs::imwrite(
+//        path.as_ref().to_str().unwrap(),
+//        mat,
+//        &opencv::core::Vector::new(),
+//    )
+//}
+
 #[cfg(test)]
 mod unit_tests {
     use std::path::PathBuf;
+
+    use crate::state;
 
     use super::*;
     use base64::prelude::*;
@@ -500,6 +636,10 @@ mod unit_tests {
             FilePath::Path(PathBuf::from("tests/assets/image_002.jpg")),
             FilePath::Path(PathBuf::from("tests/assets/image_003.jpg")),
         ]
+    }
+
+    fn setup_ocr_data() {
+        state::init_model_dir(PathBuf::from("tests/assets"));
     }
 
     fn not_image() -> FilePath {
@@ -567,19 +707,21 @@ mod unit_tests {
 
     #[test]
     fn test_handle_upload_success() {
+        setup_ocr_data();
         let path = test_key_image();
-        let result = handle_upload(path);
+        let result = handle_upload(path, &state::init_thread_ocr());
         assert!(result.is_ok());
 
-        let (base64_string, mat, answer_sheet) = result.unwrap();
+        let (base64_string, mat, _answer_sheet) = result.unwrap();
         assert!(base64_string.starts_with("data:image/png;base64,"));
         assert!(!mat.empty());
     }
 
     #[test]
     fn test_handle_upload_failure() {
+        setup_ocr_data();
         let path = not_image();
-        let result = handle_upload(path);
+        let result = handle_upload(path, &state::init_thread_ocr());
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), UploadError::NotImage));
     }
@@ -661,5 +803,51 @@ mod unit_tests {
             student_id, "65010001",
             "Student ID does not match expected value"
         );
+    }
+
+    #[test]
+    fn check_ocr_function() -> Result<(), SheetError> {
+        setup_ocr_data();
+        let ocr = &state::init_thread_ocr();
+
+        for (i, path) in test_images().into_iter().enumerate() {
+            println!("image #{i}");
+            let mat = read_from_path(path).expect("Failed to read image");
+
+            let (name, subject, date, exam_room, seat) = extract_user_information(&mat, ocr)?;
+            if i == 0 {
+                assert_eq!(name, "Elize Howells", "Name does not match expected value");
+                assert_eq!(
+                    subject, "Mathematics",
+                    "Subject does not match expected value"
+                );
+                assert_eq!(date, "2021-01-01", "Date does not match expected value");
+                assert_eq!(exam_room, "608", "Exam room does not match expected value");
+                assert_eq!(seat, "A02", "Seat does not match expected value");
+            } else if i == 1 {
+                assert_eq!(name, "Marcia Cole", "Name does not match expected value");
+                assert_eq!(
+                    subject, "Mathematics",
+                    "Subject does not match expected value"
+                );
+                assert_eq!(date, "2021-01-01", "Date does not match expected value");
+                assert_eq!(exam_room, "608", "Exam room does not match expected value");
+                assert_eq!(seat, "A03", "Seat does not match expected value");
+            } else {
+                assert_eq!(
+                    name, "Sophie-Louise Greene",
+                    "Name does not match expected value"
+                );
+                assert_eq!(
+                    subject, "Mathematics",
+                    "Subject does not match expected value"
+                );
+                assert_eq!(date, "2021-01-01", "Date does not match expected value");
+                assert_eq!(exam_room, "608", "Exam room does not match expected value");
+                assert_eq!(seat, "A04", "Seat does not match expected value");
+            }
+        }
+
+        Ok(())
     }
 }

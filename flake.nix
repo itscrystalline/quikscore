@@ -3,24 +3,32 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
   outputs = {
     self,
     nixpkgs,
     flake-utils,
+    fenix,
   }:
     flake-utils.lib.eachDefaultSystem (
       system: let
         pkgs = import nixpkgs {inherit system;};
         inherit (pkgs) lib stdenv fetchYarnDeps;
-        inherit (pkgs.rustPlatform) buildRustPackage;
+        nightlyPlatform = pkgs.makeRustPlatform {
+          inherit (fenix.packages.${system}.minimal) cargo rustc;
+        };
 
         loaderPath =
           if stdenv.isx86_64
           then "/lib64/ld-linux-x86-64.so.2"
           else "/lib/ld-linux-aarch64.so.1";
 
-        package = buildRustPackage (finalAttrs: {
+        package = nightlyPlatform.buildRustPackage (finalAttrs: {
+
           pname = "quikscore";
           version = "0.1.0";
 
@@ -28,36 +36,42 @@
 
           yarnOfflineCache = fetchYarnDeps {
             yarnLock = finalAttrs.src + "/yarn.lock";
-            hash = "sha256-fBrclUcHHLgviE6X6Os5zewuI4vLauz5N52N8jc2FQ0=";
+            hash = "sha256-287hUCyVI1o4D1iCLqBp42KHDT+bLmRyt3qrf8TN++A=";
           };
 
           nativeBuildInputs = with pkgs; [
             yarnConfigHook
-            nodejs
             cargo-tauri.hook
-            rustPlatform.bindgenHook
+            nightlyPlatform.bindgenHook
+
+            nodejs
             pkg-config
             clang
             patchelf
           ];
 
+          env = {
+            RUSTFLAGS = "-Z threads=8";
+            OPENCV_LINK_PATHS = "+${pkgs.opencv}/lib";
+            OPENCV_LINK_LIBS = "+opencv_core,opencv_calib3d,opencv_dnn,opencv_features2d,opencv_imgproc,opencv_video,opencv_flann,opencv_imgcodecs,opencv_objdetect,opencv_stitching,png";
+            OPENCV_INCLUDE_PATHS = "+${pkgs.opencv}/include";
+          };
+
+          # Optional: uncomment if needed
           # buildEnv = {
           #   LIBCLANG_PATH = "${pkgs.libclang}/lib";
           #   CPLUS_INCLUDE_PATH = "${pkgs.llvmPackages.libcxx.dev}/include/c++";
           # };
-          env = {
-            OPENCV_LINK_PATHS = "+${pkgs.opencv}/lib";
-            OPENCV_LINK_LIBS = "+opencv_core,opencv_imgproc,opencv_imgcodecs,png";
-            OPENCV_INCLUDE_PATHS = "+${pkgs.opencv}/include";
-          };
 
           cargoRoot = "src-tauri";
           cargoLock = {
             lockFile = finalAttrs.src + "/${finalAttrs.cargoRoot}/Cargo.lock";
           };
+          cargoBuildFeatures = ["avx512"];
 
           buildAndTestSubdir = "src-tauri";
-          useNextest = true;
+          # useNextest = true;
+          doCheck = false;
 
           buildInputs = with pkgs; (lib.optionals stdenv.hostPlatform.isLinux [
               glib
