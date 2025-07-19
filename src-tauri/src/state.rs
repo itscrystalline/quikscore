@@ -74,7 +74,11 @@ pub enum AppStatePipeline {
         key: AnswerKeySheet,
         subject_code: String,
     },
-    Scoring,
+    Scoring {
+        key_image: Mat,
+        key: AnswerKeySheet,
+        subject_code: String,
+    },
     Scored {
         key_image: Mat,
         key: AnswerKeySheet,
@@ -87,7 +91,7 @@ impl Display for AppStatePipeline {
         f.write_str(match self {
             Self::Init => "Init",
             Self::WithKey { .. } => "WithKey",
-            Self::Scoring => "Scoring",
+            Self::Scoring { .. } => "Scoring",
             Self::Scored { .. } => "Scored",
         })
     }
@@ -144,23 +148,7 @@ impl AppState {
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        state.state = AppStatePipeline::Scoring;
-        signal!(
-            channel,
-            AnswerUpload::Processing {
-                total: images_count,
-                started: 0,
-                finished: 0
-            }
-        );
-    }
-    pub fn upload_answer_sheets<R: Runtime, A: Emitter<R> + Manager<R>>(
-        app: &A,
-        channel: &Channel<AnswerUpload>,
-        result: Vec<Result<(String, Mat, AnswerSheet), UploadError>>,
-    ) {
-        let mutex = app.state::<StateMutex>();
-        let mut state = mutex.lock().expect("poisoned");
+
         match &state.state {
             AppStatePipeline::WithKey {
                 key_image,
@@ -172,6 +160,41 @@ impl AppState {
                 key,
                 subject_code,
                 ..
+            } => {
+                state.state = AppStatePipeline::Scoring {
+                    key_image: key_image.clone(),
+                    key: key.clone(),
+                    subject_code: subject_code.clone(),
+                };
+                signal!(
+                    channel,
+                    AnswerUpload::Processing {
+                        total: images_count,
+                        started: 0,
+                        finished: 0
+                    }
+                );
+            }
+            s => signal!(
+                channel,
+                AnswerUpload::Error {
+                    error: format!("Unexpected State: {s}")
+                }
+            ),
+        }
+    }
+    pub fn upload_answer_sheets<R: Runtime, A: Emitter<R> + Manager<R>>(
+        app: &A,
+        channel: &Channel<AnswerUpload>,
+        result: Vec<Result<(String, Mat, AnswerSheet), UploadError>>,
+    ) {
+        let mutex = app.state::<StateMutex>();
+        let mut state = mutex.lock().expect("poisoned");
+        match &state.state {
+            AppStatePipeline::Scoring {
+                key_image,
+                key,
+                subject_code,
             } => {
                 let scored: Vec<
                     Result<(String, Mat, AnswerSheet, AnswerSheetResult), UploadError>,
@@ -388,6 +411,7 @@ mod unit_tests {
     use crate::image::upload_key_image_impl;
     use crate::image::upload_sheet_images_impl;
     use std::sync::Arc;
+    use std::sync::RwLock;
     use std::{path::PathBuf, sync::Mutex};
 
     use crate::state::StateMutex;

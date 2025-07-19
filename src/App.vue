@@ -69,15 +69,18 @@ const answerEventHandler = (msg: AnswerUpload): void => {
       answerProgressBar.value = undefined;
       break;
     case "clear":
+      canUploadKey.value = true;
       answerStatus.value = "";
       answerImages.value = [];
       answerProgressBar.value = undefined;
       break;
     case "almostDone":
+      canUploadKey.value = false;
       answerStatus.value = "Publishing results...";
       answerProgressBar.value = { type: "indeterminate" };
       break;
     case "processing":
+      canUploadKey.value = false;
       const { total, started, finished } = msg.data;
       answerStatus.value = `Processing ${started}/${total} sheets... (${started - finished} in progress)`;
       answerProgressBar.value = { type: "progress", max: total, progressTop: finished, progressBottom: started };
@@ -85,6 +88,7 @@ const answerEventHandler = (msg: AnswerUpload): void => {
     case "done":
       answerStatus.value = "";
       answerImages.value = msg.data.uploaded;
+      canUploadKey.value = answerImages.value.length === 0;
       answerProgressBar.value = undefined;
       break;
     case "error":
@@ -97,6 +101,8 @@ const answerEventHandler = (msg: AnswerUpload): void => {
 const keyImage = ref("");
 const keyStatus = ref("");
 const keyProgressBar = ref(false);
+
+const canUploadKey = ref(true);
 
 const answerImages = ref<AnswerScoreResult[]>([]);
 const answerStatus = ref("");
@@ -140,19 +146,19 @@ async function clearSheets() {
 
     <div class="header">
       <h2>Answer Key</h2>
-      <button :class="`btn-key${answerImages.length !== 0 ? ' btn-disabled' : ''}`" @click="uploadKey"
-        v-bind:disabled="answerImages.length !== 0">{{ keyImage ===
+      <button :class="`btn-key${!canUploadKey ? ' btn-disabled' : ''}`" @click="uploadKey"
+        v-bind:disabled="!canUploadKey">{{ keyImage ===
           ""
           ?
           "📥\nUpload Answer Key..." :
           "Change Answer Key" }}</button>
-      <button :class="`btn-clear${answerImages.length !== 0 ? ' btn-disabled' : ''}`" @click="clearKey"
-        v-bind:disabled="answerImages.length !== 0" v-if="keyImage !== ''">🔄 Clear
+      <button :class="`btn-clear${!canUploadKey ? ' btn-disabled' : ''}`" @click="clearKey"
+        v-bind:disabled="!canUploadKey" v-if="keyImage !== ''">🔄 Clear
         Answer Key</button>
     </div>
     <div class="card">
       <img v-bind:src="keyImage" :style="keyImage == '' ? 'display: none;' : ''"></img>
-      <p class="placeholder" v-if="!keyImage && answerImages.length === 0">{{ keyStatus === "" ? "Upload a key..." :
+      <p class="placeholder" v-if="!keyImage && canUploadKey">{{ keyStatus === "" ? "Upload a key..." :
         keyStatus }}</p>
       <StackedProgressBar v-if="keyProgressBar" type="indeterminate" />
     </div>
