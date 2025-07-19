@@ -568,7 +568,7 @@ fn extract_user_information(
 
     println!("Working directory: {:?}", std::env::current_dir());
 
-    let (name, subject, date, exam_room, seat) = crop_each_part(&mat)?;
+    let (name, subject, date, exam_room, seat) = crop_each_part(mat)?;
 
     //if cfg!(debug_assertions) {
     //    safe_imwrite("temp/debug_name.png", &name)?;
