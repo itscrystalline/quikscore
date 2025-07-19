@@ -800,14 +800,41 @@ mod unit_tests {
 
     #[test]
     fn check_ocr_function() -> Result<(), SheetError> {
+        // workaround needed to prevent `STATUS_ENTRYPOINT_NOT_FOUND` error in tests 
+        // see https://github.com/tauri-apps/tauri/pull/4383#issuecomment-1212221864 
+        let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap(); 
+        let target_env = std::env::var("CARGO_CFG_TARGET_ENV"); 
+        let is_tauri_workspace = std::env::var("__TAURI_WORKSPACE__").map_or(false, |v| v == "true"); 
+        if is_tauri_workspace && target_os == "windows" && Ok("msvc") == target_env.as_deref() { 
+                embed_manifest_for_tests(); 
+        } 
+
+        fn embed_manifest_for_tests() { 
+            static WINDOWS_MANIFEST_FILE: &str = "windows-app-manifest.xml"; 
+        
+            let manifest = std::env::current_dir() 
+                .unwrap() 
+                .join("../../../crates/tauri-build/src") 
+                .join(WINDOWS_MANIFEST_FILE); 
+        
+            println!("cargo:rerun-if-changed={}", manifest.display()); 
+            // Embed the Windows application manifest file. 
+            println!("cargo:rustc-link-arg=/MANIFEST:EMBED"); 
+            println!( 
+                "cargo:rustc-link-arg=/MANIFESTINPUT:{}", 
+                 manifest.to_str().unwrap() 
+            ); 
+            // Turn linker warnings into errors. 
+            println!("cargo:rustc-link-arg=/WX"); 
+        } 
+    
         setup_ocr_data();
         let ocr = &state::init_thread_ocr();
 
         for (i, path) in test_images().into_iter().enumerate() {
             let mat = read_from_path(path).expect("Failed to read image");
-            let resized = resize_relative_img(&mat, 0.3333).expect("Resize failed");
 
-            let (name, subject, date, exam_room, seat) = extract_user_information(&resized, ocr)?;
+            let (name, subject, date, exam_room, seat) = extract_user_information(&mat, ocr)?;
             if i == 0 {
                 assert_eq!(name, "Elize Howells", "Name does not match expected value");
                 assert_eq!(
