@@ -171,6 +171,9 @@ fn handle_upload(
     let (subject_id_s_f, student_id_s_f) = extract_subject_student_from_written_field(&resized, ocr)?;
     println!("subject_id: {subject_id_s_f}");
     println!("subject_id: {student_id_s_f}");
+    if subject_id_string != subject_id_s_f || student_id_string != student_id_s_f {
+        println!("User Fon and Enter differently");
+    }
     //testing
     //#[cfg(not(test))]
     //let _ = show_img(&aligned_for_processing, "resized & aligned image");
@@ -615,16 +618,16 @@ fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Erro
 fn crop_subject_stuent(mat: &Mat) -> Result<(Mat, Mat), SheetError> {
    let subject = mat
         .roi(Rect_ {
-            x: 5,
-            y: 213,
+            x: 40,
+            y: 245,
             width: 43,
             height: 19,
         })?
         .clone_pointee();
     let student = mat
         .roi(Rect_ {
-            x: 75,
-            y: 213,
+            x: 112,
+            y: 245,
             width: 120,
             height: 18,
         })?
@@ -634,8 +637,11 @@ fn crop_subject_stuent(mat: &Mat) -> Result<(Mat, Mat), SheetError> {
 
 fn extract_subject_student_from_written_field(mat: &Mat, ocr: &OcrEngine) -> Result<(String, String), SheetError> {
     let (subject_f, student_f) = crop_subject_stuent(mat)?;
-    let subject = image_to_string(&subject_f, ocr)?;
-    let student = image_to_string(&student_f, ocr)?;
+    let rsub = image_to_string(&subject_f, ocr)?;
+    let rstu = image_to_string(&student_f, ocr)?;
+
+    let subject = clean_text(&rsub);
+    let student = clean_text(&rstu);
 
     safe_imwrite("temp/debug_subject_f.png", &subject_f)?;
     safe_imwrite("temp/debug_student_f.png", &student_f)?;
@@ -645,6 +651,23 @@ fn extract_subject_student_from_written_field(mat: &Mat, ocr: &OcrEngine) -> Res
         student
     ))
 }
+
+fn clean_text(raw: &str) -> String {
+    raw.chars()
+        .filter_map(|c| {
+            if c == 'o' || c == 'O' {
+                Some('0')
+            } else if c.is_ascii_digit() {
+                Some(c)
+            } else if c.is_ascii_alphabetic() {
+                None
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 
 #[cfg(test)]
 mod unit_tests {
