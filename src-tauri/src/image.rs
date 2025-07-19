@@ -413,14 +413,14 @@ fn extract_digits_for_sub_stu(
         }
         digits.push_str(&selected_digit.to_string());
     }
-    if temp {
-        println!("Student:");
-    } else {
-        println!("Subject");
-    }
-    for (i, row) in v.iter().enumerate() {
-        println!("Row {i}: {row:?}");
-    }
+    //if temp {
+    //    println!("Student:");
+    //} else {
+    //    println!("Subject");
+    //}
+    //for (i, row) in v.iter().enumerate() {
+    //    println!("Row {i}: {row:?}");
+    //}
     Ok(digits)
 }
 
@@ -614,6 +614,37 @@ fn extract_user_information(
 //        &opencv::core::Vector::new(),
 //    )
 //}
+
+fn crop_subject_stuent(mat: &Mat) -> Result<(Mat, Mat), SheetError> {
+   let subject = mat
+        .roi(Rect_ {
+            x: 5,
+            y: 213,
+            width: 43,
+            height: 19,
+        })?
+        .clone_pointee();
+    let student = mat
+        .roi(Rect_ {
+            x: 75,
+            y: 213,
+            width: 120,
+            height: 18,
+        })?
+        .clone_pointee();
+   Ok((subject, student))
+}
+
+fn extract_subject_student_from_written_field(mat: &Mat, ocr: &OcrEngine) -> Result<(String, String), SheetError> {
+    let (subject_f, student_f) = crop_subject_stuent(mat)?;
+    let subject = image_to_string(&subject_f, ocr)?;
+    let student = image_to_string(&student_f, ocr)?;
+
+    Ok((
+        subject,
+        student
+    ))
+}
 
 #[cfg(test)]
 mod unit_tests {
