@@ -77,14 +77,7 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
 
     let images_count = paths.len();
 
-    signal!(
-        channel,
-        AnswerUpload::Processing {
-            total: images_count,
-            started: 0,
-            finished: 0
-        }
-    );
+    AppState::mark_scoring(app, &channel, images_count);
 
     let (tx, mut rx) = tauri::async_runtime::channel::<ProcessingState>(images_count);
 
@@ -119,7 +112,7 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
                 ProcessingState::Finishing => finished += 1,
                 ProcessingState::Done(list) => {
                     signal!(channel, AnswerUpload::AlmostDone);
-                    AppState::upload_answer_sheets(app, channel, list);
+                    AppState::upload_answer_sheets(app, &channel, list);
                     processing_thread.abort();
                     break;
                 }
