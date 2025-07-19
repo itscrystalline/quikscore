@@ -9,9 +9,10 @@ use base64::Engine;
 use itertools::Itertools;
 use opencv::core::{Mat, Rect_, Size, Vector};
 use opencv::imgproc::{COLOR_GRAY2RGBA, FILLED, LINE_8, THRESH_BINARY};
-use opencv::{core::MatTraitConstManual, imgproc, prelude::*};
+use opencv::{core::MatTraitConstManual, imgproc, prelude::*, imgcodecs};
 use rayon::prelude::*;
 use std::fs;
+use std::path::Path;
 use tauri_plugin_dialog::FilePath;
 // use tesseract_rs::TesseractAPI;
 
@@ -167,8 +168,9 @@ fn handle_upload(
 
     let subject_id_string = extract_digits_for_sub_stu(&subject_id, 2, false)?;
     let student_id_string = extract_digits_for_sub_stu(&student_id, 9, true)?;
-    println!("subject_id: {subject_id_string}");
-    println!("subject_id: {student_id_string}");
+    let (subject_id_s_f, student_id_s_f) = extract_subject_student_from_written_field(&resized, ocr)?;
+    println!("subject_id: {subject_id_s_f}");
+    println!("subject_id: {student_id_s_f}");
     //testing
     //#[cfg(not(test))]
     //let _ = show_img(&aligned_for_processing, "resized & aligned image");
@@ -594,21 +596,21 @@ fn extract_user_information(
     ))
 }
 
-//fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Error> {
-//    if mat.empty() {
-//        println!(
-//            "Warning: attempting to write an empty Mat to {:?}",
-//            path.as_ref()
-//        );
-//    } else {
-//        println!("Writing debug image to {:?}", path.as_ref());
-//    }
-//    imgcodecs::imwrite(
-//        path.as_ref().to_str().unwrap(),
-//        mat,
-//        &opencv::core::Vector::new(),
-//    )
-//}
+fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Error> {
+    if mat.empty() {
+        println!(
+            "Warning: attempting to write an empty Mat to {:?}",
+            path.as_ref()
+        );
+    } else {
+        println!("Writing debug image to {:?}", path.as_ref());
+    }
+    imgcodecs::imwrite(
+        path.as_ref().to_str().unwrap(),
+        mat,
+        &opencv::core::Vector::new(),
+    )
+}
 
 fn crop_subject_stuent(mat: &Mat) -> Result<(Mat, Mat), SheetError> {
    let subject = mat
@@ -634,6 +636,9 @@ fn extract_subject_student_from_written_field(mat: &Mat, ocr: &OcrEngine) -> Res
     let (subject_f, student_f) = crop_subject_stuent(mat)?;
     let subject = image_to_string(&subject_f, ocr)?;
     let student = image_to_string(&student_f, ocr)?;
+
+    safe_imwrite("temp/debug_subject_f.png", &subject_f)?;
+    safe_imwrite("temp/debug_student_f.png", &student_f)?;
 
     Ok((
         subject,
