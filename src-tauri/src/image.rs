@@ -9,7 +9,7 @@ use base64::Engine;
 use itertools::Itertools;
 use opencv::core::{Mat, Rect_, Size, Vector};
 use opencv::imgproc::{COLOR_GRAY2RGBA, FILLED, LINE_8, THRESH_BINARY};
-use opencv::{core::MatTraitConstManual, imgproc, prelude::*, imgcodecs};
+use opencv::{core::MatTraitConstManual, imgcodecs, imgproc, prelude::*};
 use rayon::prelude::*;
 use std::fs;
 use std::path::Path;
@@ -165,16 +165,17 @@ fn handle_upload(
 
     let subject_id_string = extract_digits_for_sub_stu(&subject_id, 2, false)?;
     let student_id_string = extract_digits_for_sub_stu(&student_id, 9, true)?;
-    let (subject_id_s_f, student_id_s_f) = extract_subject_student_from_written_field(&resized, ocr)?;
-    println!("subject_id: {subject_id_s_f}");
-    println!("subject_id: {student_id_s_f}");
-    if subject_id_string != subject_id_s_f || student_id_string != student_id_s_f {
-        println!("User Fon and Enter differently");
-    }
     //testing
     //#[cfg(not(test))]
     //let _ = show_img(&aligned_for_processing, "resized & aligned image");
     if let Some(ocr) = ocr {
+        let (subject_id_s_f, student_id_s_f) =
+            extract_subject_student_from_written_field(&resized, ocr)?;
+        println!("subject_id: {subject_id_s_f}");
+        println!("subject_id: {student_id_s_f}");
+        if subject_id_string != subject_id_s_f || student_id_string != student_id_s_f {
+            println!("User Fon and Enter differently");
+        }
         let (name, subject, date, exam_room, seat) = extract_user_information(&mat, ocr)?;
         println!("name: {name}");
         println!("subject: {subject}");
@@ -621,7 +622,7 @@ fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Erro
 }
 
 fn crop_subject_stuent(mat: &Mat) -> Result<(Mat, Mat), SheetError> {
-   let subject = mat
+    let subject = mat
         .roi(Rect_ {
             x: 40,
             y: 245,
@@ -637,10 +638,13 @@ fn crop_subject_stuent(mat: &Mat) -> Result<(Mat, Mat), SheetError> {
             height: 18,
         })?
         .clone_pointee();
-   Ok((subject, student))
+    Ok((subject, student))
 }
 
-fn extract_subject_student_from_written_field(mat: &Mat, ocr: &OcrEngine) -> Result<(String, String), SheetError> {
+fn extract_subject_student_from_written_field(
+    mat: &Mat,
+    ocr: &OcrEngine,
+) -> Result<(String, String), SheetError> {
     let (subject_f, student_f) = crop_subject_stuent(mat)?;
     let rsub = image_to_string(&subject_f, ocr)?;
     let rstu = image_to_string(&student_f, ocr)?;
@@ -651,10 +655,7 @@ fn extract_subject_student_from_written_field(mat: &Mat, ocr: &OcrEngine) -> Res
     safe_imwrite("temp/debug_subject_f.png", &subject_f)?;
     safe_imwrite("temp/debug_student_f.png", &student_f)?;
 
-    Ok((
-        subject,
-        student
-    ))
+    Ok((subject, student))
 }
 
 fn clean_text(raw: &str) -> String {
@@ -670,7 +671,6 @@ fn clean_text(raw: &str) -> String {
         })
         .collect()
 }
-
 
 #[cfg(test)]
 mod unit_tests {
@@ -869,31 +869,23 @@ mod unit_tests {
         for (i, path) in test_images().into_iter().enumerate() {
             let mat = read_from_path(path).expect("Failed to read image");
             let resized = resize_relative_img(&mat, 0.3333).expect("Resize failed");
-            let (subject_id,student_id) = extract_subject_student_from_written_field(&resized, ocr)?;
+            let (subject_id, student_id) =
+                extract_subject_student_from_written_field(&resized, ocr)?;
 
             if i == 0 {
-                assert_eq!(
-                    subject_id, "10",
-                    "Subject ID does not match expected value"
-                );
+                assert_eq!(subject_id, "10", "Subject ID does not match expected value");
                 assert_eq!(
                     student_id, "65010002",
                     "Student ID does not match expected value"
                 );
             } else if i == 1 {
-                assert_eq!(
-                    subject_id, "10",
-                    "Subject ID does not match expected value"
-                );
+                assert_eq!(subject_id, "10", "Subject ID does not match expected value");
                 assert_eq!(
                     student_id, "65010003",
                     "Student ID does not match expected value"
                 );
             } else {
-                assert_eq!(
-                    subject_id, "10",
-                    "Subject ID does not match expected value"
-                );
+                assert_eq!(subject_id, "10", "Subject ID does not match expected value");
                 assert_eq!(
                     student_id, "65010004",
                     "Student ID does not match expected value"
