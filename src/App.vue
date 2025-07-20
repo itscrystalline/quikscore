@@ -6,7 +6,16 @@ import { download } from '@tauri-apps/plugin-upload';
 import * as path from '@tauri-apps/api/path';
 import { exists, mkdir } from "@tauri-apps/plugin-fs";
 
-type TimeElapsed = | "notCounting" | { count: number, counter: number };
+type TimeElapsed = | "notCounting" | number;
+const hms = (secs: number): string => {
+  var h = Math.floor(secs / 3600);
+  var m = Math.floor(secs % 3600 / 60);
+  var s = Math.floor(secs % 3600 % 60);
+  var hDisplay = h > 0 ? h + "h " : "";
+  var mDisplay = m > 0 ? m + "m " : "";
+  var sDisplay = s > 0 ? s + "s" : "";
+  return hDisplay + mDisplay + sDisplay;
+}
 
 async function ensureModel(textRef: Ref<string>): Promise<string> {
   const cache = await path.cacheDir();
@@ -87,15 +96,16 @@ const answerEventHandler = (msg: AnswerUpload): void => {
     case "processing":
       canUploadKey.value = false;
       const { total, started, finished } = msg.data;
-      answerStatus.value = `Processing ${started}/${total} sheets... (${started - finished} in progress, ${typeof elapsed.value == "object" ? elapsed.value.count : ''}s elapsed)`;
+      var secsPerImage = -1;
+      if (elapsed.value == "notCounting") {
+        elapsed.value = Date.now();
+      } else if (finished > 0) {
+        const timePassed = (Date.now() - elapsed.value) / 1000;
+        secsPerImage = Math.round(timePassed / finished);
+      }
+      const leftText = secsPerImage != -1 ? `, ${hms(secsPerImage * (total - finished))} left` : '';
+      answerStatus.value = `Processing ${started}/${total} sheets... (${started - finished} in progress${leftText})`;
       answerProgressBar.value = { type: "progress", max: total, progressTop: finished, progressBottom: started };
-      elapsed.value = {
-        count: 0, counter: setTimeout(() => {
-          if (elapsed.value != "notCounting") {
-            elapsed.value.count += 1;
-          }
-        }, 1000)
-      };
       break;
     case "done":
       answerStatus.value = "";
