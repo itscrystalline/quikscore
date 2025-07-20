@@ -168,7 +168,7 @@ fn handle_upload(
 
     let subject_id_string = extract_digits_for_sub_stu(&subject_id, 2, false)?;
     let student_id_string = extract_digits_for_sub_stu(&student_id, 9, true)?;
-    let (subject_id_s_f, student_id_s_f) = extract_subject_student_from_written_field(&resized, ocr)?;
+    let (subject_id_s_f, student_id_s_f) = extract_subject_student_from_written_field(&resized, ocr.expect("REASON"))?;
     println!("subject_id: {subject_id_s_f}");
     println!("subject_id: {student_id_s_f}");
     if subject_id_string != subject_id_s_f || student_id_string != student_id_s_f {
@@ -866,7 +866,7 @@ mod unit_tests {
         for (i, path) in test_images().into_iter().enumerate() {
             let mat = read_from_path(path).expect("Failed to read image");
             let resized = resize_relative_img(&mat, 0.3333).expect("Resize failed");
-            let (subject_id,student_id) = extract_subject_student_from_written_field(&resized, &ocr)?;
+            let (subject_id,student_id) = extract_subject_student_from_written_field(&resized, ocr)?;
 
             if i == 0 {
                 assert_eq!(
