@@ -55,6 +55,7 @@ in {
   languages.rust = {
     enable = true;
     channel = "nightly";
+    version = "2025-06-08";
     rustflags = "-Z threads=8";
     components = ["rustc" "cargo" "clippy" "rustfmt" "rust-analyzer"];
   };
