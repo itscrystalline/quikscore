@@ -866,7 +866,7 @@ mod unit_tests {
         for (i, path) in test_images().into_iter().enumerate() {
             let mat = read_from_path(path).expect("Failed to read image");
             let resized = resize_relative_img(&mat, 0.3333).expect("Resize failed");
-            let (subject_id,student_id) = extract_subject_student_from_written_field(&resized, ocr)?;
+            let (subject_id,student_id) = extract_subject_student_from_written_field(&resized, &ocr)?;
 
             if i == 0 {
                 assert_eq!(
