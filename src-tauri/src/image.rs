@@ -9,9 +9,10 @@ use base64::Engine;
 use itertools::Itertools;
 use opencv::core::{Mat, Rect_, Size, Vector};
 use opencv::imgproc::{COLOR_GRAY2RGBA, FILLED, LINE_8, THRESH_BINARY};
-use opencv::{core::MatTraitConstManual, imgproc, prelude::*};
+use opencv::{core::MatTraitConstManual, imgcodecs, imgproc, prelude::*};
 use rayon::prelude::*;
 use std::fs;
+use std::path::Path;
 use tauri_plugin_dialog::FilePath;
 // use tesseract_rs::TesseractAPI;
 
@@ -164,12 +165,17 @@ fn handle_upload(
 
     let subject_id_string = extract_digits_for_sub_stu(&subject_id, 2, false)?;
     let student_id_string = extract_digits_for_sub_stu(&student_id, 9, true)?;
-    println!("subject_id: {subject_id_string}");
-    println!("subject_id: {student_id_string}");
     //testing
     //#[cfg(not(test))]
     //let _ = show_img(&aligned_for_processing, "resized & aligned image");
     if let Some(ocr) = ocr {
+        let (subject_id_s_f, student_id_s_f) =
+            extract_subject_student_from_written_field(&resized, ocr)?;
+        println!("subject_id: {subject_id_s_f}");
+        println!("subject_id: {student_id_s_f}");
+        if subject_id_string != subject_id_s_f || student_id_string != student_id_s_f {
+            println!("User Fon and Enter differently");
+        }
         let (name, subject, date, exam_room, seat) = extract_user_information(&mat, ocr)?;
         println!("name: {name}");
         println!("subject: {subject}");
@@ -413,14 +419,14 @@ fn extract_digits_for_sub_stu(
         }
         digits.push_str(&selected_digit.to_string());
     }
-    if temp {
-        println!("Student:");
-    } else {
-        println!("Subject");
-    }
-    for (i, row) in v.iter().enumerate() {
-        println!("Row {i}: {row:?}");
-    }
+    //if temp {
+    //    println!("Student:");
+    //} else {
+    //    println!("Subject");
+    //}
+    //for (i, row) in v.iter().enumerate() {
+    //    println!("Row {i}: {row:?}");
+    //}
     Ok(digits)
 }
 
@@ -599,21 +605,72 @@ fn extract_user_information(
     ))
 }
 
-//fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Error> {
-//    if mat.empty() {
-//        println!(
-//            "Warning: attempting to write an empty Mat to {:?}",
-//            path.as_ref()
-//        );
-//    } else {
-//        println!("Writing debug image to {:?}", path.as_ref());
-//    }
-//    imgcodecs::imwrite(
-//        path.as_ref().to_str().unwrap(),
-//        mat,
-//        &opencv::core::Vector::new(),
-//    )
-//}
+fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Error> {
+    if mat.empty() {
+        println!(
+            "Warning: attempting to write an empty Mat to {:?}",
+            path.as_ref()
+        );
+    } else {
+        println!("Writing debug image to {:?}", path.as_ref());
+    }
+    imgcodecs::imwrite(
+        path.as_ref().to_str().unwrap(),
+        mat,
+        &opencv::core::Vector::new(),
+    )
+}
+
+fn crop_subject_stuent(mat: &Mat) -> Result<(Mat, Mat), SheetError> {
+    let subject = mat
+        .roi(Rect_ {
+            x: 40,
+            y: 245,
+            width: 43,
+            height: 19,
+        })?
+        .clone_pointee();
+    let student = mat
+        .roi(Rect_ {
+            x: 112,
+            y: 245,
+            width: 120,
+            height: 18,
+        })?
+        .clone_pointee();
+    Ok((subject, student))
+}
+
+fn extract_subject_student_from_written_field(
+    mat: &Mat,
+    ocr: &OcrEngine,
+) -> Result<(String, String), SheetError> {
+    let (subject_f, student_f) = crop_subject_stuent(mat)?;
+    let rsub = image_to_string(&subject_f, ocr)?;
+    let rstu = image_to_string(&student_f, ocr)?;
+
+    let subject = clean_text(&rsub);
+    let student = clean_text(&rstu);
+
+    safe_imwrite("temp/debug_subject_f.png", &subject_f)?;
+    safe_imwrite("temp/debug_student_f.png", &student_f)?;
+
+    Ok((subject, student))
+}
+
+fn clean_text(raw: &str) -> String {
+    raw.chars()
+        .filter_map(|c| {
+            if c == 'o' || c == 'O' {
+                Some('0')
+            } else if c.is_ascii_digit() {
+                Some(c)
+            } else {
+                None
+            }
+        })
+        .collect()
+}
 
 #[cfg(test)]
 mod unit_tests {
@@ -802,6 +859,40 @@ mod unit_tests {
             student_id, "65010001",
             "Student ID does not match expected value"
         );
+    }
+
+    #[test]
+    fn check_extracted_ids_ocr() -> Result<(), SheetError> {
+        setup_ocr_data();
+        let ocr = &state::init_thread_ocr();
+
+        for (i, path) in test_images().into_iter().enumerate() {
+            let mat = read_from_path(path).expect("Failed to read image");
+            let resized = resize_relative_img(&mat, 0.3333).expect("Resize failed");
+            let (subject_id, student_id) =
+                extract_subject_student_from_written_field(&resized, ocr)?;
+
+            if i == 0 {
+                assert_eq!(subject_id, "10", "Subject ID does not match expected value");
+                assert_eq!(
+                    student_id, "65010002",
+                    "Student ID does not match expected value"
+                );
+            } else if i == 1 {
+                assert_eq!(subject_id, "10", "Subject ID does not match expected value");
+                assert_eq!(
+                    student_id, "65010003",
+                    "Student ID does not match expected value"
+                );
+            } else {
+                assert_eq!(subject_id, "10", "Subject ID does not match expected value");
+                assert_eq!(
+                    student_id, "65010004",
+                    "Student ID does not match expected value"
+                );
+            }
+        }
+        Ok(())
     }
 
     #[test]
