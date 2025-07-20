@@ -3,8 +3,8 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    fenix = {
-      url = "github:nix-community/fenix";
+    oxalica = {
+      url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -12,14 +12,17 @@
     self,
     nixpkgs,
     flake-utils,
-    fenix,
+    oxalica,
   }:
     flake-utils.lib.eachDefaultSystem (
       system: let
-        pkgs = import nixpkgs {inherit system;};
+        overlays = [(import oxalica)];
+        pkgs = import nixpkgs {inherit system overlays;};
         inherit (pkgs) lib stdenv fetchYarnDeps;
+        nightlyVersion = "2025-06-08";
         nightlyPlatform = pkgs.makeRustPlatform {
-          inherit (fenix.packages.${system}.minimal) cargo rustc;
+          cargo = pkgs.rust-bin.nightly.${nightlyVersion}.minimal;
+          rustc = pkgs.rust-bin.nightly.${nightlyVersion}.minimal;
         };
 
         loaderPath =

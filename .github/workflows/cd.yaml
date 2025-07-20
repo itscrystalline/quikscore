@@ -36,6 +36,8 @@ jobs:
 
     - name: Install Nix
       uses: cachix/install-nix-action@v30
+      with:
+        nix_path: nixpkgs=channel:nixos-25.05
 
     - name: Set up Cachix cache (optional)
       uses: cachix/cachix-action@v15
@@ -75,9 +77,9 @@ jobs:
         useLockFile: true
 
     - name: Install Rust
-      uses: dtolnay/rust-toolchain@stable
+      uses: dtolnay/rust-toolchain@master
       with: 
-        toolchain: nightly
+        toolchain: nightly-2025-06-08
 
     - name: Install OpenCV & Other dependencies (sccache, cmake, llvm)
       run: | 
