@@ -6,6 +6,8 @@ import { download } from '@tauri-apps/plugin-upload';
 import * as path from '@tauri-apps/api/path';
 import { exists, mkdir } from "@tauri-apps/plugin-fs";
 
+type TimeElapsed = | "notCounting" | { count: number, counter: number };
+
 async function ensureModel(textRef: Ref<string>): Promise<string> {
   const cache = await path.cacheDir();
   const modelPath = await path.join(cache, "quikscore");
@@ -67,33 +69,45 @@ const answerEventHandler = (msg: AnswerUpload): void => {
     case "cancelled":
       answerStatus.value = "User cancelled upload";
       answerProgressBar.value = undefined;
+      elapsed.value = "notCounting";
       break;
     case "clear":
       canUploadKey.value = true;
       answerStatus.value = "";
       answerImages.value = [];
       answerProgressBar.value = undefined;
+      elapsed.value = "notCounting";
       break;
     case "almostDone":
       canUploadKey.value = false;
       answerStatus.value = "Publishing results...";
       answerProgressBar.value = { type: "indeterminate" };
+      elapsed.value = "notCounting";
       break;
     case "processing":
       canUploadKey.value = false;
       const { total, started, finished } = msg.data;
-      answerStatus.value = `Processing ${started}/${total} sheets... (${started - finished} in progress)`;
+      answerStatus.value = `Processing ${started}/${total} sheets... (${started - finished} in progress, ${typeof elapsed.value == "object" ? elapsed.value.count : ''}s elapsed)`;
       answerProgressBar.value = { type: "progress", max: total, progressTop: finished, progressBottom: started };
+      elapsed.value = {
+        count: 0, counter: setTimeout(() => {
+          if (elapsed.value != "notCounting") {
+            elapsed.value.count += 1;
+          }
+        }, 1000)
+      };
       break;
     case "done":
       answerStatus.value = "";
       answerImages.value = msg.data.uploaded;
       canUploadKey.value = answerImages.value.length === 0;
       answerProgressBar.value = undefined;
+      elapsed.value = "notCounting";
       break;
     case "error":
-      answerStatus.value = `Error uploading sheets: ${msg.data.error}`;
+      answerStatus.value = `Error uploading sheets: ${msg.data.error} `;
       answerProgressBar.value = undefined;
+      elapsed.value = "notCounting";
       break;
   }
 }
@@ -107,6 +121,8 @@ const canUploadKey = ref(true);
 const answerImages = ref<AnswerScoreResult[]>([]);
 const answerStatus = ref("");
 const answerProgressBar = ref<undefined | ProgressBarProps>(undefined);
+
+const elapsed = ref<TimeElapsed>("notCounting");
 
 async function uploadKey() {
   const path = await ensureModel(keyStatus);
