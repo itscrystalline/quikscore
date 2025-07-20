@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Ref, ref } from "vue";
+import { Ref, ref, watch } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { AnswerScoreResult, AnswerUpload, KeyUpload } from "./messages";
 import { download } from '@tauri-apps/plugin-upload';
@@ -122,6 +122,9 @@ const answerEventHandler = (msg: AnswerUpload): void => {
   }
 }
 
+const ocr = ref(true);
+watch(ocr, async (new_ocr, _) => { await invoke("set_ocr", { ocr: new_ocr }) });
+
 const keyImage = ref("");
 const keyStatus = ref("");
 const keyProgressBar = ref(false);
@@ -169,6 +172,10 @@ async function clearSheets() {
     </div>
     <p class="credits">KOSEN-KMITL PBL Year 3 (C14, C35, C41, C43)</p>
     <p class="instructions">Upload your key sheet and some answer sheets!</p>
+    <div class="header" style="justify-content: center;">
+      <input type="checkbox" id="ocr-ck" v-model="ocr" />
+      <label for="ocr-ck" style="padding-left: 1vh;">Enable OCR</label>
+    </div>
 
     <div class="header">
       <h2>Answer Key</h2>

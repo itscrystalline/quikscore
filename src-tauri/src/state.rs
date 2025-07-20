@@ -57,12 +57,17 @@ macro_rules! signal {
 #[derive(Default)]
 pub struct AppState {
     state: AppStatePipeline,
-    _options: Options,
+    options: Options,
 }
 
-#[derive(Default)]
+#[derive(Copy, Clone)]
 pub struct Options {
-    _ocr: bool,
+    pub ocr: bool,
+}
+impl Default for Options {
+    fn default() -> Self {
+        Self { ocr: true }
+    }
 }
 
 #[derive(Default)]
@@ -289,6 +294,16 @@ impl AppState {
             signal!(channel, AnswerUpload::Clear);
         }
     }
+    pub fn set_ocr<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A, ocr: bool) {
+        let mutex = app.state::<StateMutex>();
+        let mut state = mutex.lock().expect("poisoned");
+        state.options.ocr = ocr;
+    }
+    pub fn get_options<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A) -> Options {
+        let mutex = app.state::<StateMutex>();
+        let state = mutex.lock().expect("poisoned");
+        state.options
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -411,7 +426,6 @@ mod unit_tests {
     use crate::image::upload_key_image_impl;
     use crate::image::upload_sheet_images_impl;
     use std::sync::Arc;
-    use std::sync::RwLock;
     use std::{path::PathBuf, sync::Mutex};
 
     use crate::state::StateMutex;

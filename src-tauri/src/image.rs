@@ -19,7 +19,9 @@ use tauri::{Emitter, Manager, Runtime};
 
 use opencv::imgcodecs::{imencode, imread, ImreadModes};
 
-use crate::state::{Answer, AnswerSheet, AnswerUpload, AppState, KeyUpload, QuestionGroup};
+use crate::state::{
+    Answer, AnswerSheet, AnswerUpload, AppState, KeyUpload, Options, QuestionGroup,
+};
 
 macro_rules! new_mat_copy {
     ($orig: ident) => {{
@@ -45,7 +47,8 @@ pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         signal!(channel, KeyUpload::Cancelled);
         return;
     };
-    match handle_upload(file_path, &state::init_thread_ocr()) {
+    let Options { ocr } = AppState::get_options(app);
+    match handle_upload(file_path, ocr.then(state::init_thread_ocr).as_ref()) {
         Ok((base64_image, mat, key)) => {
             let subject = key.subject_code.clone();
             AppState::upload_key(app, channel, base64_image, mat, subject, key.into())
@@ -76,6 +79,7 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     };
 
     let images_count = paths.len();
+    let Options { ocr } = AppState::get_options(app);
 
     AppState::mark_scoring(app, &channel, images_count);
 
@@ -85,10 +89,10 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         let base64_list: Vec<Result<(String, Mat, AnswerSheet), UploadError>> = paths
             .into_par_iter()
             .map_init(
-                || (tx.clone(), state::init_thread_ocr()),
+                || (tx.clone(), ocr.then(state::init_thread_ocr)),
                 |(tx, ocr), file_path| {
                     _ = tx.try_send(ProcessingState::Starting);
-                    let res = handle_upload(file_path, ocr);
+                    let res = handle_upload(file_path, ocr.as_ref());
                     _ = tx.try_send(ProcessingState::Finishing);
                     res
                 },
@@ -150,7 +154,7 @@ pub fn resize_relative_img(src: &Mat, relative: f64) -> opencv::Result<Mat> {
 
 fn handle_upload(
     path: FilePath,
-    ocr: &OcrEngine,
+    ocr: Option<&OcrEngine>,
 ) -> Result<(String, Mat, AnswerSheet), UploadError> {
     let mat = read_from_path(path)?;
     let resized = resize_relative_img(&mat, 0.3333).map_err(UploadError::from)?;
@@ -165,12 +169,14 @@ fn handle_upload(
     //testing
     //#[cfg(not(test))]
     //let _ = show_img(&aligned_for_processing, "resized & aligned image");
-    let (name, subject, date, exam_room, seat) = extract_user_information(&mat, ocr)?;
-    println!("name: {name}");
-    println!("subject: {subject}");
-    println!("date: {date}");
-    println!("exam_room: {exam_room}");
-    println!("seat: {seat}");
+    if let Some(ocr) = ocr {
+        let (name, subject, date, exam_room, seat) = extract_user_information(&mat, ocr)?;
+        println!("name: {name}");
+        println!("subject: {subject}");
+        println!("date: {date}");
+        println!("exam_room: {exam_room}");
+        println!("seat: {seat}");
+    }
     let base64 = mat_to_base64_png(&aligned_for_display).map_err(UploadError::from)?;
     let answer_sheet: AnswerSheet = (subject_id, student_id, answer_sheet).try_into()?;
     Ok((base64, aligned_for_display, answer_sheet))
@@ -702,7 +708,7 @@ mod unit_tests {
     fn test_handle_upload_success() {
         setup_ocr_data();
         let path = test_key_image();
-        let result = handle_upload(path, &state::init_thread_ocr());
+        let result = handle_upload(path, Some(&state::init_thread_ocr()));
         assert!(result.is_ok());
 
         let (base64_string, mat, _answer_sheet) = result.unwrap();
@@ -714,7 +720,7 @@ mod unit_tests {
     fn test_handle_upload_failure() {
         setup_ocr_data();
         let path = not_image();
-        let result = handle_upload(path, &state::init_thread_ocr());
+        let result = handle_upload(path, Some(&state::init_thread_ocr()));
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), UploadError::NotImage));
     }
