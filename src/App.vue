@@ -6,6 +6,17 @@ import { download } from '@tauri-apps/plugin-upload';
 import * as path from '@tauri-apps/api/path';
 import { exists, mkdir } from "@tauri-apps/plugin-fs";
 
+type TimeElapsed = | "notCounting" | number;
+const hms = (secs: number): string => {
+  var h = Math.floor(secs / 3600);
+  var m = Math.floor(secs % 3600 / 60);
+  var s = Math.floor(secs % 3600 % 60);
+  var hDisplay = h > 0 ? h + "h " : "";
+  var mDisplay = m > 0 ? m + "m " : "";
+  var sDisplay = s > 0 ? s + "s" : "";
+  return hDisplay + mDisplay + sDisplay;
+}
+
 async function ensureModel(textRef: Ref<string>): Promise<string> {
   const cache = await path.cacheDir();
   const modelPath = await path.join(cache, "quikscore");
@@ -67,22 +78,33 @@ const answerEventHandler = (msg: AnswerUpload): void => {
     case "cancelled":
       answerStatus.value = "User cancelled upload";
       answerProgressBar.value = undefined;
+      elapsed.value = "notCounting";
       break;
     case "clear":
       canUploadKey.value = true;
       answerStatus.value = "";
       answerImages.value = [];
       answerProgressBar.value = undefined;
+      elapsed.value = "notCounting";
       break;
     case "almostDone":
       canUploadKey.value = false;
       answerStatus.value = "Publishing results...";
       answerProgressBar.value = { type: "indeterminate" };
+      elapsed.value = "notCounting";
       break;
     case "processing":
       canUploadKey.value = false;
       const { total, started, finished } = msg.data;
-      answerStatus.value = `Processing ${started}/${total} sheets... (${started - finished} in progress)`;
+      var secsPerImage = -1;
+      if (elapsed.value == "notCounting") {
+        elapsed.value = Date.now();
+      } else if (finished > 0) {
+        const timePassed = (Date.now() - elapsed.value) / 1000;
+        secsPerImage = Math.round(timePassed / finished);
+      }
+      const leftText = secsPerImage != -1 ? `, ${hms(secsPerImage * (total - finished))} left` : '';
+      answerStatus.value = `Processing ${started}/${total} sheets... (${started - finished} in progress${leftText})`;
       answerProgressBar.value = { type: "progress", max: total, progressTop: finished, progressBottom: started };
       break;
     case "done":
@@ -90,10 +112,12 @@ const answerEventHandler = (msg: AnswerUpload): void => {
       answerImages.value = msg.data.uploaded;
       canUploadKey.value = answerImages.value.length === 0;
       answerProgressBar.value = undefined;
+      elapsed.value = "notCounting";
       break;
     case "error":
-      answerStatus.value = `Error uploading sheets: ${msg.data.error}`;
+      answerStatus.value = `Error uploading sheets: ${msg.data.error} `;
       answerProgressBar.value = undefined;
+      elapsed.value = "notCounting";
       break;
   }
 }
@@ -107,6 +131,8 @@ const canUploadKey = ref(true);
 const answerImages = ref<AnswerScoreResult[]>([]);
 const answerStatus = ref("");
 const answerProgressBar = ref<undefined | ProgressBarProps>(undefined);
+
+const elapsed = ref<TimeElapsed>("notCounting");
 
 async function uploadKey() {
   const path = await ensureModel(keyStatus);
