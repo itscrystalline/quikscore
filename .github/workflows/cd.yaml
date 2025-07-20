@@ -6,6 +6,7 @@ on:
     branches:
       - main
     paths:
+      - '.github/workflows/cd.yaml'
       - 'flake.nix'  
       - 'flake.lock'  
       - 'package.json'
@@ -29,6 +30,9 @@ jobs:
             name: macos-aarch64
           - on: macos-13
             name: macos-x86_64
+        avx:
+          - true
+          - false
 
     steps:
     - name: Checkout code
@@ -44,14 +48,19 @@ jobs:
       with:
         name: devenv
 
-    - name: Build with Nix flake
+    - name: Build with Nix flake (with AVX)
+      if: ${{ matrix.avx }}
       run: |
-        nix build . -L 2>&1
+        nix build .#quikscore -L 2>&1
+    - name: Build with Nix flake (without AVX)
+      if: ${{ !matrix.avx }}
+      run: |
+        nix build .#quikscore-compat -L 2>&1
 
     - name: Upload Nix build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: quikscore-${{ matrix.platform.name }}
+        name: quikscore-${{ matrix.platform.name }}${{ matrix.avx && '-avx' || '' }}
         path: |
           result/bin/quikscore
           result/Applications/*.app
@@ -61,6 +70,10 @@ jobs:
     runs-on: windows-latest
     strategy:
       fail-fast: false
+      matrix:
+        avx:
+          - true
+          - false
 
     steps:
     - name: Checkout code
@@ -93,14 +106,19 @@ jobs:
         echo "OPENCV_LINK_LIBS=+opencv_world4110" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
         echo "OPENCV_LINK_PATHS=+C:\tools\opencv\build\x64\vc16\lib" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
-    - name: Build Tauri app
+    - name: Build Tauri app (with AVX)
+      if: ${{ matrix.avx }}
+      run: |
+        yarn tauri build --features avx512
+    - name: Build Tauri app (without AVX)
+      if: ${{ !matrix.avx }}
       run: |
         yarn tauri build
 
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
       with:
-        name: quikscore-windows-x86_64
+        name: quikscore-windows-x86_64${{ matrix.avx && '-avx' || '' }}
         path: |
           src-tauri/target/release/quikscore.exe
           src-tauri/target/release/bundle/msi/*.msi
