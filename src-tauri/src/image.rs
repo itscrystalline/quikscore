@@ -874,7 +874,7 @@ mod unit_tests {
                     "Subject ID does not match expected value"
                 );
                 assert_eq!(
-                    student_id, "65991002",
+                    student_id, "65010002",
                     "Student ID does not match expected value"
                 );
             } else if i == 1 {
@@ -883,7 +883,7 @@ mod unit_tests {
                     "Subject ID does not match expected value"
                 );
                 assert_eq!(
-                    student_id, "65991003",
+                    student_id, "65010003",
                     "Student ID does not match expected value"
                 );
             } else {
@@ -892,7 +892,7 @@ mod unit_tests {
                     "Subject ID does not match expected value"
                 );
                 assert_eq!(
-                    student_id, "65991004",
+                    student_id, "65010004",
                     "Student ID does not match expected value"
                 );
             }
