@@ -20,7 +20,8 @@ pub fn run() {
             commands::upload_key_image,
             commands::clear_key_image,
             commands::upload_sheet_images,
-            commands::clear_sheet_images
+            commands::clear_sheet_images,
+            commands::set_ocr
         ])
         .setup(|app| {
             app.manage(Mutex::new(AppState::default()));

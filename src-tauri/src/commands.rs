@@ -36,3 +36,8 @@ pub fn upload_sheet_images(app: AppHandle, channel: Channel<AnswerUpload>, model
 pub fn clear_sheet_images(app: AppHandle, channel: Channel<AnswerUpload>) {
     AppState::clear_answer_sheets(&app, &channel);
 }
+
+#[tauri::command]
+pub fn set_ocr(app: AppHandle, ocr: bool) {
+    AppState::set_ocr(&app, ocr);
+}
