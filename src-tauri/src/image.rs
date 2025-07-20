@@ -165,7 +165,7 @@ fn handle_upload(
 
     let subject_id_string = extract_digits_for_sub_stu(&subject_id, 2, false)?;
     let student_id_string = extract_digits_for_sub_stu(&student_id, 9, true)?;
-    let (subject_id_s_f, student_id_s_f) = extract_subject_student_from_written_field(&resized, ocr.expect("REASON"))?;
+    let (subject_id_s_f, student_id_s_f) = extract_subject_student_from_written_field(&resized, ocr)?;
     println!("subject_id: {subject_id_s_f}");
     println!("subject_id: {student_id_s_f}");
     if subject_id_string != subject_id_s_f || student_id_string != student_id_s_f {
@@ -664,8 +664,6 @@ fn clean_text(raw: &str) -> String {
                 Some('0')
             } else if c.is_ascii_digit() {
                 Some(c)
-            } else if c.is_ascii_alphabetic() {
-                None
             } else {
                 None
             }
