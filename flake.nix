@@ -29,7 +29,7 @@
           if stdenv.isx86_64
           then "/lib64/ld-linux-x86-64.so.2"
           else "/lib/ld-linux-aarch64.so.1";
-        libPathPatchScript = ''
+        libPathPatchScript = pkgs.writeScript "quikscore" ''
           #!/bin/sh
           LIB_DIR="$(dirname "$0")/../lib"
           LIBS=""
@@ -99,9 +99,7 @@
 
               echo Adding wrapper script...
               mv $out/bin/quikscore $out/bin/.quikscore-wrapped
-              cat << EOF > $out/bin/quikscore
-              ${libPathPatchScript}
-              EOF
+              cp ${libPathPatchScript} $out/bin/quikscore
               chmod +x $out/bin/quikscore
             '';
 
