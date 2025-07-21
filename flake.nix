@@ -47,6 +47,13 @@
 
             src = ./.;
 
+            postPatch = ''
+              echo Removing Windows Resource...
+              rm src-tauri/opencv_world4110.dll
+              substituteInPlace src-tauri/tauri.conf.json \
+                --replace-warn '"opencv_world4110.dll"' ""
+            '';
+
             yarnOfflineCache = fetchYarnDeps {
               yarnLock = finalAttrs.src + "/yarn.lock";
               hash = "sha256-bnSADccuQUUuvQE7TnQgEujfUGJF0BXdWzH4ZKxy+OM=";

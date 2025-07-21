@@ -30,6 +30,9 @@
       "icons/128x128@2x.png",
       "icons/logo.icns",
       "icons/logo.ico"
+    ],
+    "resources": [
+      "opencv_world4110.dll"
     ]
   }
 }
