@@ -58,14 +58,14 @@ jobs:
         nix build .#quikscore-compat -L 2>&1
 
     - name: Upload Nix build artifacts (Linux)
-      if: ${{ contains(matrix.platform.name, "linux") }}
+      if: ${{ contains(matrix.platform.name, 'linux') }}
       uses: actions/upload-artifact@v4
       with:
         name: quikscore-${{ matrix.platform.name }}${{ matrix.avx && '-avx' || '' }}
         path: |
           result
     - name: Upload Nix build artifacts (macOS)
-      if: ${{ contains(matrix.platform.name, "macos") }}
+      if: ${{ contains(matrix.platform.name, 'macos') }}
       uses: actions/upload-artifact@v4
       with:
         name: quikscore-${{ matrix.platform.name }}${{ matrix.avx && '-avx' || '' }}
