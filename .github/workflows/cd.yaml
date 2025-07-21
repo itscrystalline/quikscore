@@ -115,6 +115,8 @@ jobs:
 
     - name: Include OpenCV dll in Tauri config
       run: |
+        cp C:\tools\opencv\build\x64\vc16\bin\opencv_world4110.dll src-tauri\opencv_world4110.dll
+
         $jsonPath = "src-tauri/tauri.conf.json"
         $json = Get-Content $jsonPath -Raw | ConvertFrom-Json
 
