@@ -122,9 +122,16 @@ jobs:
       run: |
         yarn tauri build
 
+    - name: Group Binary Bundle
+      run: |
+        mkdir -p src-tauri/target/release/bin
+        mv src-tauri/target/release/opencv_world4110.dll src-tauri/target/release/bin/opencv_world4110.dll
+        mv src-tauri/target/release/quikscore.exe src-tauri/target/release/bin/quikscore.exe
+
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
       with:
         name: quikscore-windows-x86_64${{ matrix.avx && '-avx' || '' }}
         path: |
-          src-tauri/target/release
+          src-tauri/target/release/bin
+          src-tauri/target/release/bundle
