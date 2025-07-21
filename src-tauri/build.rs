@@ -4,6 +4,25 @@ fn main() {
 
     #[cfg(windows)]
     {
+        let opencv_dll = std::env::current_dir()
+            .unwrap()
+            .join("opencv_world4110.dll");
+        if !std::fs::exists(&opencv_dll).is_ok_and(|f| f) {
+            println!("opencv_world4110.dll not found in src-tauri/, searching PATH...");
+            match which::which_all("opencv_world4110.dll")
+                .ok()
+                .and_then(|mut iter| iter.next())
+            {
+                Some(path) => {
+                    println!("found opencv_world4110.dll in {}.", path.display());
+                    std::fs::copy(path, opencv_dll).expect("should be able to copy");
+                }
+                None => {
+                    panic!("opencv_world4110.dll not found in either `src-tauri` or PATH. Provide one in `src-tauri` or add a path that contains it to PATH.");
+                }
+            }
+        }
+
         attributes = attributes
             .windows_attributes(tauri_build::WindowsAttributes::new_without_app_manifest());
     }

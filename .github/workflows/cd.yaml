@@ -57,13 +57,20 @@ jobs:
       run: |
         nix build .#quikscore-compat -L 2>&1
 
-    - name: Upload Nix build artifacts
+    - name: Upload Nix build artifacts (Linux)
+      if: ${{ contains(matrix.platform.name, "linux") }}
       uses: actions/upload-artifact@v4
       with:
         name: quikscore-${{ matrix.platform.name }}${{ matrix.avx && '-avx' || '' }}
         path: |
-          result/bin/quikscore
-          result/Applications/*.app
+          result
+    - name: Upload Nix build artifacts (macOS)
+      if: ${{ contains(matrix.platform.name, "macos") }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: quikscore-${{ matrix.platform.name }}${{ matrix.avx && '-avx' || '' }}
+        path: |
+          result/Applications
 
   windows-build:
     name: Build (Windows)
@@ -106,6 +113,17 @@ jobs:
         echo "OPENCV_LINK_LIBS=+opencv_world4110" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
         echo "OPENCV_LINK_PATHS=+C:\tools\opencv\build\x64\vc16\lib" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
+    - name: Include OpenCV dll in Tauri config
+      run: |
+        $jsonPath = "src-tauri/tauri.conf.json"
+        $json = Get-Content $jsonPath -Raw | ConvertFrom-Json
+
+        # Add item to the list
+        $json.bundle.resources += "opencv_world4110.dll"
+
+        # Write the modified object back to the file as JSON
+        $json | ConvertTo-Json -Depth 10 | Set-Content $jsonPath
+
     - name: Build Tauri app (with AVX)
       if: ${{ matrix.avx }}
       run: |
@@ -115,11 +133,16 @@ jobs:
       run: |
         yarn tauri build
 
+    - name: Group Binary Bundle
+      run: |
+        mkdir -p src-tauri/target/release/bin
+        mv src-tauri/target/release/opencv_world4110.dll src-tauri/target/release/bin/opencv_world4110.dll
+        mv src-tauri/target/release/quikscore.exe src-tauri/target/release/bin/quikscore.exe
+
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
       with:
         name: quikscore-windows-x86_64${{ matrix.avx && '-avx' || '' }}
         path: |
-          src-tauri/target/release/quikscore.exe
-          src-tauri/target/release/bundle/msi/*.msi
-          src-tauri/target/release/bundle/nsis/*.exe
+          src-tauri/target/release/bin
+          src-tauri/target/release/bundle
