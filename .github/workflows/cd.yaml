@@ -113,6 +113,17 @@ jobs:
         echo "OPENCV_LINK_LIBS=+opencv_world4110" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
         echo "OPENCV_LINK_PATHS=+C:\tools\opencv\build\x64\vc16\lib" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
+    - name: Include OpenCV dll in Tauri config
+      run: |
+        $jsonPath = "src-tauri/tauri.conf.json"
+        $json = Get-Content $jsonPath -Raw | ConvertFrom-Json
+
+        # Add item to the list
+        $json.bundle.resources += "opencv_world4110.dll"
+
+        # Write the modified object back to the file as JSON
+        $json | ConvertTo-Json -Depth 10 | Set-Content $jsonPath
+
     - name: Build Tauri app (with AVX)
       if: ${{ matrix.avx }}
       run: |
