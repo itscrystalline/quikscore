@@ -514,14 +514,14 @@ mod unit_tests {
 
     #[test]
     fn read_weight_csv() {
-        let csv = r#"
-            subject_code,question_num,A,B,C,D,E
-            10,1,2,3,1,,
-            10,2,1,1,1,,
-            10,3,4,,,,
-            10,4,2,,,,
-            10,5,2,3,,,
-        "#;
+        let csv = "\
+subject_code,question_num,A,B,C,D,E
+10,1,2,3,1,,
+10,2,1,1,1,,
+10,3,4,,,,
+10,4,2,,,,
+10,5,2,3,,,
+";
 
         let reader = csv::Reader::from_reader(csv.as_bytes());
         let mut result: ScoreWeights = reader.into_deserialize().into();
