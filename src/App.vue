@@ -71,6 +71,9 @@ const keyEventHandler = (msg: KeyUpload): void => {
       keyStatus.value = msg.data.error;
       keyProgressBar.value = false;
       break;
+
+    default:
+      answerStatus.value = "Unhandled event";
   }
 }
 const answerEventHandler = (msg: AnswerUpload): void => {
@@ -120,6 +123,8 @@ const answerEventHandler = (msg: AnswerUpload): void => {
       elapsed.value = "notCounting";
       canUploadKey.value = answerImages.value.length === 0;
       break;
+    default:
+      answerStatus.value = "Unhandled event";
   }
 }
 
@@ -202,7 +207,7 @@ async function clearSheets() {
       <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ?
         "🧾 Upload Answer Sheets..." :
         "Change Answer Sheets"
-      }}</button>
+        }}</button>
       <button class="btn-clear" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄
         Clear
         Answer
