@@ -2,8 +2,13 @@ use std::collections::HashMap;
 
 use csv::DeserializeRecordsIntoIter;
 use itertools::Itertools;
+use tauri::{ipc::Channel, Emitter, Manager, Runtime};
+use tauri_plugin_fs::FilePath;
 
-use crate::state::{Answer, AnswerKeySheet, AnswerSheet, NumberType, QuestionGroup};
+use crate::{
+    signal,
+    state::{Answer, AnswerKeySheet, AnswerSheet, KeyUpload, NumberType, QuestionGroup},
+};
 
 #[derive(Debug, Clone)]
 pub struct AnswerSheetResult {
@@ -225,6 +230,18 @@ impl<R: std::io::Read> From<WeightsIter<R>> for ScoreWeights {
         }
         Self { weights }
     }
+}
+
+pub fn upload_weights_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
+    app: &A,
+    path_maybe: Option<FilePath>,
+    channel: Channel<KeyUpload>,
+) {
+    let Some(file_path) = path_maybe else {
+        signal!(channel, KeyUpload::Cancelled);
+        return;
+    };
+    todo!()
 }
 
 #[cfg(test)]
