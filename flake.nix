@@ -93,15 +93,17 @@
                 openssl
               ]);
 
-            postFixup = lib.optionalString stdenv.hostPlatform.isLinux ''
-              echo Patching ELF loader to a non-nix path...
-              patchelf --set-interpreter ${loaderPath} $out/bin/quikscore
-
-              echo Adding wrapper script...
-              mv $out/bin/quikscore $out/bin/.quikscore-wrapped
-              cp ${libPathPatchScript} $out/bin/quikscore
-              chmod +x $out/bin/quikscore
+            fixupPhase = ''
             '';
+            # postFixup = lib.optionalString stdenv.hostPlatform.isLinux ''
+            #   echo Patching ELF loader to a non-nix path...
+            #   patchelf --set-interpreter ${loaderPath} $out/bin/quikscore
+            #
+            #   echo Adding wrapper script...
+            #   mv $out/bin/quikscore $out/bin/.quikscore-wrapped
+            #   cp ${libPathPatchScript} $out/bin/quikscore
+            #   chmod +x $out/bin/quikscore
+            # '';
 
             postInstall =
               if stdenv.hostPlatform.isLinux
