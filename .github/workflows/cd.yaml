@@ -7,12 +7,18 @@ on:
       - main
     paths:
       - '.github/workflows/cd.yaml'
-      - 'flake.nix'  
-      - 'flake.lock'  
+      - 'flake.nix'
+      - 'flake.lock'
       - 'package.json'
       - 'yarn.lock'
-      - 'src/**/*'  
-      - 'src-tauri/**/*'  
+      - 'src/**/*'
+      - 'src-tauri/**/*'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/cd.yaml'
+      - 'flake.nix'
 
 jobs:
   nix-build:
