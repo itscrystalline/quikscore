@@ -51,8 +51,7 @@ pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     let Options { ocr } = AppState::get_options(app);
     match handle_upload(file_path, ocr.then(state::init_thread_ocr).as_ref()) {
         Ok((base64_image, mat, key)) => {
-            let subject = key.subject_code.clone();
-            AppState::upload_key(app, channel, base64_image, mat, subject, key.into())
+            AppState::upload_key(app, channel, base64_image, mat, key.into())
         }
         Err(e) => signal!(
             channel,

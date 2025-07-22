@@ -77,25 +77,21 @@ pub enum AppStatePipeline {
     WithKey {
         key_image: Mat,
         key: AnswerKeySheet,
-        subject_code: String,
     },
     WithKeyAndWeights {
         key_image: Mat,
         key: AnswerKeySheet,
         weights: ScoreWeights,
-        subject_code: String,
     },
     Scoring {
         key_image: Mat,
         key: AnswerKeySheet,
         weights: ScoreWeights,
-        subject_code: String,
     },
     Scored {
         key_image: Mat,
         key: AnswerKeySheet,
         weights: ScoreWeights,
-        subject_code: String,
         _answer_sheets: HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>,
     },
 }
@@ -117,7 +113,6 @@ impl AppState {
         channel: Channel<KeyUpload>,
         base64_image: String,
         image: Mat,
-        subject_code: String,
         key: AnswerKeySheet,
     ) {
         let mutex = app.state::<StateMutex>();
@@ -129,7 +124,6 @@ impl AppState {
                 state.state = AppStatePipeline::WithKey {
                     key_image: image,
                     key,
-                    subject_code,
                 };
                 signal!(
                     channel,
@@ -154,18 +148,25 @@ impl AppState {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
         match &state.state {
-            AppStatePipeline::WithKey {
-                key_image,
-                key,
-                subject_code,
-            } => {
-                state.state = AppStatePipeline::WithKeyAndWeights {
-                    key_image: key_image.clone(),
-                    weights,
-                    key: key.clone(),
-                    subject_code: subject_code.clone(),
-                };
-                signal!(channel, KeyUpload::UploadedWeights);
+            AppStatePipeline::WithKey { key_image, key } => {
+                if weights.weights.contains_key(&key.subject_code) {
+                    state.state = AppStatePipeline::WithKeyAndWeights {
+                        key_image: key_image.clone(),
+                        weights,
+                        key: key.clone(),
+                    };
+                    signal!(channel, KeyUpload::UploadedWeights);
+                } else {
+                    signal!(
+                        channel,
+                        KeyUpload::Error {
+                            error: format!(
+                                "Cannot find weights mapping for subject ID {}",
+                                key.subject_code
+                            )
+                        }
+                    );
+                }
             }
             s => signal!(
                 channel,
@@ -201,20 +202,17 @@ impl AppState {
                 key_image,
                 key,
                 weights,
-                subject_code,
             }
             | AppStatePipeline::Scored {
                 key_image,
                 key,
                 weights,
-                subject_code,
                 ..
             } => {
                 state.state = AppStatePipeline::Scoring {
                     key_image: key_image.clone(),
                     key: key.clone(),
                     weights: weights.clone(),
-                    subject_code: subject_code.clone(),
                 };
                 signal!(
                     channel,
@@ -245,7 +243,6 @@ impl AppState {
                 key_image,
                 key,
                 weights,
-                subject_code,
             } => {
                 type Base64MatSheetResultMaxScore =
                     (String, Mat, AnswerSheet, AnswerSheetResult, u32);
@@ -317,7 +314,6 @@ impl AppState {
                     key_image: key_image.clone(),
                     key: key.clone(),
                     weights: weights.clone(),
-                    subject_code: subject_code.clone(),
                     _answer_sheets: answer_sheets,
                 };
                 signal!(channel, AnswerUpload::Done { uploaded: to_send });
@@ -336,17 +332,10 @@ impl AppState {
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        if let AppStatePipeline::Scored {
-            key,
-            key_image,
-            subject_code,
-            ..
-        } = &state.state
-        {
+        if let AppStatePipeline::Scored { key, key_image, .. } = &state.state {
             state.state = AppStatePipeline::WithKey {
                 key_image: key_image.clone(),
                 key: key.clone(),
-                subject_code: subject_code.clone(),
             };
             signal!(channel, AnswerUpload::Clear);
         }
@@ -372,13 +361,13 @@ pub struct AnswerSheet {
 
 #[derive(Debug, Clone)]
 pub struct AnswerKeySheet {
-    pub _subject_code: String,
+    pub subject_code: String,
     pub answers: [QuestionGroup; 36],
 }
 impl From<AnswerSheet> for AnswerKeySheet {
     fn from(value: AnswerSheet) -> Self {
         Self {
-            _subject_code: value.subject_code,
+            subject_code: value.subject_code,
             answers: value.answers,
         }
     }
