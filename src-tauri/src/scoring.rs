@@ -176,12 +176,12 @@ struct RawScoreWeights {
     D: String,
     E: String,
 }
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct ScoreWeights {
     pub weights: HashMap<String, (Vec<ScoreWeight>, u32)>,
 }
 #[allow(non_snake_case)]
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ScoreWeight {
     pub A: u8,
     pub B: u8,

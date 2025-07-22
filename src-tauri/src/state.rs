@@ -488,6 +488,7 @@ pub enum AnswerScoreResult {
 mod unit_tests {
     use crate::image::upload_key_image_impl;
     use crate::image::upload_sheet_images_impl;
+    use crate::scoring::upload_weights_impl;
     use std::sync::Arc;
     use std::{path::PathBuf, sync::Mutex};
 
@@ -511,6 +512,13 @@ mod unit_tests {
 
     fn test_key_image() -> FilePath {
         FilePath::Path(PathBuf::from("tests/assets/sample_valid_image.jpg"))
+    }
+
+    fn test_weights() -> Vec<FilePath> {
+        vec![
+            FilePath::Path(PathBuf::from("tests/assets/weights.csv")),
+            FilePath::Path(PathBuf::from("tests/assets/weights2.csv")),
+        ]
     }
 
     fn test_images() -> Vec<FilePath> {
@@ -584,7 +592,7 @@ mod unit_tests {
     fn test_app_change_key_upload() {
         setup_ocr_data();
         let path = test_key_image();
-        let path2 = test_images()[1].clone();
+        let path2 = test_images().remove(1);
 
         let app = mock_app_with_state(AppStatePipeline::Init);
         let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
@@ -658,12 +666,74 @@ mod unit_tests {
     }
 
     #[test]
+    fn test_app_weights_upload() {
+        setup_ocr_data();
+        let app = mock_app_with_state(AppStatePipeline::Init);
+        let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), channel.clone());
+        upload_weights_impl(&app, Some(test_weights().remove(0)), channel);
+
+        assert_state!(app, AppStatePipeline::WithKeyAndWeights { .. });
+        let msg_history = unwrap_msgs!(msgs);
+        assert!(matches!(msg_history[0], KeyUpload::Image { .. }));
+        assert!(matches!(msg_history[1], KeyUpload::UploadedWeights));
+    }
+    #[test]
+    fn test_app_change_weights_upload() {
+        setup_ocr_data();
+        let app = mock_app_with_state(AppStatePipeline::Init);
+        let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), channel.clone());
+        upload_weights_impl(&app, Some(test_weights().remove(0)), channel.clone());
+
+        let current_weights_1 = {
+            let mutex = app.state::<StateMutex>();
+            let state = mutex.lock().expect("poisoned");
+            let AppStatePipeline::WithKeyAndWeights { weights, .. } = &state.state else {
+                unreachable!()
+            };
+            weights.clone()
+        };
+
+        upload_weights_impl(&app, Some(test_weights().remove(1)), channel);
+
+        let current_weights_2 = {
+            let mutex = app.state::<StateMutex>();
+            let state = mutex.lock().expect("poisoned");
+            let AppStatePipeline::WithKeyAndWeights { weights, .. } = &state.state else {
+                unreachable!()
+            };
+            weights.clone()
+        };
+
+        assert_ne!(current_weights_1, current_weights_2);
+        let msg_history = unwrap_msgs!(msgs);
+        assert!(matches!(msg_history[0], KeyUpload::Image { .. }));
+        assert!(matches!(msg_history[1], KeyUpload::UploadedWeights));
+        assert!(matches!(msg_history[2], KeyUpload::UploadedWeights));
+    }
+    #[test]
+    fn test_app_weights_canceled_upload() {
+        setup_ocr_data();
+        let app = mock_app_with_state(AppStatePipeline::Init);
+        let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), channel.clone());
+        upload_weights_impl(&app, None, channel);
+
+        assert_state!(app, AppStatePipeline::WithKey { .. });
+        let msg_history = unwrap_msgs!(msgs);
+        assert!(matches!(msg_history[0], KeyUpload::Image { .. }));
+        assert!(matches!(msg_history[1], KeyUpload::Cancelled));
+    }
+
+    #[test]
     fn test_app_sheets_upload() {
         setup_ocr_data();
         let app = mock_app_with_state(AppStatePipeline::Init);
         let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
         let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
-        upload_key_image_impl(&app, Some(test_key_image()), key_channel);
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel.clone());
+        upload_weights_impl(&app, Some(test_weights().remove(0)), key_channel);
         upload_sheet_images_impl(&app, Some(test_images()), sheet_channel);
 
         assert_state!(app, AppStatePipeline::Scored { .. });
@@ -682,7 +752,8 @@ mod unit_tests {
         let app = mock_app_with_state(AppStatePipeline::Init);
         let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
         let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
-        upload_key_image_impl(&app, Some(test_key_image()), key_channel);
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel.clone());
+        upload_weights_impl(&app, Some(test_weights().remove(0)), key_channel);
         upload_sheet_images_impl(&app, Some(test_images()), sheet_channel.clone());
 
         let current_count = {
@@ -698,7 +769,7 @@ mod unit_tests {
             answer_sheets.len()
         };
 
-        upload_sheet_images_impl(&app, Some(vec![test_images()[0].clone()]), sheet_channel);
+        upload_sheet_images_impl(&app, Some(vec![test_images().remove(0)]), sheet_channel);
 
         let mutex = app.state::<StateMutex>();
         let state = mutex.lock().unwrap();
@@ -727,10 +798,11 @@ mod unit_tests {
         let app = mock_app_with_state(AppStatePipeline::Init);
         let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
         let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
-        upload_key_image_impl(&app, Some(test_key_image()), key_channel);
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel.clone());
+        upload_weights_impl(&app, Some(test_weights().remove(0)), key_channel);
         upload_sheet_images_impl(&app, None, sheet_channel);
 
-        assert_state!(app, AppStatePipeline::WithKey { .. });
+        assert_state!(app, AppStatePipeline::WithKeyAndWeights { .. });
 
         let msgs = unwrap_msgs!(sheet_msgs);
         let mut msgs = msgs.iter();
@@ -742,7 +814,8 @@ mod unit_tests {
         let app = mock_app_with_state(AppStatePipeline::Init);
         let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
         let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
-        upload_key_image_impl(&app, Some(test_key_image()), key_channel);
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel.clone());
+        upload_weights_impl(&app, Some(test_weights().remove(0)), key_channel);
         upload_sheet_images_impl(&app, Some(vec![not_image()]), sheet_channel);
 
         {
@@ -776,7 +849,8 @@ mod unit_tests {
         let app = mock_app_with_state(AppStatePipeline::Init);
         let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
         let (sheet_channel, sheet_msgs) = setup_channel_msgs::<AnswerUpload>();
-        upload_key_image_impl(&app, Some(test_key_image()), key_channel);
+        upload_key_image_impl(&app, Some(test_key_image()), key_channel.clone());
+        upload_weights_impl(&app, Some(test_weights().remove(0)), key_channel);
         upload_sheet_images_impl(&app, Some(test_images()), sheet_channel.clone());
 
         assert_state!(app, AppStatePipeline::Scored { .. });
@@ -797,19 +871,20 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_clear_key_on_with_key_and_sheets_does_nothing() {
+    fn test_clear_key_on_scored_does_nothing() {
         setup_ocr_data();
         let app = mock_app_with_state(AppStatePipeline::Init);
         let (key_channel, _) = setup_channel_msgs::<KeyUpload>();
         let (sheet_channel, _) = setup_channel_msgs::<AnswerUpload>();
         upload_key_image_impl(&app, Some(test_key_image()), key_channel.clone());
+        upload_weights_impl(&app, Some(test_weights().remove(0)), key_channel.clone());
         upload_sheet_images_impl(&app, Some(test_images()), sheet_channel);
 
         assert_state!(app, AppStatePipeline::Scored { .. });
 
         AppState::clear_key(&app, &key_channel);
 
-        // Should still be in WithKeyAndSheets
+        // Should still be in Scored
         assert_state!(app, AppStatePipeline::Scored { .. });
     }
     #[test]
