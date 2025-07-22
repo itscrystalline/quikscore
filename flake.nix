@@ -93,15 +93,24 @@
                 openssl
               ]);
 
-            postFixup = lib.optionalString stdenv.hostPlatform.isLinux ''
-              echo Patching ELF loader to a non-nix path...
-              patchelf --set-interpreter ${loaderPath} $out/bin/quikscore
+            postFixup =
+              if stdenv.hostPlatform.isLinux
+              then ''
+                echo Patching ELF loader to a non-nix path...
+                patchelf --set-interpreter ${loaderPath} $out/bin/quikscore
 
-              echo Adding wrapper script...
-              mv $out/bin/quikscore $out/bin/.quikscore-wrapped
-              cp ${libPathPatchScript} $out/bin/quikscore
-              chmod +x $out/bin/quikscore
-            '';
+                echo Adding wrapper script...
+                mv $out/bin/quikscore $out/bin/.quikscore-wrapped
+                cp ${libPathPatchScript} $out/bin/quikscore
+                chmod +x $out/bin/quikscore
+              ''
+              else ''
+                echo Patching libc++ dylib path...
+                install_name_tool -change \
+                  ${lib.makeLibraryPath [pkgs.libcxx]}/lib/libc++.1.dylib \
+                  /usr/lib/libc++.1.dylib \
+                  $out/Applications/quikscore.app/Contents/MacOS/quikscore
+              '';
 
             postInstall =
               if stdenv.hostPlatform.isLinux
