@@ -54,6 +54,8 @@ export type AnswerScoreResult =
       data: {
         studentId: string;
         base64: string;
+        score: number;
+        maxScore: number;
         correct: number;
         incorrect: number;
         notAnswered: number;
