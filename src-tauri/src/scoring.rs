@@ -401,7 +401,7 @@ mod unit_tests {
         };
 
         let key_sheet = AnswerKeySheet {
-            _subject_code: 1001.to_string(),
+            subject_code: 1001.to_string(),
             answers: array::from_fn(|_| correct_group.clone()),
         };
 
