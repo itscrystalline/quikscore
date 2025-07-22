@@ -9,7 +9,7 @@ export type KeyUpload =
       event: "uploadedWeights";
     }
   | {
-      event: "done";
+      event: "image";
       data: {
         base64: string;
       };
