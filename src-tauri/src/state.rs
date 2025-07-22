@@ -247,15 +247,21 @@ impl AppState {
                 weights,
                 subject_code,
             } => {
-                let scored: Vec<
-                    Result<(String, Mat, AnswerSheet, AnswerSheetResult), UploadError>,
-                > = result
+                type Base64MatSheetResultMaxScore =
+                    (String, Mat, AnswerSheet, AnswerSheetResult, u32);
+                let scored: Vec<Result<Base64MatSheetResultMaxScore, UploadError>> = result
                     .into_par_iter()
                     .map(|r| {
-                        r.map(|(s, mut m, a)| {
-                            let score = a.score(key);
+                        r.and_then(|t| {
+                            weights.weights.get(&t.2.subject_code).cloned().map_or_else(
+                                || Err(UploadError::MissingScoreWeights(t.0.clone())),
+                                |w| Ok((t.0.clone(), t.1, t.2, w.0, w.1)),
+                            )
+                        })
+                        .map(|(s, mut m, a, w, ms)| {
+                            let score = a.score(key, &w);
                             _ = score.write_score_marks(&mut m);
-                            (s, m, a, score)
+                            (s, m, a, score, ms)
                         })
                     })
                     .collect();
@@ -270,8 +276,10 @@ impl AppState {
                                 correct,
                                 incorrect,
                                 not_answered,
+                                score,
                                 ..
                             },
+                            max_score,
                         )) => {
                             let img_small = image::resize_relative_img(mat, 0.4)
                                 .and_then(|m| image::mat_to_base64_png(&m));
@@ -279,6 +287,8 @@ impl AppState {
                                 Ok(base64) => AnswerScoreResult::Ok {
                                     student_id: student_id.clone(),
                                     base64,
+                                    score: *score,
+                                    max_score: *max_score,
                                     correct: *correct,
                                     incorrect: *incorrect,
                                     not_answered: *not_answered,
@@ -296,7 +306,7 @@ impl AppState {
                 let answer_sheets = scored
                     .into_par_iter()
                     .filter_map(|r| {
-                        if let Ok((_, m, a, ca)) = r {
+                        if let Ok((_, m, a, ca, _)) = r {
                             Some((a.student_id.clone(), (m, a, ca)))
                         } else {
                             None
@@ -460,6 +470,8 @@ pub enum AnswerScoreResult {
     Ok {
         student_id: String,
         base64: String,
+        score: u32,
+        max_score: u32,
         correct: u32,
         incorrect: u32,
         not_answered: u32,
