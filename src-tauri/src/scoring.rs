@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fs::File, io::BufReader};
 
 use csv::DeserializeRecordsIntoIter;
 use itertools::Itertools;
@@ -7,7 +7,7 @@ use tauri_plugin_fs::FilePath;
 
 use crate::{
     signal,
-    state::{Answer, AnswerKeySheet, AnswerSheet, KeyUpload, NumberType, QuestionGroup},
+    state::{Answer, AnswerKeySheet, AnswerSheet, AppState, KeyUpload, NumberType, QuestionGroup},
 };
 
 #[derive(Debug, Clone)]
@@ -191,16 +191,12 @@ impl<R: std::io::Read> From<WeightsIter<R>> for ScoreWeights {
             }) = value_option
             {
                 macro_rules! conv {
-                    ($i: expr) => {{
-                        let i = $i;
-                        let Ok(r) = i.parse::<u8>() else {
-                            println!(
-                                "error reading question number: not a number or number too big ('{i}')"
-                            );
-                            continue;
-                        };
-                        r
-                    }}
+                    ($i: expr) => {
+                        $i.parse::<u8>().unwrap_or_else(|e| {
+                            println!("error reading question answer weight: not a number ('{e}'), using 0 as weight");
+                            0
+                        })
+                    };
                 }
 
                 let Ok(question_num) = question_num.parse::<usize>() else {
@@ -241,7 +237,31 @@ pub fn upload_weights_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         signal!(channel, KeyUpload::Cancelled);
         return;
     };
-    todo!()
+    let file = match file_path.into_path() {
+        Ok(path) => match File::open(path) {
+            Ok(f) => f,
+            Err(e) => {
+                signal!(
+                    channel,
+                    KeyUpload::Error {
+                        error: format!("Error while opining weights file: {e}")
+                    }
+                );
+                return;
+            }
+        },
+        Err(e) => {
+            signal!(
+                channel,
+                KeyUpload::Error {
+                    error: format!("Error while opening weights file: {e}")
+                }
+            );
+            return;
+        }
+    };
+    let reader = csv::Reader::from_reader(BufReader::new(file));
+    AppState::upload_weights(app, &channel, reader.into_deserialize().into());
 }
 
 #[cfg(test)]
