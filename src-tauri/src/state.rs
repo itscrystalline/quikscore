@@ -118,12 +118,23 @@ impl AppState {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
         match &state.state {
-            AppStatePipeline::Init
-            | AppStatePipeline::WithKey { .. }
-            | AppStatePipeline::WithKeyAndWeights { .. } => {
+            AppStatePipeline::Init | AppStatePipeline::WithKey { .. } => {
                 state.state = AppStatePipeline::WithKey {
                     key_image: image,
                     key,
+                };
+                signal!(
+                    channel,
+                    KeyUpload::Image {
+                        base64: base64_image
+                    }
+                );
+            }
+            AppStatePipeline::WithKeyAndWeights { weights, .. } => {
+                state.state = AppStatePipeline::WithKeyAndWeights {
+                    key_image: image,
+                    key,
+                    weights: weights.clone(),
                 };
                 signal!(
                     channel,
@@ -148,25 +159,28 @@ impl AppState {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
         match &state.state {
-            AppStatePipeline::WithKey { key_image, key } => {
-                if weights.weights.contains_key(&key.subject_code) {
-                    state.state = AppStatePipeline::WithKeyAndWeights {
-                        key_image: key_image.clone(),
-                        weights,
-                        key: key.clone(),
-                    };
-                    signal!(channel, KeyUpload::UploadedWeights);
-                } else {
-                    signal!(
-                        channel,
-                        KeyUpload::Error {
-                            error: format!(
-                                "Cannot find weights mapping for subject ID {}",
-                                key.subject_code
-                            )
-                        }
-                    );
-                }
+            AppStatePipeline::WithKey { key_image, key }
+            | AppStatePipeline::WithKeyAndWeights { key_image, key, .. }
+                if weights.weights.contains_key(&key.subject_code) =>
+            {
+                state.state = AppStatePipeline::WithKeyAndWeights {
+                    key_image: key_image.clone(),
+                    key: key.clone(),
+                    weights,
+                };
+                signal!(channel, KeyUpload::UploadedWeights);
+            }
+            AppStatePipeline::WithKey { key, .. }
+            | AppStatePipeline::WithKeyAndWeights { key, .. } => {
+                signal!(
+                    channel,
+                    KeyUpload::Error {
+                        error: format!(
+                            "Cannot find weights mapping for subject ID {}",
+                            key.subject_code
+                        )
+                    }
+                );
             }
             s => signal!(
                 channel,
