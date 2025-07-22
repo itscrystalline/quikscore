@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+
+use csv::DeserializeRecordsIntoIter;
 use itertools::Itertools;
 
 use crate::state::{Answer, AnswerKeySheet, AnswerSheet, NumberType, QuestionGroup};
@@ -131,6 +134,96 @@ impl AnswerSheet {
             not_answered,
             graded_questions,
         }
+    }
+}
+
+#[allow(non_snake_case)]
+#[derive(Debug, serde::Deserialize)]
+struct RawScoreWeights {
+    subject_code: String,
+    question_num: String,
+    A: String,
+    B: String,
+    C: String,
+    D: String,
+    E: String,
+}
+#[derive(Default, Debug)]
+pub struct ScoreWeights {
+    weights: HashMap<String, Vec<Option<ScoreWeight>>>,
+}
+#[allow(non_snake_case)]
+#[derive(Default, Debug, Clone, Copy)]
+pub struct ScoreWeight {
+    pub A: u8,
+    pub B: u8,
+    pub C: u8,
+    pub D: u8,
+    pub E: u8,
+}
+
+type WeightsIter<R> = DeserializeRecordsIntoIter<R, RawScoreWeights>;
+impl<R: std::io::Read> From<WeightsIter<R>> for ScoreWeights {
+    fn from(values: WeightsIter<R>) -> Self {
+        let mut weights: HashMap<String, Vec<Option<ScoreWeight>>> = HashMap::new();
+        for value in values {
+            let value_option = match value {
+                Ok(ok) => Some(ok),
+                Err(e) => {
+                    println!("error deserializing score weights: {e}");
+                    None
+                }
+            };
+
+            if let Some(RawScoreWeights {
+                subject_code,
+                question_num,
+                A,
+                B,
+                C,
+                D,
+                E,
+            }) = value_option
+            {
+                macro_rules! conv {
+                    ($i: expr) => {{
+                        let i = $i;
+                        let Ok(r) = i.parse::<u8>() else {
+                            println!(
+                                "error reading question number: not a number or number too big ('{i}')"
+                            );
+                            continue;
+                        };
+                        r
+                    }}
+                }
+
+                let Ok(question_num) = question_num.parse::<usize>() else {
+                    println!("error reading question number: not a number ('{question_num}')");
+                    continue;
+                };
+                if let Some(subject_weights) = weights.get_mut(&subject_code) {
+                    _ = subject_weights[question_num - 1].insert(ScoreWeight {
+                        A: conv!(A),
+                        B: conv!(B),
+                        C: conv!(C),
+                        D: conv!(D),
+                        E: conv!(E),
+                    });
+                } else {
+                    let mut subject_weights = vec![None; 36];
+                    _ = subject_weights[question_num - 1].insert(ScoreWeight {
+                        A: conv!(A),
+                        B: conv!(B),
+                        C: conv!(C),
+                        D: conv!(D),
+                        E: conv!(E),
+                    });
+                    weights.insert(subject_code, subject_weights);
+                }
+            }
+        }
+        Self { weights }
     }
 }
 
