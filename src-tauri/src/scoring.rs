@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fs::File, io::BufReader};
 
 use csv::DeserializeRecordsIntoIter;
-use itertools::Itertools;
+use itertools::{multizip, Itertools};
 use tauri::{ipc::Channel, Emitter, Manager, Runtime};
 use tauri_plugin_fs::FilePath;
 
@@ -15,6 +15,7 @@ pub struct AnswerSheetResult {
     pub correct: u32,
     pub incorrect: u32,
     pub not_answered: u32,
+    pub score: u32,
     pub graded_questions: [CheckedQuestionGroup; 36],
 }
 
@@ -26,6 +27,7 @@ pub struct CheckedQuestionGroup {
     pub C: CheckedAnswer,
     pub D: CheckedAnswer,
     pub E: CheckedAnswer,
+    pub score: u16,
 }
 
 impl CheckedQuestionGroup {
@@ -88,13 +90,31 @@ impl Answer {
 }
 
 impl QuestionGroup {
-    pub fn check_with(&self, key: &Self) -> CheckedQuestionGroup {
+    pub fn check_with(&self, key: &Self, weights: &ScoreWeight) -> CheckedQuestionGroup {
+        let arr = [
+            Answer::check_with(self.A, key.A),
+            Answer::check_with(self.B, key.B),
+            Answer::check_with(self.C, key.C),
+            Answer::check_with(self.D, key.D),
+            Answer::check_with(self.E, key.E),
+        ];
+        let weight_arr = [weights.A, weights.B, weights.C, weights.D, weights.E];
+        let score = arr.iter().zip(weight_arr.iter()).fold(0, |acc, (&c, &w)| {
+            if c == CheckedAnswer::Correct {
+                acc + w as u16
+            } else {
+                acc
+            }
+        });
+        #[allow(non_snake_case)]
+        let [A, B, C, D, E] = arr;
         CheckedQuestionGroup {
-            A: Answer::check_with(self.A, key.A),
-            B: Answer::check_with(self.B, key.B),
-            C: Answer::check_with(self.C, key.C),
-            D: Answer::check_with(self.D, key.D),
-            E: Answer::check_with(self.E, key.E),
+            A,
+            B,
+            C,
+            D,
+            E,
+            score,
         }
     }
 }
@@ -116,17 +136,19 @@ impl CheckedQuestionGroup {
 }
 
 impl AnswerSheet {
-    pub fn score(&self, key_sheet: &AnswerKeySheet) -> AnswerSheetResult {
-        let graded_questions: [CheckedQuestionGroup; 36] = self
-            .answers
-            .iter()
-            .zip(key_sheet.answers.iter())
-            .map(|(curr, key)| curr.check_with(key))
-            .collect_array()
-            .expect("should always be of size 36");
+    pub fn score(&self, key_sheet: &AnswerKeySheet, weights: &[ScoreWeight]) -> AnswerSheetResult {
+        let graded_questions: [CheckedQuestionGroup; 36] = multizip((
+            self.answers.iter(),
+            key_sheet.answers.iter(),
+            weights.iter(),
+        ))
+        .map(|(curr, key, weights)| curr.check_with(key, weights))
+        .collect_array()
+        .expect("should always be of size 36");
 
-        let (mut correct, mut incorrect, mut not_answered) = (0u32, 0u32, 0u32);
+        let (mut correct, mut incorrect, mut not_answered, mut score) = (0u32, 0u32, 0u32, 0u32);
         for qg in graded_questions {
+            score += qg.score as u32;
             let (c, i, n) = qg.collect_stats();
             correct += c;
             incorrect += i;
@@ -138,6 +160,7 @@ impl AnswerSheet {
             incorrect,
             not_answered,
             graded_questions,
+            score,
         }
     }
 }
@@ -155,7 +178,7 @@ struct RawScoreWeights {
 }
 #[derive(Default, Debug, Clone)]
 pub struct ScoreWeights {
-    weights: HashMap<String, Vec<Option<ScoreWeight>>>,
+    pub weights: HashMap<String, (Vec<ScoreWeight>, u32)>,
 }
 #[allow(non_snake_case)]
 #[derive(Default, Debug, Clone, Copy)]
@@ -166,11 +189,26 @@ pub struct ScoreWeight {
     pub D: u8,
     pub E: u8,
 }
+impl ScoreWeight {
+    fn max_score(&self) -> u32 {
+        self.A as u32 + self.B as u32 + self.C as u32 + self.D as u32 + self.E as u32
+    }
+    #[cfg(test)]
+    fn identity() -> Self {
+        Self {
+            A: 1,
+            B: 1,
+            C: 1,
+            D: 1,
+            E: 1,
+        }
+    }
+}
 
 type WeightsIter<R> = DeserializeRecordsIntoIter<R, RawScoreWeights>;
 impl<R: std::io::Read> From<WeightsIter<R>> for ScoreWeights {
     fn from(values: WeightsIter<R>) -> Self {
-        let mut weights: HashMap<String, Vec<Option<ScoreWeight>>> = HashMap::new();
+        let mut weights: HashMap<String, (Vec<ScoreWeight>, u32)> = HashMap::new();
         for value in values {
             let value_option = match value {
                 Ok(ok) => Some(ok),
@@ -203,24 +241,27 @@ impl<R: std::io::Read> From<WeightsIter<R>> for ScoreWeights {
                     println!("error reading question number: not a number ('{question_num}')");
                     continue;
                 };
-                if let Some(subject_weights) = weights.get_mut(&subject_code) {
-                    _ = subject_weights[question_num - 1].insert(ScoreWeight {
+                if let Some((subject_weights, max_score)) = weights.get_mut(&subject_code) {
+                    let w = ScoreWeight {
                         A: conv!(A),
                         B: conv!(B),
                         C: conv!(C),
                         D: conv!(D),
                         E: conv!(E),
-                    });
+                    };
+                    *max_score += w.max_score();
+                    subject_weights[question_num - 1] = w;
                 } else {
-                    let mut subject_weights = vec![None; 36];
-                    _ = subject_weights[question_num - 1].insert(ScoreWeight {
+                    let mut subject_weights = vec![ScoreWeight::default(); 36];
+                    let w = ScoreWeight {
                         A: conv!(A),
                         B: conv!(B),
                         C: conv!(C),
                         D: conv!(D),
                         E: conv!(E),
-                    });
-                    weights.insert(subject_code, subject_weights);
+                    };
+                    subject_weights[question_num - 1] = w;
+                    weights.insert(subject_code, (subject_weights, w.max_score()));
                 }
             }
         }
@@ -312,7 +353,7 @@ mod unit_tests {
             E: answer(5),
         };
 
-        let checked = group1.check_with(&key);
+        let checked = group1.check_with(&key, &ScoreWeight::identity());
 
         assert_eq!(checked.A, CheckedAnswer::Correct);
         assert_eq!(checked.B, CheckedAnswer::Incorrect);
@@ -329,6 +370,7 @@ mod unit_tests {
             C: CheckedAnswer::Incorrect,
             D: CheckedAnswer::Missing,
             E: CheckedAnswer::NotCounted,
+            score: 1,
         };
 
         let stats = checked.collect_stats();
@@ -363,7 +405,7 @@ mod unit_tests {
             answers: array::from_fn(|_| correct_group.clone()),
         };
 
-        let result = answer_sheet.score(&key_sheet);
+        let result = answer_sheet.score(&key_sheet, &[ScoreWeight::identity(); 36]);
 
         // Per group: 2 correct, 3 incorrect (since missing is also considered incorrect here)
         assert_eq!(result.correct, 2 * 36);
