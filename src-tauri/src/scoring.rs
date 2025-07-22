@@ -148,7 +148,7 @@ struct RawScoreWeights {
     D: String,
     E: String,
 }
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct ScoreWeights {
     weights: HashMap<String, Vec<Option<ScoreWeight>>>,
 }
