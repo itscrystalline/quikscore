@@ -15,7 +15,7 @@ use opencv::core::Mat;
 use crate::{
     errors::{SheetError, UploadError},
     image,
-    scoring::AnswerSheetResult,
+    scoring::{AnswerSheetResult, ScoreWeights},
 };
 
 pub type StateMutex = Mutex<AppState>;
@@ -79,14 +79,22 @@ pub enum AppStatePipeline {
         key: AnswerKeySheet,
         subject_code: String,
     },
+    WithKeyAndWeights {
+        key_image: Mat,
+        key: AnswerKeySheet,
+        weights: ScoreWeights,
+        subject_code: String,
+    },
     Scoring {
         key_image: Mat,
         key: AnswerKeySheet,
+        weights: ScoreWeights,
         subject_code: String,
     },
     Scored {
         key_image: Mat,
         key: AnswerKeySheet,
+        weights: ScoreWeights,
         subject_code: String,
         _answer_sheets: HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>,
     },
@@ -96,6 +104,7 @@ impl Display for AppStatePipeline {
         f.write_str(match self {
             Self::Init => "Init",
             Self::WithKey { .. } => "WithKey",
+            Self::WithKeyAndWeights { .. } => "WithKeyAndWeights",
             Self::Scoring { .. } => "Scoring",
             Self::Scored { .. } => "Scored",
         })
@@ -114,7 +123,9 @@ impl AppState {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
         match &state.state {
-            AppStatePipeline::Init | AppStatePipeline::WithKey { .. } => {
+            AppStatePipeline::Init
+            | AppStatePipeline::WithKey { .. }
+            | AppStatePipeline::WithKeyAndWeights { .. } => {
                 state.state = AppStatePipeline::WithKey {
                     key_image: image,
                     key,
@@ -122,10 +133,39 @@ impl AppState {
                 };
                 signal!(
                     channel,
-                    KeyUpload::Done {
+                    KeyUpload::Image {
                         base64: base64_image
                     }
                 );
+            }
+            s => signal!(
+                channel,
+                KeyUpload::Error {
+                    error: format!("Unexpected state: {s}")
+                }
+            ),
+        }
+    }
+    pub fn upload_weights<R: Runtime, A: Emitter<R> + Manager<R>>(
+        app: &A,
+        channel: &Channel<KeyUpload>,
+        weights: ScoreWeights,
+    ) {
+        let mutex = app.state::<StateMutex>();
+        let mut state = mutex.lock().expect("poisoned");
+        match &state.state {
+            AppStatePipeline::WithKey {
+                key_image,
+                key,
+                subject_code,
+            } => {
+                state.state = AppStatePipeline::WithKeyAndWeights {
+                    key_image: key_image.clone(),
+                    weights,
+                    key: key.clone(),
+                    subject_code: subject_code.clone(),
+                };
+                signal!(channel, KeyUpload::UploadedWeights);
             }
             s => signal!(
                 channel,
@@ -141,7 +181,9 @@ impl AppState {
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        if let AppStatePipeline::WithKey { .. } = state.state {
+        if let AppStatePipeline::WithKey { .. } | AppStatePipeline::WithKeyAndWeights { .. } =
+            state.state
+        {
             state.state = AppStatePipeline::Init;
             signal!(channel, KeyUpload::Clear);
         }
@@ -155,20 +197,23 @@ impl AppState {
         let mut state = mutex.lock().expect("poisoned");
 
         match &state.state {
-            AppStatePipeline::WithKey {
+            AppStatePipeline::WithKeyAndWeights {
                 key_image,
                 key,
+                weights,
                 subject_code,
             }
             | AppStatePipeline::Scored {
                 key_image,
                 key,
+                weights,
                 subject_code,
                 ..
             } => {
                 state.state = AppStatePipeline::Scoring {
                     key_image: key_image.clone(),
                     key: key.clone(),
+                    weights: weights.clone(),
                     subject_code: subject_code.clone(),
                 };
                 signal!(
@@ -199,6 +244,7 @@ impl AppState {
             AppStatePipeline::Scoring {
                 key_image,
                 key,
+                weights,
                 subject_code,
             } => {
                 let scored: Vec<
@@ -260,6 +306,7 @@ impl AppState {
                 state.state = AppStatePipeline::Scored {
                     key_image: key_image.clone(),
                     key: key.clone(),
+                    weights: weights.clone(),
                     subject_code: subject_code.clone(),
                     _answer_sheets: answer_sheets,
                 };
@@ -374,7 +421,8 @@ pub enum NumberType {
 pub enum KeyUpload {
     Cancelled,
     Clear,
-    Done { base64: String },
+    UploadedWeights,
+    Image { base64: String },
     Error { error: String },
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -517,7 +565,7 @@ mod unit_tests {
 
         assert_state!(app, AppStatePipeline::WithKey { .. });
         let msg_history = unwrap_msgs!(msgs);
-        assert!(matches!(msg_history[0], KeyUpload::Done { .. }))
+        assert!(matches!(msg_history[0], KeyUpload::Image { .. }))
     }
     #[test]
     fn test_app_change_key_upload() {
@@ -551,8 +599,8 @@ mod unit_tests {
 
         let msgs = unwrap_msgs!(msgs);
         let mut msgs = msgs.iter();
-        assert!(matches!(msgs.next(), Some(KeyUpload::Done { .. })));
-        assert!(matches!(msgs.next(), Some(KeyUpload::Done { .. })));
+        assert!(matches!(msgs.next(), Some(KeyUpload::Image { .. })));
+        assert!(matches!(msgs.next(), Some(KeyUpload::Image { .. })));
     }
     #[test]
     fn test_app_key_canceled_upload() {
@@ -592,7 +640,7 @@ mod unit_tests {
         assert_state!(app, AppStatePipeline::Init);
         let msgs = unwrap_msgs!(msgs);
         let mut msgs = msgs.iter();
-        assert!(matches!(msgs.next(), Some(KeyUpload::Done { .. })));
+        assert!(matches!(msgs.next(), Some(KeyUpload::Image { .. })));
         assert!(matches!(msgs.next(), Some(KeyUpload::Clear)));
     }
 
