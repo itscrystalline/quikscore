@@ -87,6 +87,7 @@ in {
   tasks = {
     "quikscore:check".exec = "cd $DEVENV_ROOT/src-tauri; cargo check";
     "quikscore:lint".exec = "cd $DEVENV_ROOT/src-tauri; RUSTFLAGS=\"-Dwarnings\" cargo-clippy";
+    "quikscore:test-full".exec = "cd $DEVENV_ROOT/src-tauri; cargo nextest run --features ocr-tests";
     "quikscore:coverage".exec = "cd $DEVENV_ROOT/src-tauri; ${pkgs.cargo-tarpaulin}/bin/cargo-tarpaulin --color always --verbose --all-features --workspace --timeout 120 --out xml --no-dead-code --engine llvm --release";
   };
   #

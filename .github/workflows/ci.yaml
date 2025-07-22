@@ -67,4 +67,4 @@ jobs:
         shell: bash
 
       - name: Run Tests
-        run: devenv test
+        run: devenv tasks run quikscore:test-full
