@@ -34,6 +34,11 @@ pub fn clear_key_image(app: AppHandle, channel: Channel<KeyUpload>) {
 }
 
 #[tauri::command]
+pub fn clear_weights(app: AppHandle, channel: Channel<KeyUpload>) {
+    AppState::clear_weights(&app, &channel);
+}
+
+#[tauri::command]
 pub fn upload_sheet_images(app: AppHandle, channel: Channel<AnswerUpload>, model_dir: PathBuf) {
     state::init_model_dir(model_dir);
     println!("uploading sheet images");

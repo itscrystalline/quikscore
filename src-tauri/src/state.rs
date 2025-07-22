@@ -182,13 +182,27 @@ impl AppState {
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        if let AppStatePipeline::WithKey { .. } | AppStatePipeline::WithKeyAndWeights { .. } =
-            state.state
-        {
+        if let AppStatePipeline::WithKey { .. } = state.state {
             state.state = AppStatePipeline::Init;
             signal!(channel, KeyUpload::Clear);
         }
     }
+
+    pub fn clear_weights<R: Runtime, A: Emitter<R> + Manager<R>>(
+        app: &A,
+        channel: &Channel<KeyUpload>,
+    ) {
+        let mutex = app.state::<StateMutex>();
+        let mut state = mutex.lock().expect("poisoned");
+        if let AppStatePipeline::WithKeyAndWeights { key_image, key, .. } = &state.state {
+            state.state = AppStatePipeline::WithKey {
+                key_image: key_image.clone(),
+                key: key.clone(),
+            };
+            signal!(channel, KeyUpload::Clear);
+        }
+    }
+
     pub fn mark_scoring<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,
         channel: &Channel<AnswerUpload>,
