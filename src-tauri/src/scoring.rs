@@ -360,6 +360,7 @@ mod unit_tests {
         assert_eq!(checked.C, CheckedAnswer::Correct);
         assert_eq!(checked.D, CheckedAnswer::NotCounted);
         assert_eq!(checked.E, CheckedAnswer::Missing);
+        assert_eq!(checked.score, 2);
     }
 
     #[test]
@@ -409,6 +410,7 @@ mod unit_tests {
 
         // Per group: 2 correct, 3 incorrect (since missing is also considered incorrect here)
         assert_eq!(result.correct, 2 * 36);
+        assert_eq!(result.score, 2 * 36);
         assert_eq!(result.incorrect, 36);
         assert_eq!(result.not_answered, 36);
         assert_eq!(result.graded_questions.len(), 36);
@@ -475,5 +477,61 @@ mod unit_tests {
                 number: 2u8
             }
         ));
+    }
+
+    macro_rules! weights {
+        // Match 5 args
+        ($a:expr, $b:expr, $c:expr, $d:expr, $e:expr) => {
+            ScoreWeight {
+                A: $a,
+                B: $b,
+                C: $c,
+                D: $d,
+                E: $e,
+            }
+        };
+        // Match 4 args
+        ($a:expr, $b:expr, $c:expr, $d:expr) => {
+            weights!($a, $b, $c, $d, 0)
+        };
+        // Match 3 args
+        ($a:expr, $b:expr, $c:expr) => {
+            weights!($a, $b, $c, 0, 0)
+        };
+        // Match 2 args
+        ($a:expr, $b:expr) => {
+            weights!($a, $b, 0, 0, 0)
+        };
+        // Match 1 arg
+        ($a:expr) => {
+            weights!($a, 0, 0, 0, 0)
+        };
+        // Match 0 args
+        () => {
+            weights!(0, 0, 0, 0, 0)
+        };
+    }
+
+    #[test]
+    fn read_weight_csv() {
+        let csv = r#"
+            subject_code,question_num,A,B,C,D,E
+            10,1,2,3,1,,
+            10,2,1,1,1,,
+            10,3,4,,,,
+            10,4,2,,,,
+            10,5,2,3,,,
+        "#;
+
+        let reader = csv::Reader::from_reader(csv.as_bytes());
+        let mut result: ScoreWeights = reader.into_deserialize().into();
+        let (question_weights, max_score) = result.weights.remove("10").unwrap();
+        let mut question_weights = question_weights.into_iter();
+        assert_eq!(max_score, 2 + 3 + 1 + 1 + 1 + 1 + 4 + 2 + 2 + 3);
+        assert_eq!(question_weights.next(), Some(weights!(2, 3, 1)));
+        assert_eq!(question_weights.next(), Some(weights!(1, 1, 1)));
+        assert_eq!(question_weights.next(), Some(weights!(4)));
+        assert_eq!(question_weights.next(), Some(weights!(2)));
+        assert_eq!(question_weights.next(), Some(weights!(2, 3)));
     }
 }
