@@ -61,7 +61,7 @@ const keyEventHandler = (msg: KeyUpload): void => {
       keyProgressBar.value = false;
       break;
 
-    case "done":
+    case "image":
       keyImage.value = msg.data.base64;
       keyStatus.value = "";
       keyProgressBar.value = false;
@@ -118,6 +118,7 @@ const answerEventHandler = (msg: AnswerUpload): void => {
       answerStatus.value = `Error uploading sheets: ${msg.data.error} `;
       answerProgressBar.value = undefined;
       elapsed.value = "notCounting";
+      canUploadKey.value = answerImages.value.length === 0;
       break;
   }
 }
