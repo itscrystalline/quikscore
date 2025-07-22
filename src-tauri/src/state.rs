@@ -441,7 +441,9 @@ mod unit_tests {
         let app = tauri::test::mock_app();
         app.manage(Mutex::new(AppState {
             state,
-            ..Default::default()
+            options: Options {
+                ocr: cfg!(feature = "ocr-tests"),
+            },
         }));
         app
     }

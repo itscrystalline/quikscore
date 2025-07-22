@@ -765,7 +765,12 @@ mod unit_tests {
     fn test_handle_upload_success() {
         setup_ocr_data();
         let path = test_key_image();
-        let result = handle_upload(path, Some(&state::init_thread_ocr()));
+        let result = handle_upload(
+            path,
+            cfg!(feature = "ocr-tests")
+                .then(state::init_thread_ocr)
+                .as_ref(),
+        );
         assert!(result.is_ok());
 
         let (base64_string, mat, _answer_sheet) = result.unwrap();
@@ -777,7 +782,12 @@ mod unit_tests {
     fn test_handle_upload_failure() {
         setup_ocr_data();
         let path = not_image();
-        let result = handle_upload(path, Some(&state::init_thread_ocr()));
+        let result = handle_upload(
+            path,
+            cfg!(feature = "ocr-tests")
+                .then(state::init_thread_ocr)
+                .as_ref(),
+        );
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), UploadError::NotImage));
     }
@@ -862,6 +872,7 @@ mod unit_tests {
     }
 
     #[test]
+    #[cfg(feature = "ocr-tests")]
     fn check_extracted_ids_ocr() -> Result<(), SheetError> {
         setup_ocr_data();
         let ocr = &state::init_thread_ocr();
@@ -896,6 +907,7 @@ mod unit_tests {
     }
 
     #[test]
+    #[cfg(feature = "ocr-tests")]
     fn check_ocr_function() -> Result<(), SheetError> {
         setup_ocr_data();
         let ocr = &state::init_thread_ocr();
