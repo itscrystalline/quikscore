@@ -189,6 +189,7 @@ impl AppState {
                         )
                     }
                 );
+                signal!(channel, KeyUpload::MissingWeights);
             }
             s => signal!(
                 channel,
@@ -471,6 +472,7 @@ pub enum KeyUpload {
     ClearImage,
     ClearWeights,
     UploadedWeights,
+    MissingWeights,
     Image { base64: String },
     Error { error: String },
 }
@@ -556,6 +558,7 @@ mod unit_tests {
         vec![
             FilePath::Path(PathBuf::from("tests/assets/weights.csv")),
             FilePath::Path(PathBuf::from("tests/assets/weights2.csv")),
+            FilePath::Path(PathBuf::from("tests/assets/weights3.csv")),
         ]
     }
 
@@ -781,6 +784,21 @@ mod unit_tests {
         assert!(matches!(msgs.next(), Some(KeyUpload::Image { .. })));
         assert!(matches!(msgs.next(), Some(KeyUpload::UploadedWeights)));
         assert!(matches!(msgs.next(), Some(KeyUpload::ClearWeights)));
+    }
+    #[test]
+    fn test_app_different_weights_upload() {
+        setup_ocr_data();
+        let app = mock_app_with_state(AppStatePipeline::Init);
+        let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), channel.clone());
+        upload_weights_impl(&app, Some(test_weights().remove(2)), channel.clone());
+
+        assert_state!(app, AppStatePipeline::WithKey { .. });
+        let msgs = unwrap_msgs!(msgs);
+        let mut msgs = msgs.iter();
+        assert!(matches!(msgs.next(), Some(KeyUpload::Image { .. })));
+        assert!(matches!(msgs.next(), Some(KeyUpload::Error { .. })));
+        assert!(matches!(msgs.next(), Some(KeyUpload::MissingWeights)));
     }
 
     #[test]
