@@ -66,9 +66,9 @@
 
             env = {
               RUSTFLAGS = "-Z threads=8";
-              OPENCV_LINK_PATHS = "+${pkgs.opencv}/lib";
-              OPENCV_LINK_LIBS = "+opencv_core,opencv_imgproc,opencv_imgcodecs,png";
-              OPENCV_INCLUDE_PATHS = "+${pkgs.opencv}/include";
+              OPENCV_LINK_PATHS = "${pkgs.opencv}/lib";
+              OPENCV_LINK_LIBS = "opencv_core,opencv_imgproc,opencv_imgcodecs,png";
+              OPENCV_INCLUDE_PATHS = "${pkgs.opencv}/include";
             };
 
             cargoRoot = "src-tauri";
@@ -105,11 +105,19 @@
                 chmod +x $out/bin/quikscore
               ''
               else ''
-                echo Patching libc++ dylib path...
+                echo "Rewriting lib path to system libc++"
+                binary="$out/Applications/quikscore.app/Contents/MacOS/quikscore"
+
+                echo "Before:"
+                otool -L "$binary"
+
                 install_name_tool -change \
-                  ${lib.makeLibraryPath [pkgs.libcxx]}/lib/libc++.1.dylib \
+                  /nix/store/*-libcxx-*/lib/libc++.1.0.dylib \
                   /usr/lib/libc++.1.dylib \
-                  $out/Applications/quikscore.app/Contents/MacOS/quikscore
+                  "$binary"
+
+                echo "After:"
+                otool -L "$binary"
               '';
 
             postInstall =
@@ -121,16 +129,21 @@
                 done
               ''
               else ''
-                mkdir -p $out/Applications/quikscore.app/Contents/Frameworks
+                binary="$out/Applications/quikscore.app/Contents/MacOS/quikscore"
+                frameworks="$out/Applications/quikscore.app/Contents/Frameworks"
+
+                mkdir -p "$frameworks"
                 for lib in core imgproc imgcodecs ; do
-                  cp "${pkgs.opencv}/lib/libopencv_$lib.dylib" $out/Applications/quikscore.app/Contents/Frameworks/
+                  cp "${pkgs.opencv}/lib/libopencv_$lib.dylib" $frameworks/
                 done
+                cp "${pkgs.libpng}/lib/libpng*.dylib" $frameworks/
+                cp "${pkgs.libiconv}/lib/libiconv*.dylib" $frameworks/
 
                 for dylib in $out/Applications/quikscore.app/Contents/Frameworks/*.dylib; do
                   install_name_tool -id "@loader_path/../Frameworks/$(basename "$dylib")" "$dylib"
                 done
 
-                for dep in $(otool -L $out/Applications/quikscore.app/Contents/MacOS/quikscore | grep opencv | awk '{print $1}'); do
+                for dep in $(otool -L $out/Applications/quikscore.app/Contents/MacOS/quikscore | grep "/nix/store" | awk '{print $1}'); do
                   name=$(basename "$dep")
                   install_name_tool -change "$dep" "@loader_path/../Frameworks/$name" $out/Applications/quikscore.app/Contents/MacOS/quikscore
                 done
