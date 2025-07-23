@@ -292,8 +292,8 @@ impl AppState {
                     .map(|r| {
                         r.and_then(|t| {
                             weights.weights.get(&t.2.subject_code).cloned().map_or_else(
-                                || Err(UploadError::MissingScoreWeights(t.0.clone())),
-                                |w| Ok((t.0.clone(), t.1, t.2, w.0, w.1)),
+                                || Err(UploadError::MissingScoreWeights(t.2.clone().subject_code)),
+                                |w| Ok((t.0, t.1, t.2.clone(), w.0, w.1)),
                             )
                         })
                         .map(|(s, mut m, a, w, ms)| {
