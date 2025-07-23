@@ -138,8 +138,8 @@
                 for lib in core imgproc imgcodecs ; do
                   cp "${pkgs.opencv}/lib/libopencv_$lib.dylib" $frameworks/
                 done
-                cp "${pkgs.libpng}/lib/libpng*.dylib" $frameworks/
-                cp "${pkgs.libiconv}/lib/libiconv*.dylib" $frameworks/
+                cp "${pkgs.libpng}/lib/libpng16.16.dylib" $frameworks/
+                cp "${pkgs.libiconv}/lib/libiconv.2.dylib" $frameworks/
 
                 for dylib in $out/Applications/quikscore.app/Contents/Frameworks/*.dylib; do
                   install_name_tool -id "@loader_path/../Frameworks/$(basename "$dylib")" "$dylib"
