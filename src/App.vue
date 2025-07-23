@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { Ref, ref, watch } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { AnswerScoreResult, AnswerUpload, KeyUpload } from "./messages";
+import { AnswerScoreResult, AnswerUpload, AppState, KeyUpload } from "./messages";
 import { download } from '@tauri-apps/plugin-upload';
 import * as path from '@tauri-apps/api/path';
 import { exists, mkdir } from "@tauri-apps/plugin-fs";
+import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
+import { listen } from "@tauri-apps/api/event";
 
 type TimeElapsed = | "notCounting" | number;
 const hms = (secs: number): string => {
@@ -46,7 +48,12 @@ async function ensureModel(textRef: Ref<string>): Promise<string> {
 
   return modelPath;
 }
-import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
+
+const appState = ref<AppState>("Init");
+listen<AppState>("state", (event) => {
+  appState.value = event.payload;
+  console.log("state changed to " + appState.value);
+})
 
 const keyEventHandler = (msg: KeyUpload): void => {
   switch (msg.event) {
@@ -84,20 +91,17 @@ const answerEventHandler = (msg: AnswerUpload): void => {
       elapsed.value = "notCounting";
       break;
     case "clear":
-      canUploadKey.value = true;
       answerStatus.value = "";
       answerImages.value = [];
       answerProgressBar.value = undefined;
       elapsed.value = "notCounting";
       break;
     case "almostDone":
-      canUploadKey.value = false;
       answerStatus.value = "Publishing results...";
       answerProgressBar.value = { type: "indeterminate" };
       elapsed.value = "notCounting";
       break;
     case "processing":
-      canUploadKey.value = false;
       const { total, started, finished } = msg.data;
       var secsPerImage = -1;
       if (elapsed.value == "notCounting") {
@@ -113,7 +117,6 @@ const answerEventHandler = (msg: AnswerUpload): void => {
     case "done":
       answerStatus.value = "";
       answerImages.value = msg.data.uploaded;
-      canUploadKey.value = answerImages.value.length === 0;
       answerProgressBar.value = undefined;
       elapsed.value = "notCounting";
       break;
@@ -121,7 +124,6 @@ const answerEventHandler = (msg: AnswerUpload): void => {
       answerStatus.value = `Error uploading sheets: ${msg.data.error} `;
       answerProgressBar.value = undefined;
       elapsed.value = "notCounting";
-      canUploadKey.value = answerImages.value.length === 0;
       break;
     default:
       answerStatus.value = "Unhandled event";
@@ -135,7 +137,12 @@ const keyImage = ref("");
 const keyStatus = ref("");
 const keyProgressBar = ref(false);
 
-const canUploadKey = ref(true);
+const canUploadKey = () => appState.value == "Init" || appState.value == "WithKey" || appState.value == "WithKeyAndWeights";
+const canChangeKey = () => appState.value == "WithKey" || appState.value == "WithKeyAndWeights";
+const canClearKey = () => appState.value == "WithKey";
+const canUploadSheets = () => appState.value == "Init" || appState.value == "WithKey" || appState.value == "WithKeyAndWeights";
+const canChangeSheets = () => appState.value == "WithKeyAndWeights" || appState.value == "Scored";
+const canClearSheets = () => appState.value == "Scored";
 
 const answerImages = ref<AnswerScoreResult[]>([]);
 const answerStatus = ref("");
@@ -185,30 +192,29 @@ async function clearSheets() {
 
     <div class="header">
       <h2>Answer Key</h2>
-      <button :class="`btn-key${!canUploadKey ? ' btn-disabled' : ''}`" @click="uploadKey"
-        v-bind:disabled="!canUploadKey">{{ keyImage ===
-          ""
+      <button :class="`btn-key${!canUploadKey() ? ' btn-disabled' : ''}`" @click="uploadKey"
+        v-bind:disabled="!canUploadKey()">{{ canChangeKey()
           ?
-          "📥\nUpload Answer Key..." :
-          "Change Answer Key" }}</button>
-      <button :class="`btn-clear${!canUploadKey ? ' btn-disabled' : ''}`" @click="clearKey"
-        v-bind:disabled="!canUploadKey" v-if="keyImage !== ''">🔄 Clear
+          "Change Answer Key" :
+          "📥\nUpload Answer Key..." }}</button>
+      <button :class="`btn-clear${!canClearKey() ? ' btn-disabled' : ''}`" @click="clearKey"
+        v-bind:disabled="!canClearKey()" v-if="keyImage !== ''">🔄 Clear
         Answer Key</button>
     </div>
     <div class="card">
       <img v-bind:src="keyImage" :style="keyImage == '' ? 'display: none;' : ''"></img>
-      <p class="placeholder" v-if="!keyImage && canUploadKey">{{ keyStatus === "" ? "Upload a key..." :
+      <p class="placeholder" v-if="!keyImage && canUploadKey()">{{ keyStatus === "" ? "Upload a key..." :
         keyStatus }}</p>
       <StackedProgressBar v-if="keyProgressBar" type="indeterminate" />
     </div>
 
     <div class="header">
       <h2>Answer Sheets</h2>
-      <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ?
-        "🧾 Upload Answer Sheets..." :
-        "Change Answer Sheets"
+      <button class="btn-sheet" @click="uploadSheets" :disabled="!canUploadSheets()">{{ canChangeSheets() ?
+        "Change Answer Sheets" :
+        "🧾 Upload Answer Sheets..."
         }}</button>
-      <button class="btn-clear" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄
+      <button class="btn-clear" @click="clearSheets" :disabled="!canClearSheets()" v-if="answerImages.length !== 0">🔄
         Clear
         Answer
         Sheets</button>

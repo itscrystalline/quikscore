@@ -1,3 +1,9 @@
+export type AppState =
+  | "Init"
+  | "WithKey"
+  | "WithKeyAndWeights"
+  | "Scoring"
+  | "Scored";
 export type KeyUpload =
   | {
       event: "cancelled";
