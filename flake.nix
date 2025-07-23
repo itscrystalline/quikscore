@@ -102,19 +102,23 @@
                 chmod +x $out/bin/quikscore
               ''
               else ''
-                echo "Rewriting lib path to system libc++"
-                binary="$out/Applications/quikscore.app/Contents/MacOS/quikscore"
+                                echo "Rewriting lib path to system libc++"
+                                binary="$out/Applications/quikscore.app/Contents/MacOS/quikscore"
 
-                echo "Before:"
-                otool -L "$binary"
+                                echo "Before:"
+                                otool -L "$binary"
 
-                install_name_tool -change \
-                  ${pkgs.libcxx}/lib/libc++.1.0.dylib \
-                  /usr/lib/libc++.1.dylib \
-                  "$binary"
+                                install_name_tool -change \
+                <<<<<<< HEAD
+                                  ${pkgs.libcxx}/lib/libc++.1.0.dylib \
+                =======
+                                  /nix/store/*-libcxx-*/lib/libc++.1.0.dylib \
+                >>>>>>> 350d5a6 (chore: limit opencv link libs and fix macos linking issues)
+                                  /usr/lib/libc++.1.dylib \
+                                  "$binary"
 
-                echo "After:"
-                otool -L "$binary"
+                                echo "After:"
+                                otool -L "$binary"
               '';
 
             postInstall =
@@ -129,25 +133,28 @@
                 cp -a "${pkgs.openexr.out}/lib/." "$out/lib/"
               ''
               else ''
-                echo "Bundling additional dylibs (OpenCV, libpng, libiconv)"
-                binary="$out/Applications/quikscore.app/Contents/MacOS/quikscore"
-                frameworks="$out/Applications/quikscore.app/Contents/Frameworks"
+                <<<<<<< HEAD
+                                echo "Bundling additional dylibs (OpenCV, libpng, libiconv)"
+                =======
+                >>>>>>> 350d5a6 (chore: limit opencv link libs and fix macos linking issues)
+                                binary="$out/Applications/quikscore.app/Contents/MacOS/quikscore"
+                                frameworks="$out/Applications/quikscore.app/Contents/Frameworks"
 
-                mkdir -p "$frameworks"
-                for lib in core imgproc imgcodecs ; do
-                  cp "${pkgs.opencv}/lib/libopencv_$lib.dylib" $frameworks/
-                done
-                cp "${pkgs.libpng}/lib/libpng16.16.dylib" $frameworks/
-                cp "${pkgs.libiconv}/lib/libiconv.2.dylib" $frameworks/
+                                mkdir -p "$frameworks"
+                                for lib in core imgproc imgcodecs ; do
+                                  cp "${pkgs.opencv}/lib/libopencv_$lib.dylib" $frameworks/
+                                done
+                                cp "${pkgs.libpng}/lib/libpng16.16.dylib" $frameworks/
+                                cp "${pkgs.libiconv}/lib/libiconv.2.dylib" $frameworks/
 
-                for dylib in $out/Applications/quikscore.app/Contents/Frameworks/*.dylib; do
-                  install_name_tool -id "@loader_path/../Frameworks/$(basename "$dylib")" "$dylib"
-                done
+                                for dylib in $out/Applications/quikscore.app/Contents/Frameworks/*.dylib; do
+                                  install_name_tool -id "@loader_path/../Frameworks/$(basename "$dylib")" "$dylib"
+                                done
 
-                for dep in $(otool -L $out/Applications/quikscore.app/Contents/MacOS/quikscore | grep "/nix/store" | awk '{print $1}'); do
-                  name=$(basename "$dep")
-                  install_name_tool -change "$dep" "@loader_path/../Frameworks/$name" $out/Applications/quikscore.app/Contents/MacOS/quikscore
-                done
+                                for dep in $(otool -L $out/Applications/quikscore.app/Contents/MacOS/quikscore | grep "/nix/store" | awk '{print $1}'); do
+                                  name=$(basename "$dep")
+                                  install_name_tool -change "$dep" "@loader_path/../Frameworks/$name" $out/Applications/quikscore.app/Contents/MacOS/quikscore
+                                done
               '';
           });
       in {
