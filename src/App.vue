@@ -80,6 +80,9 @@ const keyEventHandler = (msg: KeyUpload): void => {
     case "uploadedWeights":
       break;
 
+    case "missingWeights":
+      break;
+
     case "error":
       keyStatus.value = msg.data.error;
       keyProgressBar.value = false;
