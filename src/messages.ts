@@ -18,6 +18,9 @@ export type KeyUpload =
       event: "uploadedWeights";
     }
   | {
+      event: "missingWeights";
+    }
+  | {
       event: "image";
       data: {
         base64: string;
