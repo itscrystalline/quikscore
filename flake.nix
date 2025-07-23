@@ -126,8 +126,7 @@
                   cp "${pkgs.opencv}/lib/libopencv_$lib.so.411" "$out/lib/"
                 done
                 cp "${pkgs.openblas}/lib/libopenblas.so.0" "$out/lib/"
-                cp "${pkgs.openexr.out}/lib/libOpenEXR-3_3.so.32" "$out/lib/"
-                cp "${pkgs.openexr.out}/lib/libOpenEXRCore-3_3.so.32" "$out/lib/"
+                cp "${pkgs.openexr.out}/lib/*" "$out/lib/"
               ''
               else ''
                 echo "Bundling additional dylibs (OpenCV, libpng, libiconv)"
