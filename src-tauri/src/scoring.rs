@@ -231,7 +231,9 @@ impl<R: std::io::Read> From<WeightsIter<R>> for ScoreWeights {
                 macro_rules! conv {
                     ($i: expr) => {
                         $i.parse::<u8>().unwrap_or_else(|e| {
-                            println!("error reading question answer weight: not a number ('{e}'), using 0 as weight");
+                            println!(
+                                "warn: cannot read question answer weight: {e}, using 0 as weight"
+                            );
                             0
                         })
                     };
