@@ -62,10 +62,13 @@ const keyEventHandler = (msg: KeyUpload): void => {
       keyProgressBar.value = false;
       break;
 
-    case "clear":
+    case "clearImage":
       keyImage.value = "";
       keyStatus.value = "";
       keyProgressBar.value = false;
+      break;
+
+    case "clearWeights":
       break;
 
     case "image":
@@ -74,13 +77,16 @@ const keyEventHandler = (msg: KeyUpload): void => {
       keyProgressBar.value = false;
       break;
 
+    case "uploadedWeights":
+      break;
+
     case "error":
       keyStatus.value = msg.data.error;
       keyProgressBar.value = false;
       break;
 
     default:
-      answerStatus.value = "Unhandled event";
+      keyStatus.value = "Unhandled event";
   }
 }
 const answerEventHandler = (msg: AnswerUpload): void => {
@@ -137,11 +143,14 @@ const keyImage = ref("");
 const keyStatus = ref("");
 const keyProgressBar = ref(false);
 
-const canUploadKey = () => appState.value == "Init" || appState.value == "WithKey" || appState.value == "WithKeyAndWeights";
+const canUploadKey = () => appState.value == "Init" || appState.value == "WithKey";
 const canChangeKey = () => appState.value == "WithKey" || appState.value == "WithKeyAndWeights";
 const canClearKey = () => appState.value == "WithKey";
-const canUploadSheets = () => appState.value == "Init" || appState.value == "WithKey" || appState.value == "WithKeyAndWeights";
-const canChangeSheets = () => appState.value == "WithKeyAndWeights" || appState.value == "Scored";
+const canUploadWeights = () => appState.value == "WithKey" || appState.value == "WithKeyAndWeights";
+const canChangeWeights = () => appState.value == "WithKeyAndWeights";
+const canClearWeights = () => appState.value == "WithKeyAndWeights";
+const canUploadSheets = () => appState.value == "WithKeyAndWeights";
+const canChangeSheets = () => appState.value == "Scored";
 const canClearSheets = () => appState.value == "Scored";
 
 const answerImages = ref<AnswerScoreResult[]>([]);
@@ -161,6 +170,17 @@ async function clearKey() {
   const keyEventChannel = new Channel<KeyUpload>();
   keyEventChannel.onmessage = keyEventHandler;
   await invoke("clear_key_image", { channel: keyEventChannel });
+}
+
+async function uploadWeights() {
+  const keyEventChannel = new Channel<KeyUpload>();
+  keyEventChannel.onmessage = keyEventHandler;
+  await invoke("upload_weights", { channel: keyEventChannel });
+}
+async function clearWeights() {
+  const keyEventChannel = new Channel<KeyUpload>();
+  keyEventChannel.onmessage = keyEventHandler;
+  await invoke("clear_weights", { channel: keyEventChannel });
 }
 
 async function uploadSheets() {
@@ -191,33 +211,40 @@ async function clearSheets() {
     </div>
 
     <div class="header">
-      <h2>Answer Key</h2>
-      <button :class="`btn-key${!canUploadKey() ? ' btn-disabled' : ''}`" @click="uploadKey"
-        v-bind:disabled="!canUploadKey()">{{ canChangeKey()
-          ?
-          "Change Answer Key" :
-          "📥\nUpload Answer Key..." }}</button>
+      <h2>Answer Key & Weights</h2>
+      <button :class="`btn-key${!(canUploadKey() || canChangeKey()) ? ' btn-disabled' : ''}`" @click="uploadKey"
+        v-bind:disabled="!(canUploadKey() || canChangeKey())">
+        {{ canChangeKey() ? "Change Answer Key" : "📥\nUpload Answer Key..." }}
+      </button>
       <button :class="`btn-clear${!canClearKey() ? ' btn-disabled' : ''}`" @click="clearKey"
-        v-bind:disabled="!canClearKey()" v-if="keyImage !== ''">🔄 Clear
-        Answer Key</button>
+        v-bind:disabled="!canClearKey()" v-if="keyImage !== ''">
+        🔄 Clear Answer Key
+      </button>
+
+      <button :class="`btn-key${!(canUploadWeights() || canChangeWeights()) ? ' btn-disabled' : ''}`"
+        @click="uploadWeights" v-bind:disabled="!(canUploadWeights() || canChangeWeights())">
+        {{ canChangeWeights() ? "Change Weights file" : "📥\nUpload Weights file..." }}
+      </button>
+      <button :class="`btn-clear${!canClearWeights() ? ' btn-disabled' : ''}`" @click="clearWeights"
+        v-bind:disabled="!canClearWeights()" v-if="keyImage !== ''">
+        🔄 Clear Weights
+      </button>
     </div>
     <div class="card">
-      <img v-bind:src="keyImage" :style="keyImage == '' ? 'display: none;' : ''"></img>
-      <p class="placeholder" v-if="!keyImage && canUploadKey()">{{ keyStatus === "" ? "Upload a key..." :
-        keyStatus }}</p>
+      <p class="placeholder" v-if="keyStatus !== '' || !keyImage">
+        {{ keyStatus === "" ? "Upload a key..." : keyStatus }}
+      </p>
       <StackedProgressBar v-if="keyProgressBar" type="indeterminate" />
+      <img v-bind:src="keyImage" :style="keyImage == '' ? 'display: none;' : ''"></img>
     </div>
 
     <div class="header">
       <h2>Answer Sheets</h2>
-      <button class="btn-sheet" @click="uploadSheets" :disabled="!canUploadSheets()">{{ canChangeSheets() ?
-        "Change Answer Sheets" :
-        "🧾 Upload Answer Sheets..."
-        }}</button>
-      <button class="btn-clear" @click="clearSheets" :disabled="!canClearSheets()" v-if="answerImages.length !== 0">🔄
-        Clear
-        Answer
-        Sheets</button>
+      <button class="btn-sheet" @click="uploadSheets" :disabled="!(canUploadSheets() || canChangeSheets())">
+        {{ canChangeSheets() ? "Change Answer Sheets" : "🧾 Upload Answer Sheets..." }}
+      </button>
+      <button class="btn-clear" @click="clearSheets" :disabled="!canClearSheets()" v-if="answerImages.length !== 0">
+        🔄 Clear Answer Sheets</button>
     </div>
     <!-- 📦 Result Placeholder -->
     <div class="card">
@@ -226,8 +253,7 @@ async function clearSheets() {
           <img :src="data.base64"></img>
           <div class="stats">
             <p>ID {{ data.studentId }}</p>
-            <p>score: {{ data.correct }}</p>
-            <p>incorrect: {{ data.incorrect }}</p>
+            <p>score: {{ data.score }}/{{ data.maxScore }}</p>
             <p>questions not answered: {{ data.notAnswered }}</p>
           </div>
         </div>
@@ -235,8 +261,9 @@ async function clearSheets() {
           {{ data.error }}
         </p>
       </div>
-      <p class="placeholder" v-if="answerImages.length === 0">{{ answerStatus === "" ?
-        "Upload files to see results here" : answerStatus }}</p>
+      <p class="placeholder" v-if="answerImages.length === 0 || answerStatus">
+        {{ answerStatus === "" ? "Upload files to see results here" : answerStatus }}
+      </p>
       <StackedProgressBar v-if="answerProgressBar" v-bind="answerProgressBar" />
     </div>
   </main>
