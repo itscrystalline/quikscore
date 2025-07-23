@@ -53,6 +53,13 @@ macro_rules! signal {
         }
     };
 }
+macro_rules! emit_state {
+    ($app: ident, $message: expr) => {
+        if let Err(e) = $app.emit("state", $message) {
+            println!("State event emission failed: {e}");
+        }
+    };
+}
 
 #[derive(Default)]
 pub struct AppState {
@@ -150,6 +157,7 @@ impl AppState {
                 }
             ),
         }
+        emit_state!(app, state.state.to_string());
     }
     pub fn upload_weights<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,
@@ -189,6 +197,7 @@ impl AppState {
                 }
             ),
         }
+        emit_state!(app, state.state.to_string());
     }
     pub fn clear_key<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,
@@ -200,6 +209,7 @@ impl AppState {
             state.state = AppStatePipeline::Init;
             signal!(channel, KeyUpload::Clear);
         }
+        emit_state!(app, state.state.to_string());
     }
 
     pub fn clear_weights<R: Runtime, A: Emitter<R> + Manager<R>>(
@@ -215,6 +225,7 @@ impl AppState {
             };
             signal!(channel, KeyUpload::Clear);
         }
+        emit_state!(app, state.state.to_string());
     }
 
     pub fn mark_scoring<R: Runtime, A: Emitter<R> + Manager<R>>(
@@ -258,6 +269,7 @@ impl AppState {
                 }
             ),
         }
+        emit_state!(app, state.state.to_string());
     }
     pub fn upload_answer_sheets<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,
@@ -353,6 +365,7 @@ impl AppState {
                 }
             ),
         }
+        emit_state!(app, state.state.to_string());
     }
     pub fn clear_answer_sheets<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,
@@ -360,13 +373,21 @@ impl AppState {
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        if let AppStatePipeline::Scored { key, key_image, .. } = &state.state {
-            state.state = AppStatePipeline::WithKey {
+        if let AppStatePipeline::Scored {
+            key,
+            key_image,
+            weights,
+            ..
+        } = &state.state
+        {
+            state.state = AppStatePipeline::WithKeyAndWeights {
                 key_image: key_image.clone(),
                 key: key.clone(),
+                weights: weights.clone(),
             };
             signal!(channel, AnswerUpload::Clear);
         }
+        emit_state!(app, state.state.to_string());
     }
     pub fn set_ocr<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A, ocr: bool) {
         let mutex = app.state::<StateMutex>();
