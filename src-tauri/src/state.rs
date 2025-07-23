@@ -207,7 +207,7 @@ impl AppState {
         let mut state = mutex.lock().expect("poisoned");
         if let AppStatePipeline::WithKey { .. } = state.state {
             state.state = AppStatePipeline::Init;
-            signal!(channel, KeyUpload::Clear);
+            signal!(channel, KeyUpload::ClearImage);
         }
         emit_state!(app, state.state.to_string());
     }
@@ -223,7 +223,7 @@ impl AppState {
                 key_image: key_image.clone(),
                 key: key.clone(),
             };
-            signal!(channel, KeyUpload::Clear);
+            signal!(channel, KeyUpload::ClearWeights);
         }
         emit_state!(app, state.state.to_string());
     }
@@ -468,7 +468,8 @@ pub enum NumberType {
 )]
 pub enum KeyUpload {
     Cancelled,
-    Clear,
+    ClearImage,
+    ClearWeights,
     UploadedWeights,
     Image { base64: String },
     Error { error: String },
@@ -699,7 +700,7 @@ mod unit_tests {
         let msgs = unwrap_msgs!(msgs);
         let mut msgs = msgs.iter();
         assert!(matches!(msgs.next(), Some(KeyUpload::Image { .. })));
-        assert!(matches!(msgs.next(), Some(KeyUpload::Clear)));
+        assert!(matches!(msgs.next(), Some(KeyUpload::ClearImage)));
     }
 
     #[test]
@@ -761,6 +762,25 @@ mod unit_tests {
         let msg_history = unwrap_msgs!(msgs);
         assert!(matches!(msg_history[0], KeyUpload::Image { .. }));
         assert!(matches!(msg_history[1], KeyUpload::Cancelled));
+    }
+    #[test]
+    fn test_app_weights_clear() {
+        setup_ocr_data();
+        let app = mock_app_with_state(AppStatePipeline::Init);
+        let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), channel.clone());
+        upload_weights_impl(&app, Some(test_weights().remove(0)), channel.clone());
+
+        assert_state!(app, AppStatePipeline::WithKeyAndWeights { .. });
+
+        AppState::clear_weights(&app, &channel);
+
+        assert_state!(app, AppStatePipeline::WithKey { .. });
+        let msgs = unwrap_msgs!(msgs);
+        let mut msgs = msgs.iter();
+        assert!(matches!(msgs.next(), Some(KeyUpload::Image { .. })));
+        assert!(matches!(msgs.next(), Some(KeyUpload::UploadedWeights)));
+        assert!(matches!(msgs.next(), Some(KeyUpload::ClearWeights)));
     }
 
     #[test]
@@ -894,7 +914,7 @@ mod unit_tests {
 
         AppState::clear_answer_sheets(&app, &sheet_channel);
 
-        assert_state!(app, AppStatePipeline::WithKey { .. });
+        assert_state!(app, AppStatePipeline::WithKeyAndWeights { .. });
 
         let msgs = unwrap_msgs!(sheet_msgs);
         let mut msgs = msgs

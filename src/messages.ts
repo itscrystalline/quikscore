@@ -9,7 +9,10 @@ export type KeyUpload =
       event: "cancelled";
     }
   | {
-      event: "clear";
+      event: "clearImage";
+    }
+  | {
+      event: "clearWeights";
     }
   | {
       event: "uploadedWeights";
