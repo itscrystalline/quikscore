@@ -10,13 +10,17 @@ import { listen } from "@tauri-apps/api/event";
 
 type TimeElapsed = | "notCounting" | number;
 const hms = (secs: number): string => {
-  var h = Math.floor(secs / 3600);
-  var m = Math.floor(secs % 3600 / 60);
-  var s = Math.floor(secs % 3600 % 60);
-  var hDisplay = h > 0 ? h + "h " : "";
-  var mDisplay = m > 0 ? m + "m " : "";
-  var sDisplay = s > 0 ? s + "s" : "";
-  return hDisplay + mDisplay + sDisplay;
+  if (secs > 0) {
+    var h = Math.floor(secs / 3600);
+    var m = Math.floor(secs % 3600 / 60);
+    var s = Math.floor(secs % 3600 % 60);
+    var hDisplay = h > 0 ? h + "h " : "";
+    var mDisplay = m > 0 ? m + "m " : "";
+    var sDisplay = s > 0 ? s + "s" : "";
+    return hDisplay + mDisplay + sDisplay;
+  } else {
+    return "<1s";
+  }
 }
 
 async function ensureModel(textRef: Ref<string>): Promise<string> {
