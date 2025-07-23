@@ -32,12 +32,9 @@
         libPathPatchScript = pkgs.writeScript "quikscore" ''
           #!/bin/sh
           LIB_DIR="$(dirname "$0")/../lib"
-          LIBS=""
-          for lib in core imgproc imgcodecs ; do
-            LIBS=$LIB_DIR/libopencv_$lib.so.411:$LIBS
-          done
-          export LD_LIBRARY_PATH=$LIBS$LD_LIBRARY_PATH
-          exec -a "$0" "`dirname $0`/.quikscore-wrapped" "$@"
+          LIB_DIR=$(readlink -f $LIB_DIR)
+          export LD_LIBRARY_PATH=$LIB_DIR:$LD_LIBRARY_PATH
+          exec "`dirname $0`/.quikscore-wrapped" "$@"
         '';
 
         package = avx:
@@ -68,7 +65,7 @@
               RUSTFLAGS = "-Z threads=8";
               OPENCV_LINK_PATHS = "${pkgs.opencv}/lib";
               OPENCV_LINK_LIBS = "opencv_core,opencv_imgproc,opencv_imgcodecs,png";
-              OPENCV_INCLUDE_PATHS = "${pkgs.opencv}/include";
+              OPENCV_INCLUDE_PATHS = "+${pkgs.opencv}/include";
             };
 
             cargoRoot = "src-tauri";
@@ -123,12 +120,17 @@
             postInstall =
               if stdenv.hostPlatform.isLinux
               then ''
+                echo Bundling additional libraries (OpenCV, OpenBLAS, OpenEXR)
                 mkdir -p $out/lib
                 for lib in core imgproc imgcodecs ; do
                   cp "${pkgs.opencv}/lib/libopencv_$lib.so.411" "$out/lib/"
                 done
+                cp "${pkgs.openblas}/lib/libopenblas.so.0" "$out/lib/"
+                cp "${pkgs.openexr.out}/lib/libOpenEXR-3_3.so.32" "$out/lib/"
+                cp "${pkgs.openexr.out}/lib/libOpenEXRCore-3_3.so.32" "$out/lib/"
               ''
               else ''
+                echo Bundling additional dylibs (OpenCV, libpng, libiconv)
                 binary="$out/Applications/quikscore.app/Contents/MacOS/quikscore"
                 frameworks="$out/Applications/quikscore.app/Contents/Frameworks"
 
