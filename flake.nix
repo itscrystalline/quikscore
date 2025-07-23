@@ -120,7 +120,7 @@
             postInstall =
               if stdenv.hostPlatform.isLinux
               then ''
-                echo Bundling additional libraries (OpenCV, OpenBLAS, OpenEXR)
+                echo "Bundling additional libraries (OpenCV, OpenBLAS, OpenEXR)"
                 mkdir -p $out/lib
                 for lib in core imgproc imgcodecs ; do
                   cp "${pkgs.opencv}/lib/libopencv_$lib.so.411" "$out/lib/"
@@ -130,7 +130,7 @@
                 cp "${pkgs.openexr.out}/lib/libOpenEXRCore-3_3.so.32" "$out/lib/"
               ''
               else ''
-                echo Bundling additional dylibs (OpenCV, libpng, libiconv)
+                echo "Bundling additional dylibs (OpenCV, libpng, libiconv)"
                 binary="$out/Applications/quikscore.app/Contents/MacOS/quikscore"
                 frameworks="$out/Applications/quikscore.app/Contents/Frameworks"
 
