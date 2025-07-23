@@ -73,6 +73,8 @@ const keyEventHandler = (msg: KeyUpload): void => {
       break;
 
     case "clearWeights":
+      keyHasWeights.value = "notUploaded";
+      keyStatus.value = "";
       break;
 
     case "image":
@@ -82,9 +84,12 @@ const keyEventHandler = (msg: KeyUpload): void => {
       break;
 
     case "uploadedWeights":
+      keyHasWeights.value = "yes";
+      keyStatus.value = "";
       break;
 
     case "missingWeights":
+      keyHasWeights.value = "missingWeights";
       break;
 
     case "error":
@@ -147,6 +152,7 @@ const ocr = ref(true);
 watch(ocr, async (new_ocr, _) => { await invoke("set_ocr", { ocr: new_ocr }) });
 
 const keyImage = ref("");
+const keyHasWeights = ref<"notUploaded" | "missingWeights" | "yes">("notUploaded");
 const keyStatus = ref("");
 const keyProgressBar = ref(false);
 
@@ -242,7 +248,20 @@ async function clearSheets() {
         {{ keyStatus === "" ? "Upload a key..." : keyStatus }}
       </p>
       <StackedProgressBar v-if="keyProgressBar" type="indeterminate" />
-      <img v-bind:src="keyImage" :style="keyImage == '' ? 'display: none;' : ''"></img>
+      <div :style="keyImage == '' ? 'display: none;' : ''" class="key-image-container">
+        <div :class="keyHasWeights == 'notUploaded' ? 'yellow' : keyHasWeights == 'missingWeights' ? 'red' : 'green'">
+          <img
+            :src="`/src/assets/${keyHasWeights == 'notUploaded' ? 'no' : keyHasWeights == 'missingWeights' ? 'missing' : 'have'}_weights.svg`" />
+          <p>
+            {{
+              keyHasWeights == 'notUploaded' ? "Please upload weights for this key." :
+                keyHasWeights == 'missingWeights' ? "Weights missing for this key." :
+                  "Weights uploaded!"
+            }}
+          </p>
+        </div>
+        <img v-bind:src="keyImage" :style="keyImage == '' ? 'display: none;' : ''" />
+      </div>
     </div>
 
     <div class="header">
@@ -490,6 +509,51 @@ button.btn-clear:hover:not(:disabled) {
 img {
   object-fit: contain;
   max-height: 100%;
+  max-width: 100%;
+}
+
+.key-image-container {
+  display: inline-block;
+  position: relative;
+}
+
+.key-image-container>div {
+  position: absolute;
+  width: 100%;
+  /* 100% bleeds outside the image for some reason */
+  height: 96%;
+  display: flex;
+  overflow: hidden;
+  align-items: self-end;
+  justify-content: start;
+}
+
+.key-image-container>div.red {
+  background: #E64553;
+  background: linear-gradient(0deg, rgba(230, 69, 83, 0.8) 0%, rgba(233, 94, 106, 0.6) 20%, rgba(255, 255, 255, 0) 75%);
+}
+
+.key-image-container>div.yellow {
+  background: #DF8E1D;
+  background: linear-gradient(0deg, rgba(223, 142, 29, 0.8) 0%, rgba(227, 158, 60, 0.6) 20%, rgba(255, 255, 255, 0) 75%);
+}
+
+.key-image-container>div.green {
+  background: #10B981;
+  background: linear-gradient(0deg, rgba(16, 185, 129, 0.8) 0%, rgba(79, 204, 162, 0.6) 20%, rgba(255, 255, 255, 0) 75%);
+}
+
+.key-image-container>div>* {
+  margin-left: 3vh;
+  margin-bottom: 3vh;
+  color: #eff1f5;
+  height: 2em;
+  font-size: 1.3em;
+  text-shadow: rgba(0, 0, 0, 0.25) 0px 54px 55px, rgba(0, 0, 0, 0.12) 0px -12px 30px, rgba(0, 0, 0, 0.12) 0px 4px 6px, rgba(0, 0, 0, 0.17) 0px 12px 13px, rgba(0, 0, 0, 0.09) 0px -3px 5px;
+
+}
+
+.key-image-container>img {
   max-width: 100%;
 }
 </style>
