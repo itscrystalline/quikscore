@@ -30,15 +30,22 @@ jobs:
         platform: 
           - on: ubuntu-latest 
             name: linux-x86_64
+            avx: true
+          - on: ubuntu-latest 
+            name: linux-x86_64
+            avx: false 
           - on: ubuntu-24.04-arm 
             name: linux-aarch64
+            avx: false 
           - on: macos-latest 
             name: macos-aarch64
+            avx: false 
           - on: macos-13
             name: macos-x86_64
-        avx:
-          - true
-          - false
+            avx: true
+          - on: macos-13
+            name: macos-x86_64
+            avx: false 
 
     steps:
     - name: Checkout code
@@ -55,11 +62,11 @@ jobs:
         name: devenv
 
     - name: Build with Nix flake (with AVX)
-      if: ${{ matrix.avx }}
+      if: ${{ matrix.platform.avx }}
       run: |
         nix build .#quikscore -L 2>&1
     - name: Build with Nix flake (without AVX)
-      if: ${{ !matrix.avx }}
+      if: ${{ !matrix.platform.avx }}
       run: |
         nix build .#quikscore-compat -L 2>&1
 
@@ -67,7 +74,7 @@ jobs:
       if: ${{ contains(matrix.platform.name, 'linux') }}
       uses: actions/upload-artifact@v4
       with:
-        name: quikscore-${{ matrix.platform.name }}${{ matrix.avx && '-avx' || '' }}
+        name: quikscore-${{ matrix.platform.name }}${{ matrix.platform.avx && '-avx' || '' }}
         include-hidden-files: true
         path: |
           result
@@ -75,7 +82,7 @@ jobs:
       if: ${{ contains(matrix.platform.name, 'macos') }}
       uses: actions/upload-artifact@v4
       with:
-        name: quikscore-${{ matrix.platform.name }}${{ matrix.avx && '-avx' || '' }}
+        name: quikscore-${{ matrix.platform.name }}${{ matrix.platform.avx && '-avx' || '' }}
         path: |
           result/Applications
 
