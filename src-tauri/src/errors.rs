@@ -12,6 +12,8 @@ pub enum UploadError {
     NotAnswerSheet(#[from] SheetError),
     #[error("Pipe between processing threads and main thread unexpectetly broken")]
     UnexpectedPipeClosure,
+    #[error("Weights file does not contain weights for subject id {0}")]
+    MissingScoreWeights(String),
 }
 
 #[derive(thiserror::Error, Debug)]

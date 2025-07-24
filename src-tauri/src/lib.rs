@@ -18,10 +18,12 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             commands::upload_key_image,
+            commands::upload_weights,
             commands::clear_key_image,
+            commands::clear_weights,
             commands::upload_sheet_images,
             commands::clear_sheet_images,
-            commands::set_ocr
+            commands::set_ocr,
         ])
         .setup(|app| {
             app.manage(Mutex::new(AppState::default()));

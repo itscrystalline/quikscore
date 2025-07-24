@@ -1,12 +1,27 @@
+export type AppState =
+  | "Init"
+  | "WithKey"
+  | "WithKeyAndWeights"
+  | "Scoring"
+  | "Scored";
 export type KeyUpload =
   | {
       event: "cancelled";
     }
   | {
-      event: "clear";
+      event: "clearImage";
     }
   | {
-      event: "done";
+      event: "clearWeights";
+    }
+  | {
+      event: "uploadedWeights";
+    }
+  | {
+      event: "missingWeights";
+    }
+  | {
+      event: "image";
       data: {
         base64: string;
       };
@@ -51,6 +66,8 @@ export type AnswerScoreResult =
       data: {
         studentId: string;
         base64: string;
+        score: number;
+        maxScore: number;
         correct: number;
         incorrect: number;
         notAnswered: number;

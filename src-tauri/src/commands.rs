@@ -1,3 +1,4 @@
+use crate::scoring::upload_weights_impl;
 use crate::state;
 use std::path::PathBuf;
 
@@ -20,8 +21,21 @@ pub fn upload_key_image(app: AppHandle, channel: Channel<KeyUpload>, model_dir: 
 }
 
 #[tauri::command]
+pub fn upload_weights(app: AppHandle, channel: Channel<KeyUpload>) {
+    println!("uploading weights");
+    app.dialog().file().pick_file(move |file_path| {
+        upload_weights_impl(&app, file_path, channel);
+    });
+}
+
+#[tauri::command]
 pub fn clear_key_image(app: AppHandle, channel: Channel<KeyUpload>) {
     AppState::clear_key(&app, &channel);
+}
+
+#[tauri::command]
+pub fn clear_weights(app: AppHandle, channel: Channel<KeyUpload>) {
+    AppState::clear_weights(&app, &channel);
 }
 
 #[tauri::command]
