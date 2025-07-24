@@ -47,6 +47,10 @@ pub fn upload_sheet_images(app: AppHandle, channel: Channel<AnswerUpload>, model
     });
 }
 #[tauri::command]
+pub fn cancel_upload_sheets(app: AppHandle, channel: Channel<AnswerUpload>) {
+    AppState::cancel_scoring(&app, &channel);
+}
+#[tauri::command]
 pub fn clear_sheet_images(app: AppHandle, channel: Channel<AnswerUpload>) {
     AppState::clear_answer_sheets(&app, &channel);
 }
