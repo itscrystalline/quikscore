@@ -30,22 +30,12 @@ jobs:
         platform: 
           - on: ubuntu-latest 
             name: linux-x86_64
-            avx: true
-          - on: ubuntu-latest 
-            name: linux-x86_64
-            avx: false 
           - on: ubuntu-24.04-arm 
             name: linux-aarch64
-            avx: false 
           - on: macos-latest 
             name: macos-aarch64
-            avx: false 
           - on: macos-13
             name: macos-x86_64
-            avx: true
-          - on: macos-13
-            name: macos-x86_64
-            avx: false 
 
     steps:
     - name: Checkout code
@@ -61,20 +51,15 @@ jobs:
       with:
         name: devenv
 
-    - name: Build with Nix flake (with AVX)
-      if: ${{ matrix.platform.avx }}
+    - name: Build with Nix flake
       run: |
         nix build .#quikscore -L 2>&1
-    - name: Build with Nix flake (without AVX)
-      if: ${{ !matrix.platform.avx }}
-      run: |
-        nix build .#quikscore-compat -L 2>&1
 
     - name: Upload Nix build artifacts (Linux)
       if: ${{ contains(matrix.platform.name, 'linux') }}
       uses: actions/upload-artifact@v4
       with:
-        name: quikscore-${{ matrix.platform.name }}${{ matrix.platform.avx && '-avx' || '' }}
+        name: quikscore-${{ matrix.platform.name }}
         include-hidden-files: true
         path: |
           result
@@ -82,7 +67,7 @@ jobs:
       if: ${{ contains(matrix.platform.name, 'macos') }}
       uses: actions/upload-artifact@v4
       with:
-        name: quikscore-${{ matrix.platform.name }}${{ matrix.platform.avx && '-avx' || '' }}
+        name: quikscore-${{ matrix.platform.name }}
         path: |
           result/Applications
 
@@ -91,10 +76,6 @@ jobs:
     runs-on: windows-latest
     strategy:
       fail-fast: false
-      matrix:
-        avx:
-          - true
-          - false
 
     steps:
     - name: Checkout code
@@ -115,9 +96,9 @@ jobs:
       with: 
         toolchain: nightly-2025-06-08
 
-    - name: Install OpenCV & Other dependencies (sccache, cmake, llvm)
+    - name: Install OpenCV & Other dependencies (cmake, llvm)
       run: | 
-        choco install opencv sccache cmake -y
+        choco install opencv cmake -y
         choco install llvm --version=19.1.7 --force
 
     - name: Set up Environment variables
@@ -140,14 +121,9 @@ jobs:
         # Write the modified object back to the file as JSON
         $json | ConvertTo-Json -Depth 10 | Set-Content $jsonPath
 
-    - name: Build Tauri app (with AVX)
-      if: ${{ matrix.avx }}
+    - name: Build Tauri app
       run: |
         yarn tauri build --features avx512
-    - name: Build Tauri app (without AVX)
-      if: ${{ !matrix.avx }}
-      run: |
-        yarn tauri build
 
     - name: Group Binary Bundle
       run: |
@@ -158,7 +134,7 @@ jobs:
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
       with:
-        name: quikscore-windows-x86_64${{ matrix.avx && '-avx' || '' }}
+        name: quikscore-windows-x86_64
         path: |
           src-tauri/target/release/bin
           src-tauri/target/release/bundle
