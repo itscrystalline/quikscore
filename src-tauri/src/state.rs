@@ -138,11 +138,19 @@ impl AppState {
                 );
             }
             AppStatePipeline::WithKeyAndWeights { weights, .. } => {
-                state.state = AppStatePipeline::WithKeyAndWeights {
-                    key_image: image,
-                    key,
-                    weights: weights.clone(),
-                };
+                if weights.weights.contains_key(&key.subject_code) {
+                    state.state = AppStatePipeline::WithKeyAndWeights {
+                        key_image: image,
+                        key,
+                        weights: weights.clone(),
+                    };
+                } else {
+                    state.state = AppStatePipeline::WithKey {
+                        key_image: image,
+                        key,
+                    };
+                    signal!(channel, KeyUpload::ClearWeights)
+                }
                 signal!(
                     channel,
                     KeyUpload::Image {
@@ -567,6 +575,7 @@ mod unit_tests {
             FilePath::Path(PathBuf::from("tests/assets/image_001.jpg")),
             FilePath::Path(PathBuf::from("tests/assets/image_002.jpg")),
             FilePath::Path(PathBuf::from("tests/assets/image_003.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/image_004.jpg")),
         ]
     }
 
@@ -799,6 +808,43 @@ mod unit_tests {
         assert!(matches!(msgs.next(), Some(KeyUpload::Image { .. })));
         assert!(matches!(msgs.next(), Some(KeyUpload::Error { .. })));
         assert!(matches!(msgs.next(), Some(KeyUpload::MissingWeights)));
+    }
+    #[test]
+    fn test_app_weights_key_clear_same() {
+        setup_ocr_data();
+        let app = mock_app_with_state(AppStatePipeline::Init);
+        let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), channel.clone());
+        upload_weights_impl(&app, Some(test_weights().remove(0)), channel.clone());
+
+        // upload another key in same subject
+        upload_key_image_impl(&app, Some(test_images().remove(1)), channel.clone());
+
+        assert_state!(app, AppStatePipeline::WithKeyAndWeights { .. });
+        let msgs = unwrap_msgs!(msgs);
+        let mut msgs = msgs.iter();
+        assert!(matches!(msgs.next(), Some(KeyUpload::Image { .. })));
+        assert!(matches!(msgs.next(), Some(KeyUpload::UploadedWeights)));
+        assert!(matches!(msgs.next(), Some(KeyUpload::Image { .. })));
+    }
+    #[test]
+    fn test_app_weights_key_clear_different() {
+        setup_ocr_data();
+        let app = mock_app_with_state(AppStatePipeline::Init);
+        let (channel, msgs) = setup_channel_msgs::<KeyUpload>();
+        upload_key_image_impl(&app, Some(test_key_image()), channel.clone());
+        upload_weights_impl(&app, Some(test_weights().remove(0)), channel.clone());
+
+        // upload another key in different subject
+        upload_key_image_impl(&app, Some(test_images().remove(3)), channel.clone());
+
+        assert_state!(app, AppStatePipeline::WithKey { .. });
+        let msgs = unwrap_msgs!(msgs);
+        let mut msgs = msgs.iter();
+        assert!(matches!(msgs.next(), Some(KeyUpload::Image { .. })));
+        assert!(matches!(msgs.next(), Some(KeyUpload::UploadedWeights)));
+        assert!(matches!(msgs.next(), Some(KeyUpload::ClearWeights)));
+        assert!(matches!(msgs.next(), Some(KeyUpload::Image { .. })));
     }
 
     #[test]
