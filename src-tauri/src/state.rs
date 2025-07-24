@@ -14,7 +14,7 @@ use opencv::core::Mat;
 
 use crate::{
     errors::{SheetError, UploadError},
-    image,
+    image::{self, ProcessingState},
     scoring::{AnswerSheetResult, ScoreWeights},
 };
 
@@ -94,6 +94,7 @@ pub enum AppStatePipeline {
         key_image: Mat,
         key: AnswerKeySheet,
         weights: ScoreWeights,
+        processing_channel: tauri::async_runtime::Sender<ProcessingState>,
     },
     Scored {
         key_image: Mat,
@@ -241,6 +242,7 @@ impl AppState {
         app: &A,
         channel: &Channel<AnswerUpload>,
         images_count: usize,
+        processing_channel: tauri::async_runtime::Sender<ProcessingState>,
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
@@ -261,6 +263,7 @@ impl AppState {
                     key_image: key_image.clone(),
                     key: key.clone(),
                     weights: weights.clone(),
+                    processing_channel,
                 };
                 signal!(
                     channel,
@@ -280,6 +283,39 @@ impl AppState {
         }
         emit_state!(app, state.state.to_string());
     }
+    pub fn cancel_scoring<R: Runtime, A: Emitter<R> + Manager<R>>(
+        app: &A,
+        channel: &Channel<AnswerUpload>,
+    ) {
+        let mutex = app.state::<StateMutex>();
+        let mut state = mutex.lock().expect("poisoned");
+        match &state.state {
+            AppStatePipeline::Scoring {
+                key_image,
+                key,
+                weights,
+                processing_channel,
+            } => {
+                processing_channel
+                    .blocking_send(ProcessingState::Cancel)
+                    .expect("called in async context (impossible)");
+                state.state = AppStatePipeline::WithKeyAndWeights {
+                    key_image: key_image.clone(),
+                    key: key.clone(),
+                    weights: weights.clone(),
+                };
+                signal!(channel, AnswerUpload::Cancelled);
+            }
+            s => signal!(
+                channel,
+                AnswerUpload::Error {
+                    error: format!("Unexpected state: {s}")
+                }
+            ),
+        }
+        emit_state!(app, state.state.to_string());
+    }
+
     pub fn upload_answer_sheets<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,
         channel: &Channel<AnswerUpload>,
@@ -292,7 +328,9 @@ impl AppState {
                 key_image,
                 key,
                 weights,
+                ..
             } => {
+                signal!(channel, AnswerUpload::AlmostDone);
                 type Base64MatSheetResultMaxScore =
                     (String, Mat, AnswerSheet, AnswerSheetResult, u32);
                 let scored: Vec<Result<Base64MatSheetResultMaxScore, UploadError>> = result

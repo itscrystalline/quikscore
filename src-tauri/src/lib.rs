@@ -22,6 +22,7 @@ pub fn run() {
             commands::clear_key_image,
             commands::clear_weights,
             commands::upload_sheet_images,
+            commands::cancel_upload_sheets,
             commands::clear_sheet_images,
             commands::set_ocr,
         ])

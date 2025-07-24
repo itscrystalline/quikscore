@@ -14,6 +14,8 @@ pub enum UploadError {
     UnexpectedPipeClosure,
     #[error("Weights file does not contain weights for subject id {0}")]
     MissingScoreWeights(String),
+    #[error("Processing has been prematurely cancelled")]
+    PrematureCancellaton,
 }
 
 #[derive(thiserror::Error, Debug)]

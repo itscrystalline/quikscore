@@ -164,6 +164,7 @@ const canChangeWeights = () => appState.value == "WithKeyAndWeights";
 const canClearWeights = () => appState.value == "WithKeyAndWeights";
 const canUploadSheets = () => appState.value == "WithKeyAndWeights";
 const canChangeSheets = () => appState.value == "Scored";
+const canCancelSheetUpload = () => appState.value == "Scoring";
 const canClearSheets = () => appState.value == "Scored";
 
 const answerImages = ref<AnswerScoreResult[]>([]);
@@ -202,6 +203,11 @@ async function uploadSheets() {
   const answerEventChannel = new Channel<AnswerUpload>();
   answerEventChannel.onmessage = answerEventHandler;
   await invoke("upload_sheet_images", { channel: answerEventChannel, modelDir: path });
+}
+async function cancelUploadSheets() {
+  const answerEventChannel = new Channel<AnswerUpload>();
+  answerEventChannel.onmessage = answerEventHandler;
+  await invoke("cancel_upload_sheets", { channel: answerEventChannel });
 }
 async function clearSheets() {
   const answerEventChannel = new Channel<AnswerUpload>();
@@ -250,8 +256,9 @@ async function clearSheets() {
       <StackedProgressBar v-if="keyProgressBar" type="indeterminate" />
       <div :style="keyImage == '' ? 'display: none;' : ''" class="key-image-container">
         <div :class="keyHasWeights == 'notUploaded' ? 'yellow' : keyHasWeights == 'missingWeights' ? 'red' : 'green'">
-          <img
-            :src="`/src/assets/${keyHasWeights == 'notUploaded' ? 'no' : keyHasWeights == 'missingWeights' ? 'missing' : 'have'}_weights.svg`" />
+          <img v-if="keyHasWeights == 'notUploaded'" src="/src/assets/no_weights.svg" />
+          <img v-if="keyHasWeights == 'missingWeights'" src="/src/assets/missing_weights.svg" />
+          <img v-if="keyHasWeights == 'yes'" src="/src/assets/have_weights.svg" />
           <p>
             {{
               keyHasWeights == 'notUploaded' ? "Please upload weights for this key." :
@@ -269,8 +276,13 @@ async function clearSheets() {
       <button class="btn-sheet" @click="uploadSheets" :disabled="!(canUploadSheets() || canChangeSheets())">
         {{ canChangeSheets() ? "Change Answer Sheets" : "🧾 Upload Answer Sheets..." }}
       </button>
+      <button class="btn-clear" @click="cancelUploadSheets" :disabled="!canCancelSheetUpload()"
+        v-if="canCancelSheetUpload()">
+        Cancel Upload
+      </button>
       <button class="btn-clear" @click="clearSheets" :disabled="!canClearSheets()" v-if="answerImages.length !== 0">
-        🔄 Clear Answer Sheets</button>
+        🔄 Clear Answer Sheets
+      </button>
     </div>
     <!-- 📦 Result Placeholder -->
     <div class="card">

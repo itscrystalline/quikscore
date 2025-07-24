@@ -1,5 +1,6 @@
 use ocrs::{ImageSource, OcrEngine};
 use std::array;
+use std::sync::{Arc, RwLock};
 use tauri::ipc::Channel;
 
 use crate::errors::{SheetError, UploadError};
@@ -62,17 +63,17 @@ pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     }
 }
 
+pub enum ProcessingState {
+    Starting,
+    Finishing,
+    Cancel,
+    Done(Vec<Result<(String, Mat, AnswerSheet), UploadError>>),
+}
 pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
     paths: Option<Vec<FilePath>>,
     channel: Channel<AnswerUpload>,
 ) {
-    enum ProcessingState {
-        Starting,
-        Finishing,
-        Done(Vec<Result<(String, Mat, AnswerSheet), UploadError>>),
-    }
-
     let Some(paths) = paths else {
         signal!(channel, AnswerUpload::Cancelled);
         return;
@@ -81,20 +82,32 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     let images_count = paths.len();
     let Options { ocr } = AppState::get_options(app);
 
-    AppState::mark_scoring(app, &channel, images_count);
-
     let (tx, mut rx) = tauri::async_runtime::channel::<ProcessingState>(images_count);
+    let stop_flag = Arc::new(RwLock::new(false));
 
+    AppState::mark_scoring(app, &channel, images_count, tx.clone());
+
+    let stop_moved = Arc::clone(&stop_flag);
     let processing_thread = tauri::async_runtime::spawn(async move {
         let base64_list: Vec<Result<(String, Mat, AnswerSheet), UploadError>> = paths
             .into_par_iter()
             .map_init(
-                || (tx.clone(), ocr.then(state::init_thread_ocr)),
-                |(tx, ocr), file_path| {
-                    _ = tx.try_send(ProcessingState::Starting);
-                    let res = handle_upload(file_path, ocr.as_ref());
-                    _ = tx.try_send(ProcessingState::Finishing);
-                    res
+                || {
+                    (
+                        tx.clone(),
+                        ocr.then(state::init_thread_ocr),
+                        Arc::clone(&stop_moved),
+                    )
+                },
+                |(tx, ocr, stop), file_path| {
+                    if !*stop.read().expect("not poisoned") {
+                        _ = tx.try_send(ProcessingState::Starting);
+                        let res = handle_upload(file_path, ocr.as_ref());
+                        _ = tx.try_send(ProcessingState::Finishing);
+                        res
+                    } else {
+                        Err(UploadError::PrematureCancellaton)
+                    }
                 },
             )
             .collect();
@@ -115,8 +128,12 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
                 ProcessingState::Starting => started += 1,
                 ProcessingState::Finishing => finished += 1,
                 ProcessingState::Done(list) => {
-                    signal!(channel, AnswerUpload::AlmostDone);
                     AppState::upload_answer_sheets(app, &channel, list);
+                    processing_thread.abort();
+                    break;
+                }
+                ProcessingState::Cancel => {
+                    *stop_flag.write().expect("not poisoned") = true;
                     processing_thread.abort();
                     break;
                 }
