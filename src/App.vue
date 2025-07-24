@@ -256,8 +256,9 @@ async function clearSheets() {
       <StackedProgressBar v-if="keyProgressBar" type="indeterminate" />
       <div :style="keyImage == '' ? 'display: none;' : ''" class="key-image-container">
         <div :class="keyHasWeights == 'notUploaded' ? 'yellow' : keyHasWeights == 'missingWeights' ? 'red' : 'green'">
-          <img
-            :src="`/src/assets/${keyHasWeights == 'notUploaded' ? 'no' : keyHasWeights == 'missingWeights' ? 'missing' : 'have'}_weights.svg`" />
+          <img v-if="keyHasWeights == 'notUploaded'" src="/src/assets/no_weights.svg" />
+          <img v-if="keyHasWeights == 'missingWeights'" src="/src/assets/missing_weights.svg" />
+          <img v-if="keyHasWeights == 'yes'" src="/src/assets/have_weights.svg" />
           <p>
             {{
               keyHasWeights == 'notUploaded' ? "Please upload weights for this key." :
