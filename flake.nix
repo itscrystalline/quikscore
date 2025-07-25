@@ -110,7 +110,7 @@
               echo "$needed"
                 for lib in *.so*; do
                 base=$(basename "$lib")
-                if ! grep -qx "$base" <<< "${needed##*/}"; then
+                if ! grep -qx "$base" <<< "''${needed##*/}"; then
                   echo "Removing unused $lib"
                   rm "$lib"
                 fi
