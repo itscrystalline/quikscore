@@ -108,7 +108,7 @@
               otool -L "$binary"
 
               install_name_tool -change \
-                ${pkgs.libcxx}/lib/libc++.1.0.dylib \
+                @loader_path/../Frameworks/libc++.1.0.dylib \
                 /usr/lib/libc++.1.dylib \
                 "$binary"
 
