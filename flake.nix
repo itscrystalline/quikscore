@@ -125,22 +125,27 @@
                 cp "${pkgs.opencv}/lib/libopencv_$lib.so.411" "$out/lib/"
               done
               cp "${pkgs.openblas}/lib/libopenblas.so.0" "$out/lib/"
-              cp -a "${pkgs.openexr.out}/lib/." "$out/lib/"
+              echo "Bundling only needed OpenEXR libraries..."
 
-              echo "Cleaning bundled libs: remove those not needed…"
-              cd $out/lib
-              needed=$(ldd $out/bin/quikscore \
+              # Collect needed .so names from ldd output
+              needed_libs=$(ldd "$out/bin/quikscore" \
                 | awk '{print $1}' \
                 | grep '\.so' \
-                | awk '!seen[$0]++')
-              echo "Needed libs:"
-              echo "$needed"
-                for lib in *.so*; do
-                base=$(basename "$lib")
-                if ! grep -qx "$base" <<< "''${needed##*/}"; then
-                  echo "Removing unused $lib"
-                  rm "$lib"
-                fi
+                | awk '!seen[$0]++' \
+                | xargs -n1 basename)
+
+              echo "Used libraries:"
+              echo "$needed_libs"
+
+              for f in ${pkgs.openexr.out}/lib/*.so*; do
+                base=$(basename "$f")
+                for needed in $needed_libs; do
+                  if [ "$base" = "$needed" ]; then
+                    echo "Copying $base"
+                    cp "$f" "$out/lib/"
+                    break
+                  fi
+                done
               done
             ''
             else ''
