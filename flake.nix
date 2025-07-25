@@ -99,6 +99,22 @@
               mv $out/bin/quikscore $out/bin/.quikscore-wrapped
               cp ${libPathPatchScript} $out/bin/quikscore
               chmod +x $out/bin/quikscore
+
+              echo "Cleaning bundled libs: remove those not needed…"
+              cd $out/lib
+              needed=$(ldd $out/bin/.quikscore-wrapped \
+                | awk '{print $1}' \
+                | grep '\.so' \
+                | awk '!seen[$0]++')
+              echo "Needed libs:"
+              echo "$needed"
+                for lib in *.so*; do
+                base=$(basename "$lib")
+                if ! grep -qx "$base" <<< "${needed##*/}"; then
+                  echo "Removing unused $lib"
+                  rm "$lib"
+                fi
+              done
             ''
             else ''
               echo "Rewriting lib path to system libc++"
