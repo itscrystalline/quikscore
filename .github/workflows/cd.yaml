@@ -63,6 +63,10 @@ jobs:
         include-hidden-files: true
         path: |
           result
+    - name: Test App (macOS)
+      if: ${{ contains(matrix.platform.name, 'macos') }}
+      run: |
+          ./result/Applications/quikscore.app/Contents/MacOS/quikscore
     - name: Upload Nix build artifacts (macOS)
       if: ${{ contains(matrix.platform.name, 'macos') }}
       uses: actions/upload-artifact@v4

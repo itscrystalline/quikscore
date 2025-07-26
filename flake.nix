@@ -149,24 +149,52 @@
               done
             ''
             else ''
-              echo "Bundling additional dylibs (OpenCV, libpng, libiconv)"
+              echo "Recursively bundling dylib dependencies"
+
               binary="$out/Applications/quikscore.app/Contents/MacOS/quikscore"
               frameworks="$out/Applications/quikscore.app/Contents/Frameworks"
 
               mkdir -p "$frameworks"
-              for lib in core imgproc imgcodecs ; do
-                cp "${pkgs.opencv}/lib/libopencv_$lib.dylib" $frameworks/
-              done
-              cp "${pkgs.libpng}/lib/libpng16.16.dylib" $frameworks/
-              cp "${pkgs.libiconv}/lib/libiconv.2.dylib" $frameworks/
 
-              for dylib in $out/Applications/quikscore.app/Contents/Frameworks/*.dylib; do
-                install_name_tool -id "@loader_path/../Frameworks/$(basename "$dylib")" "$dylib"
+              # Initial set of dylibs you want to bundle
+              initial_libs=(
+                "${pkgs.opencv}/lib/libopencv_core.411.dylib"
+                "${pkgs.opencv}/lib/libopencv_imgproc.411.dylib"
+                "${pkgs.opencv}/lib/libopencv_imgcodecs.411.dylib"
+                "${pkgs.libpng}/lib/libpng16.16.dylib"
+                "${pkgs.libiconv}/lib/libiconv.2.dylib"
+              )
+
+              cp_and_relocate() {
+                local dylib="$1"
+                local name=$(basename "$dylib")
+
+                # Only copy if not already present
+                if [[ ! -f "$frameworks/$name" ]]; then
+                  echo "Copying $name"
+                  cp "$dylib" "$frameworks/"
+                  chmod +w "$frameworks/$name" # install_name_tool requires write access
+                  install_name_tool -id "@loader_path/../Frameworks/$name" "$frameworks/$name"
+
+                  # Recursively process this dylib’s dependencies
+                  local deps=$(otool -L "$frameworks/$name" | awk '{print $1}' | grep '^/nix/store')
+                  for dep in $deps; do
+                    cp_and_relocate "$dep"
+                    install_name_tool -change "$dep" "@loader_path/../Frameworks/$(basename "$dep")" "$frameworks/$name"
+                  done
+                fi
+              }
+
+              # Start with the manually selected dylibs
+              for lib in "''${initial_libs[@]}"; do
+                cp_and_relocate "$lib"
               done
 
-              for dep in $(otool -L $out/Applications/quikscore.app/Contents/MacOS/quikscore | grep "/nix/store" | awk '{print $1}'); do
+              # Relocate main binary’s dependencies
+              for dep in $(otool -L "$binary" | awk '{print $1}' | grep '^/nix/store'); do
                 name=$(basename "$dep")
-                install_name_tool -change "$dep" "@loader_path/../Frameworks/$name" $out/Applications/quikscore.app/Contents/MacOS/quikscore
+                install_name_tool -change "$dep" "@loader_path/../Frameworks/$name" "$binary"
+                cp_and_relocate "$dep"
               done
             '';
         });
