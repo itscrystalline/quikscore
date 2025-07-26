@@ -209,20 +209,20 @@ fn handle_upload(
     let (aligned_for_display, subject_id, student_id, answer_sheet) =
         fix_answer_sheet(resized_for_fix)?;
 
-    let subject_id_string = extract_digits_for_sub_stu(&subject_id, 2, false)?;
-    let student_id_string = extract_digits_for_sub_stu(&student_id, 9, true)?;
+    let _subject_id_string = extract_digits_for_sub_stu(&subject_id, 2, false)?;
+    let _student_id_string = extract_digits_for_sub_stu(&student_id, 9, true)?;
     //testing
     //#[cfg(not(test))]
     //let _ = show_img(&aligned_for_processing, "resized & aligned image");
     if let Some(ocr) = ocr {
-        let (subject_id_s_f, student_id_s_f) =
+        let (_subject_id_s_f, _student_id_s_f) =
             extract_subject_student_from_written_field(&resized, ocr)?;
         //println!("subject_id: {subject_id_s_f}");
         //println!("subject_id: {student_id_s_f}");
         //if subject_id_string != subject_id_s_f || student_id_string != student_id_s_f {
         //    println!("User Fon and Enter differently");
         //}
-        let (name, subject, date, exam_room, seat) = extract_user_information(&mat, ocr)?;
+        let (_name, _subject, _date, _exam_room, _seat) = extract_user_information(&mat, ocr)?;
         //println!("name: {name}");
         //println!("subject: {subject}");
         //println!("date: {date}");
