@@ -23,8 +23,8 @@ const hms = (secs: number): string => {
   }
 }
 
-async function ensureModel(textRef: Ref<string>): Promise<OptionPathbuf> {
-  if (!ocr.value) return null;
+async function ensureModel(ocr: boolean, textRef: Ref<string>, progressBar: Ref<undefined | ProgressBarProps>): Promise<OptionPathbuf> {
+  if (!ocr) return null;
 
   const cache = await path.cacheDir();
   const modelPath = await path.join(cache, "quikscore");
@@ -41,6 +41,9 @@ async function ensureModel(textRef: Ref<string>): Promise<OptionPathbuf> {
     await download(
       'https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.rten',
       detectionPath,
+      ({ progress, total }) => {
+        progressBar.value = { type: "progress", progressBottom: progress, progressTop: 0, max: total };
+      }
     );
   }
   if (!await exists(recognitionPath)) {
@@ -48,9 +51,13 @@ async function ensureModel(textRef: Ref<string>): Promise<OptionPathbuf> {
     await download(
       'https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.rten',
       recognitionPath,
+      ({ progress, total }) => {
+        progressBar.value = { type: "progress", progressBottom: progress, progressTop: 0, max: total };
+      }
     );
   }
   textRef.value = "Please upload an image...";
+  progressBar.value = { type: "indeterminate" };
 
   return modelPath;
 }
@@ -65,13 +72,13 @@ const keyEventHandler = (msg: KeyUpload): void => {
   switch (msg.event) {
     case "cancelled":
       keyStatus.value = "User cancelled upload";
-      keyProgressBar.value = false;
+      keyProgressBar.value = undefined;
       break;
 
     case "clearImage":
       keyImage.value = "";
       keyStatus.value = "";
-      keyProgressBar.value = false;
+      keyProgressBar.value = undefined;
       break;
 
     case "clearWeights":
@@ -82,7 +89,7 @@ const keyEventHandler = (msg: KeyUpload): void => {
     case "image":
       keyImage.value = msg.data.base64;
       keyStatus.value = "";
-      keyProgressBar.value = false;
+      keyProgressBar.value = undefined;
       break;
 
     case "uploadedWeights":
@@ -96,7 +103,7 @@ const keyEventHandler = (msg: KeyUpload): void => {
 
     case "error":
       keyStatus.value = msg.data.error;
-      keyProgressBar.value = false;
+      keyProgressBar.value = undefined;
       break;
 
     default:
@@ -156,7 +163,7 @@ watch(ocr, async (new_ocr, _) => { await invoke("set_ocr", { ocr: new_ocr }) });
 const keyImage = ref("");
 const keyHasWeights = ref<"notUploaded" | "missingWeights" | "yes">("notUploaded");
 const keyStatus = ref("");
-const keyProgressBar = ref(false);
+const keyProgressBar = ref<undefined | ProgressBarProps>(undefined);
 
 const canUploadKey = () => appState.value == "Init" || appState.value == "WithKey";
 const canChangeKey = () => appState.value == "WithKey" || appState.value == "WithKeyAndWeights";
@@ -176,8 +183,8 @@ const answerProgressBar = ref<undefined | ProgressBarProps>(undefined);
 const elapsed = ref<TimeElapsed>("notCounting");
 
 async function uploadKey() {
-  const path = await ensureModel(keyStatus);
-  keyProgressBar.value = true;
+  const path = await ensureModel(ocr.value, keyStatus, keyProgressBar);
+  keyProgressBar.value = { type: "indeterminate" };
   const keyEventChannel = new Channel<KeyUpload>();
   keyEventChannel.onmessage = keyEventHandler;
   await invoke("upload_key_image", { channel: keyEventChannel, modelDir: path });
@@ -200,7 +207,7 @@ async function clearWeights() {
 }
 
 async function uploadSheets() {
-  const path = await ensureModel(answerStatus);
+  const path = await ensureModel(ocr.value, answerStatus, answerProgressBar);
   answerProgressBar.value = { type: "indeterminate" };
   const answerEventChannel = new Channel<AnswerUpload>();
   answerEventChannel.onmessage = answerEventHandler;
@@ -255,7 +262,7 @@ async function clearSheets() {
       <p class="placeholder" v-if="keyStatus !== '' || !keyImage">
         {{ keyStatus === "" ? "Upload a key..." : keyStatus }}
       </p>
-      <StackedProgressBar v-if="keyProgressBar" type="indeterminate" />
+      <StackedProgressBar v-if="keyProgressBar" v-bind="keyProgressBar" />
       <div :style="keyImage == '' ? 'display: none;' : ''" class="key-image-container">
         <div :class="keyHasWeights == 'notUploaded' ? 'yellow' : keyHasWeights == 'missingWeights' ? 'red' : 'green'">
           <img v-if="keyHasWeights == 'notUploaded'" src="/src/assets/no_weights.svg" />
