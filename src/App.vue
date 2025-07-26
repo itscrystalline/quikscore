@@ -28,7 +28,19 @@ listen<AppState>("state", (event) => {
 })
 
 const modelDownloadEventHandler = (msg: ModelDownload): void => {
-  keyProgressBar.value = { type: "progress", max: msg.total, progressTop: msg.progress_detection, progressBottom: msg.progress_detection + msg.progress_recognition };
+  switch (msg.event) {
+    case "progress":
+      const { total, progressDetection, progressRecognition } = msg.data
+      keyProgressBar.value = { type: "progress", max: total, progressTop: progressDetection, progressBottom: progressDetection + progressRecognition };
+      return;
+    case "error":
+      keyProgressBar.value = undefined;
+      keyStatus.value = msg.data.error;
+      return;
+    case "success":
+      keyProgressBar.value = { type: "indeterminate" };
+      return;
+  }
 }
 const keyEventHandler = (msg: KeyUpload): void => {
   switch (msg.event) {

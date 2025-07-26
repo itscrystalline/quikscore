@@ -5,11 +5,17 @@ export type AppState =
   | "Scoring"
   | "Scored";
 
-export type ModelDownload = {
-  progress_detection: number;
-  progress_recognition: number;
-  total: number;
-};
+export type ModelDownload =
+  | {
+      event: "progress";
+      data: {
+        progressDetection: number;
+        progressRecognition: number;
+        total: number;
+      };
+    }
+  | { event: "error"; data: { error: string } }
+  | { event: "success" };
 export type KeyUpload =
   | {
       event: "cancelled";

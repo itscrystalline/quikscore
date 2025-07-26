@@ -507,11 +507,22 @@ pub enum NumberType {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModelDownload {
-    progress_detection: u32,
-    progress_recognition: u32,
-    total: u32,
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "event",
+    content = "data"
+)]
+pub enum ModelDownload {
+    Progress {
+        progress_detection: u32,
+        progress_recognition: u32,
+        total: u32,
+    },
+    Error {
+        error: String,
+    },
+    Success,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(
