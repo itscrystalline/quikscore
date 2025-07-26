@@ -1,3 +1,5 @@
+export type OptionPathbuf = null | string;
+
 export type AppState =
   | "Init"
   | "WithKey"

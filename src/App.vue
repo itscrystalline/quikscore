@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Ref, ref, watch } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { AnswerScoreResult, AnswerUpload, AppState, KeyUpload } from "./messages";
+import { AnswerScoreResult, AnswerUpload, AppState, KeyUpload, OptionPathbuf } from "./types";
 import { download } from '@tauri-apps/plugin-upload';
 import * as path from '@tauri-apps/api/path';
 import { exists, mkdir } from "@tauri-apps/plugin-fs";
@@ -23,7 +23,9 @@ const hms = (secs: number): string => {
   }
 }
 
-async function ensureModel(textRef: Ref<string>): Promise<string> {
+async function ensureModel(textRef: Ref<string>): Promise<OptionPathbuf> {
+  if (!ocr.value) return null;
+
   const cache = await path.cacheDir();
   const modelPath = await path.join(cache, "quikscore");
   if (!await exists("quikscore", { baseDir: path.BaseDirectory.Cache })) {
