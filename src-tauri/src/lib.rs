@@ -12,7 +12,6 @@ mod state;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_upload::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -25,6 +24,7 @@ pub fn run() {
             commands::cancel_upload_sheets,
             commands::clear_sheet_images,
             commands::set_ocr,
+            commands::ensure_models,,
         ])
         .setup(|app| {
             app.manage(Mutex::new(AppState::default()));

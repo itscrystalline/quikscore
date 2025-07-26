@@ -1,11 +1,15 @@
-export type OptionPathbuf = null | string;
-
 export type AppState =
   | "Init"
   | "WithKey"
   | "WithKeyAndWeights"
   | "Scoring"
   | "Scored";
+
+export type ModelDownload = {
+  progress_detection: number;
+  progress_recognition: number;
+  total: number;
+};
 export type KeyUpload =
   | {
       event: "cancelled";

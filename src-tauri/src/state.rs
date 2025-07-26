@@ -21,10 +21,8 @@ use crate::{
 pub type StateMutex = Mutex<AppState>;
 pub static MODELS: OnceLock<PathBuf> = OnceLock::new();
 
-pub fn init_model_dir(models_path: Option<PathBuf>) {
-    if let Some(models_path) = models_path {
-        _ = MODELS.set(models_path);
-    }
+pub fn get_or_download_models(frontend_channel: Channel<ModelDownload>) {
+    todo!()
 }
 pub fn init_thread_ocr() -> Option<OcrEngine> {
     let model_path = MODELS.get()?;
@@ -509,6 +507,13 @@ pub enum NumberType {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelDownload {
+    progress_detection: u32,
+    progress_recognition: u32,
+    total: u32,
+}
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(
     rename_all = "camelCase",
     rename_all_fields = "camelCase",
@@ -624,7 +629,7 @@ mod unit_tests {
     }
 
     fn setup_ocr_data() {
-        init_model_dir(Some(PathBuf::from("tests/assets")))
+        get_or_download_models(Some(PathBuf::from("tests/assets")))
     }
 
     fn compare_mats(a: &Mat, b: &Mat) -> bool {

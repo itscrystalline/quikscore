@@ -714,7 +714,7 @@ mod unit_tests {
     }
 
     fn setup_ocr_data() {
-        state::init_model_dir(Some(PathBuf::from("tests/assets")));
+        state::get_or_download_models(Some(PathBuf::from("tests/assets")));
     }
 
     fn not_image() -> FilePath {

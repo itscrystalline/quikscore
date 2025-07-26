@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import { Ref, ref, watch } from "vue";
+import { ref, watch } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { AnswerScoreResult, AnswerUpload, AppState, KeyUpload, OptionPathbuf } from "./types";
-import { download } from '@tauri-apps/plugin-upload';
-import * as path from '@tauri-apps/api/path';
-import { exists, mkdir } from "@tauri-apps/plugin-fs";
+import { AnswerScoreResult, AnswerUpload, AppState, KeyUpload, ModelDownload } from "./types";
 import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
 import { listen } from "@tauri-apps/api/event";
 
@@ -23,44 +20,6 @@ const hms = (secs: number): string => {
   }
 }
 
-async function ensureModel(ocr: boolean, textRef: Ref<string>, progressBar: Ref<undefined | ProgressBarProps>): Promise<OptionPathbuf> {
-  if (!ocr) return null;
-
-  const cache = await path.cacheDir();
-  const modelPath = await path.join(cache, "quikscore");
-  if (!await exists("quikscore", { baseDir: path.BaseDirectory.Cache })) {
-    await mkdir("quikscore", { baseDir: path.BaseDirectory.Cache });
-  }
-
-  const detectionPath = await path.join(modelPath, "text-detection.rten");
-  const recognitionPath = await path.join(modelPath, "text-recognition.rten");
-
-  textRef.value = "Verifying OCR models...";
-  if (!await exists(detectionPath)) {
-    textRef.value = "Downloading Detection Model...";
-    await download(
-      'https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.rten',
-      detectionPath,
-      ({ progress, total }) => {
-        progressBar.value = { type: "progress", progressBottom: progress, progressTop: 0, max: total };
-      }
-    );
-  }
-  if (!await exists(recognitionPath)) {
-    textRef.value = "Downloading Recognition Model...";
-    await download(
-      'https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.rten',
-      recognitionPath,
-      ({ progress, total }) => {
-        progressBar.value = { type: "progress", progressBottom: progress, progressTop: 0, max: total };
-      }
-    );
-  }
-  textRef.value = "Please upload an image...";
-  progressBar.value = { type: "indeterminate" };
-
-  return modelPath;
-}
 
 const appState = ref<AppState>("Init");
 listen<AppState>("state", (event) => {
@@ -68,6 +27,9 @@ listen<AppState>("state", (event) => {
   console.log("state changed to " + appState.value);
 })
 
+const modelDownloadEventHandler = (msg: ModelDownload): void => {
+  keyProgressBar.value = { type: "progress", max: msg.total, progressTop: msg.progress_detection, progressBottom: msg.progress_detection + msg.progress_recognition };
+}
 const keyEventHandler = (msg: KeyUpload): void => {
   switch (msg.event) {
     case "cancelled":
@@ -182,8 +144,15 @@ const answerProgressBar = ref<undefined | ProgressBarProps>(undefined);
 
 const elapsed = ref<TimeElapsed>("notCounting");
 
+
+async function ensureModel() {
+  const modelDownloadChannel = new Channel<ModelDownload>();
+  modelDownloadChannel.onmessage = modelDownloadEventHandler;
+  await invoke("ensure_model", { channel: modelDownloadChannel });
+}
+
 async function uploadKey() {
-  const path = await ensureModel(ocr.value, keyStatus, keyProgressBar);
+  const path = await ensureModel();
   keyProgressBar.value = { type: "indeterminate" };
   const keyEventChannel = new Channel<KeyUpload>();
   keyEventChannel.onmessage = keyEventHandler;
@@ -207,7 +176,7 @@ async function clearWeights() {
 }
 
 async function uploadSheets() {
-  const path = await ensureModel(ocr.value, answerStatus, answerProgressBar);
+  const path = await ensureModel();
   answerProgressBar.value = { type: "indeterminate" };
   const answerEventChannel = new Channel<AnswerUpload>();
   answerEventChannel.onmessage = answerEventHandler;
