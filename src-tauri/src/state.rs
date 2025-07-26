@@ -21,8 +21,26 @@ use crate::{
 pub type StateMutex = Mutex<AppState>;
 pub static MODELS: OnceLock<PathBuf> = OnceLock::new();
 
-pub fn get_or_download_models(frontend_channel: Channel<ModelDownload>) {
-    println!("verifying models");
+const TEXT_DETECTION_HASH: &str =
+    "f15cfb56bd02c4bf478a20343986504a1f01e1665c2b3a0ad66340f054b1b5ca";
+const TEXT_RECOGNITION_HASH: &str =
+    "e484866d4cce403175bd8d00b128feb08ab42e208de30e42cd9889d8f1735a6e";
+pub fn get_or_download_models(frontend_channel: Channel<ModelDownload>) -> Result<(), String> {
+    let mut cache_dir = dirs::cache_dir().ok_or("unsupported operating system".to_string())?;
+    cache_dir.push("quikscore");
+
+    let detection_model_exists = cache_dir
+        .join("text-detection.rten")
+        .try_exists()
+        .map_err(|e| format!("error while trying to locate detection model: {e}"))?;
+    let recognition_model = cache_dir
+        .join("text-recognition.rten")
+        .try_exists()
+        .map_err(|e| format!("error while trying to locate detection model: {e}"))?;
+
+    todo!();
+
+    Ok(())
 }
 pub fn init_thread_ocr() -> Option<OcrEngine> {
     let model_path = MODELS.get()?;

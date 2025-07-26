@@ -60,6 +60,6 @@ pub fn set_ocr(app: AppHandle, ocr: bool) {
 }
 
 #[tauri::command]
-pub fn ensure_models(channel: Channel<ModelDownload>) {
-    state::get_or_download_models(channel);
+pub fn ensure_models(channel: Channel<ModelDownload>) -> Result<(), String> {
+    state::get_or_download_models(channel)
 }
