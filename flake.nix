@@ -149,24 +149,54 @@
               done
             ''
             else ''
-              echo "Bundling additional dylibs (OpenCV, libpng, libiconv)"
+              echo "Bundling dylibs (OpenCV, libpng, libiconv)"
               binary="$out/Applications/quikscore.app/Contents/MacOS/quikscore"
               frameworks="$out/Applications/quikscore.app/Contents/Frameworks"
 
               mkdir -p "$frameworks"
-              for lib in core imgproc imgcodecs ; do
-                cp "${pkgs.opencv}/lib/libopencv_$lib.dylib" $frameworks/
-              done
-              cp "${pkgs.libpng}/lib/libpng16.16.dylib" $frameworks/
-              cp "${pkgs.libiconv}/lib/libiconv.2.dylib" $frameworks/
 
-              for dylib in $out/Applications/quikscore.app/Contents/Frameworks/*.dylib; do
-                install_name_tool -id "@loader_path/../Frameworks/$(basename "$dylib")" "$dylib"
+              # 1. Copy required versioned dylibs unchanged
+              for lib in core imgproc imgcodecs; do
+                cp "${pkgs.opencv}/lib/libopencv_''${lib}.411.dylib" "$frameworks/"
+                chmod +w "$frameworks/libopencv_''${lib}.411.dylib"
+                install_name_tool -id "@loader_path/../Frameworks/libopencv_''${lib}.411.dylib" "$frameworks/libopencv_''${lib}.411.dylib"
+              done
+              cp "${pkgs.libpng}/lib/libpng16.16.dylib" "$frameworks/"
+              chmod +w "$frameworks/libpng16.16.dylib"
+              install_name_tool -id "@loader_path/../Frameworks/libpng16.16.dylib" "$frameworks/libpng16.16.dylib"
+              cp "${pkgs.libiconv}/lib/libiconv.2.dylib" "$frameworks/"
+              chmod +w "$frameworks/libiconv.2.dylib"
+              install_name_tool -id "@loader_path/../Frameworks/libiconv.2.dylib" "$frameworks/libiconv.2.dylib"
+
+              # 2. Recursively copy and patch Nix-store dependencies into Frameworks
+              copy_deps() {
+                local src="$1" dep base
+                # Analyze dependencies of original src path
+                deps=$(otool -L "$src" | awk 'NR>1 {print $1}' | grep '^/nix/store')
+                for dep in $deps; do
+                  base=$(basename "$dep")
+                  if [[ ! -f "$frameworks/$base" ]]; then
+                    echo "Copying dependency $base"
+                    cp "$dep" "$frameworks/"
+                    chmod +w "$frameworks/$base"
+                    install_name_tool -id "@loader_path/../Frameworks/$base" "$frameworks/$base"
+                    # Recurse on the original store path, not the copied file
+                    copy_deps "$dep"
+                  fi
+                  # Patch the current copied library or binary
+                  install_name_tool -change "$dep" "@loader_path/../Frameworks/$base" "$frameworks/$(basename "$src")"
+                done
+              }
+
+              # Invoke on each initial copy
+              for f in "$frameworks"/*.dylib; do
+                copy_deps "${pkgs.opencv}/lib/$(basename "$f")" || true
               done
 
-              for dep in $(otool -L $out/Applications/quikscore.app/Contents/MacOS/quikscore | grep "/nix/store" | awk '{print $1}'); do
-                name=$(basename "$dep")
-                install_name_tool -change "$dep" "@loader_path/../Frameworks/$name" $out/Applications/quikscore.app/Contents/MacOS/quikscore
+              # 3. Patch main binary to use local Frameworks versions
+              for dep in $(otool -L "$binary" | awk 'NR>1 {print $1}' | grep '^/nix/store'); do
+                depbase=$(basename "$dep")
+                install_name_tool -change "$dep" "@loader_path/../Frameworks/$depbase" "$binary"
               done
             '';
         });
