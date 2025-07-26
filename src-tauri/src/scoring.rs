@@ -1,6 +1,20 @@
 use itertools::Itertools;
 
 use crate::state::{Answer, AnswerKeySheet, AnswerSheet, NumberType, QuestionGroup};
+use crate::storage::{DetailedScore, export_to_csv};
+use std::error::Error;
+
+pub fn grade_and_export_csv(
+    answer_sheet: &AnswerSheet,
+    key_sheet: &AnswerKeySheet,
+    filename: &str,
+) -> Result<(), Box<dyn Error>> {
+    let result = answer_sheet.score(key_sheet);
+    let detailed = DetailedScore::from_result(&result);
+    export_to_csv(&detailed, filename)?;
+    Ok(())
+}
+
 
 #[derive(Debug, Clone)]
 pub struct AnswerSheetResult {
@@ -304,4 +318,36 @@ mod unit_tests {
             }
         ));
     }
+
+    #[test]
+    fn test_export_csv() -> Result<(), Box<dyn std::error::Error>> {
+        let correct_group = QuestionGroup {
+           A: answer(1),
+           B: answer(2),
+           C: answer(3),
+           D: answer(4),
+            E: none_answer(),
+        };
+        let student_group = QuestionGroup {
+            A: answer(1),
+            B: answer(9),
+            C: answer(3),
+            D: none_answer(),
+            E: answer(1),
+        };
+
+        let answer_sheet = AnswerSheet {
+            subject_code: "1001".to_string(),
+            student_id: "123456".to_string(),
+            answers: std::array::from_fn(|_| student_group.clone()),
+        };
+        let key_sheet = AnswerKeySheet {
+            _subject_code: "1001".to_string(),
+            answers: std::array::from_fn(|_| correct_group.clone()),
+        };
+
+        grade_and_export_csv(&answer_sheet, &key_sheet, "test_scores.csv")?;
+        Ok(())
+    }
+
 }
