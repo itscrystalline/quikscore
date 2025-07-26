@@ -1,9 +1,12 @@
+use core::hash;
 use ocrs::OcrEngine;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
     collections::HashMap,
     fmt::Display,
+    fs::File,
     path::PathBuf,
     sync::{Mutex, OnceLock},
 };
@@ -29,14 +32,36 @@ pub fn get_or_download_models(frontend_channel: Channel<ModelDownload>) -> Resul
     let mut cache_dir = dirs::cache_dir().ok_or("unsupported operating system".to_string())?;
     cache_dir.push("quikscore");
 
-    let detection_model_exists = cache_dir
-        .join("text-detection.rten")
+    let detection_model = cache_dir.join("text-detection.rten");
+    let recognition_model = cache_dir.join("text-recognition.rten");
+
+    let detection_model_exists = detection_model
         .try_exists()
         .map_err(|e| format!("error while trying to locate detection model: {e}"))?;
-    let recognition_model = cache_dir
-        .join("text-recognition.rten")
+    let recognition_model_exists = recognition_model
         .try_exists()
         .map_err(|e| format!("error while trying to locate detection model: {e}"))?;
+
+    let mut hasher = Sha256::new();
+    let need_download_detection = if detection_model_exists {
+        let mut detection_model_file = File::open(detection_model)
+            .map_err(|e| format!("error opening detection model file for hashing: {e}"))?;
+        _ = std::io::copy(&mut detection_model_file, &mut hasher)
+            .map_err(|e| format!("error hashing detection model: {e}"))?;
+        hasher.finalize() == TEXT_DETECTION_HASH
+    } else {
+        true
+    };
+    hasher.reset();
+    let need_download_recognition = if recognition_model_exists {
+        let mut recognition_model_file = File::open(recognition_model)
+            .map_err(|e| format!("error opening recognition model file for hashing: {e}"))?;
+        _ = std::io::copy(&mut recognition_model_file, &mut hasher)
+            .map_err(|e| format!("error hashing recognition model: {e}"))?;
+        hasher.finalize() == TEXT_RECOGNITION_HASH
+    } else {
+        true
+    };
 
     todo!();
 
