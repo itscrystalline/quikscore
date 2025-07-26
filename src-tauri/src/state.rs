@@ -111,6 +111,14 @@ impl Display for AppStatePipeline {
 }
 
 impl AppState {
+    pub fn get_key_sheet(&self) -> Option<&AnswerKeySheet> {
+        match &self.state {
+            AppStatePipeline::WithKey { key, .. } => Some(key),
+            AppStatePipeline::Scoring { key, .. } => Some(key),
+            AppStatePipeline::Scored { key, .. } => Some(key),
+            _ => None,
+        }
+    }
     pub fn upload_key<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,
         channel: Channel<KeyUpload>,

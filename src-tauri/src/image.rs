@@ -4,7 +4,8 @@ use std::sync::{Arc, RwLock};
 use tauri::ipc::Channel;
 
 use crate::errors::{SheetError, UploadError};
-use crate::scoring::{AnswerSheetResult, CheckedAnswer};
+use crate::scoring::{grade_and_export_csv, AnswerSheetResult, CheckedAnswer};
+use crate::state::StateMutex;
 use crate::{signal, state};
 use base64::Engine;
 use itertools::Itertools;
@@ -131,7 +132,33 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
                 ProcessingState::Starting => started += 1,
                 ProcessingState::Finishing => finished += 1,
                 ProcessingState::Done(list) => {
+                    signal!(channel, AnswerUpload::AlmostDone);
+                    let answer_sheets: Vec<AnswerSheet> = list
+                        .iter()
+                        .filter_map(|res| match res {
+                            Ok((_base64, _mat, answer_sheet)) => Some(answer_sheet.clone()), // Clone here
+                            Err(e) => {
+                                eprintln!("Failed to process answer sheet: {:?}", e);
+                                None
+                            }
+                        })
+                        .collect();
+
                     AppState::upload_answer_sheets(app, &channel, list);
+
+                    let mutex = app.state::<StateMutex>();
+                    let state = mutex.lock().expect("poisoned");
+
+                    if let Some(key_sheet) = state.get_key_sheet() {
+                        for (i, sheet) in answer_sheets.iter().enumerate() {
+                            let filename = format!("output/score_{}.csv", i + 1); // Name each file uniquely
+                            if let Err(e) = grade_and_export_csv(sheet, key_sheet, &filename) {
+                                eprintln!("Failed to grade and export CSV: {:?}", e);
+                            }
+                        }
+                    } else {
+                        eprintln!("No answer key sheet available for grading.");
+                    }
                     processing_thread.abort();
                     break;
                 }
@@ -190,17 +217,17 @@ fn handle_upload(
     if let Some(ocr) = ocr {
         let (subject_id_s_f, student_id_s_f) =
             extract_subject_student_from_written_field(&resized, ocr)?;
-        println!("subject_id: {subject_id_s_f}");
-        println!("subject_id: {student_id_s_f}");
-        if subject_id_string != subject_id_s_f || student_id_string != student_id_s_f {
-            println!("User Fon and Enter differently");
-        }
+        //println!("subject_id: {subject_id_s_f}");
+        //println!("subject_id: {student_id_s_f}");
+        //if subject_id_string != subject_id_s_f || student_id_string != student_id_s_f {
+        //    println!("User Fon and Enter differently");
+        //}
         let (name, subject, date, exam_room, seat) = extract_user_information(&mat, ocr)?;
-        println!("name: {name}");
-        println!("subject: {subject}");
-        println!("date: {date}");
-        println!("exam_room: {exam_room}");
-        println!("seat: {seat}");
+        //println!("name: {name}");
+        //println!("subject: {subject}");
+        //println!("date: {date}");
+        //println!("exam_room: {exam_room}");
+        //println!("seat: {seat}");
     }
     let base64 = mat_to_base64_png(&aligned_for_display).map_err(UploadError::from)?;
     let answer_sheet: AnswerSheet = (subject_id, student_id, answer_sheet).try_into()?;
