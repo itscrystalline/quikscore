@@ -145,14 +145,14 @@ const answerProgressBar = ref<undefined | ProgressBarProps>(undefined);
 const elapsed = ref<TimeElapsed>("notCounting");
 
 
-async function ensureModel() {
+async function ensureModels() {
   const modelDownloadChannel = new Channel<ModelDownload>();
   modelDownloadChannel.onmessage = modelDownloadEventHandler;
-  await invoke("ensure_model", { channel: modelDownloadChannel });
+  await invoke("ensure_models", { channel: modelDownloadChannel });
 }
 
 async function uploadKey() {
-  const path = await ensureModel();
+  const path = await ensureModels();
   keyProgressBar.value = { type: "indeterminate" };
   const keyEventChannel = new Channel<KeyUpload>();
   keyEventChannel.onmessage = keyEventHandler;
@@ -176,7 +176,7 @@ async function clearWeights() {
 }
 
 async function uploadSheets() {
-  const path = await ensureModel();
+  const path = await ensureModels();
   answerProgressBar.value = { type: "indeterminate" };
   const answerEventChannel = new Channel<AnswerUpload>();
   answerEventChannel.onmessage = answerEventHandler;

@@ -24,7 +24,7 @@ pub fn run() {
             commands::cancel_upload_sheets,
             commands::clear_sheet_images,
             commands::set_ocr,
-            commands::ensure_models,,
+            commands::ensure_models,
         ])
         .setup(|app| {
             app.manage(Mutex::new(AppState::default()));

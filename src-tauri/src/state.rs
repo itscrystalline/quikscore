@@ -22,7 +22,7 @@ pub type StateMutex = Mutex<AppState>;
 pub static MODELS: OnceLock<PathBuf> = OnceLock::new();
 
 pub fn get_or_download_models(frontend_channel: Channel<ModelDownload>) {
-    todo!()
+    println!("verifying models");
 }
 pub fn init_thread_ocr() -> Option<OcrEngine> {
     let model_path = MODELS.get()?;
