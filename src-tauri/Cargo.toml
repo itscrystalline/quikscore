@@ -23,14 +23,6 @@ ocr-tests = []
 opt-level = 3
 [profile.dev.package."rten"]
 opt-level = 3
-[profile.dev.package."rten-simd"]
-opt-level = 3
-[profile.dev.package."rten-tensor"]
-opt-level = 3
-[profile.dev.package."rten-vecmath"]
-opt-level = 3
-[profile.dev.package."rten-imageproc"]
-opt-level = 3
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -48,7 +40,6 @@ thiserror = "2.0.12"
 tauri-plugin-fs = "2"
 itertools = "0.14.0"
 rayon = "1.10.0"
-tauri-plugin-upload = "2"
 ocrs = "0.10.3"
 anyhow = "1.0.98"
 rten = "0.18.0"
