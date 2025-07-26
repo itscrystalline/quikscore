@@ -34,8 +34,18 @@ impl DetailedScore {
     }
 
     pub fn to_rows(&self) -> Vec<QuestionScoreRow> {
-        self.details
-            .iter()
+        let mut entries: Vec<_> = self.details.iter().collect();
+
+        entries.sort_by_key(|(key, _)| {
+            key.chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect::<String>()
+                .parse::<u32>()
+                .unwrap_or(0)
+        });
+
+        entries
+            .into_iter()
             .map(|(key, value)| QuestionScoreRow {
                 question_id: key.clone(),
                 score: match value {
