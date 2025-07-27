@@ -14,7 +14,6 @@ export type ModelDownload =
         total: number;
       };
     }
-  | { event: "error"; data: { error: string } }
   | { event: "success" };
 export type KeyUpload =
   | {

@@ -1,4 +1,3 @@
-use core::hash;
 use futures::StreamExt;
 use ocrs::OcrEngine;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
@@ -12,6 +11,7 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 use tauri::{ipc::Channel, Emitter, Manager, Runtime};
+use tokio::io::AsyncWriteExt;
 // use tesseract_rs::TesseractAPI;
 
 use opencv::core::Mat;
@@ -24,15 +24,30 @@ use crate::{
 
 pub type StateMutex = Mutex<AppState>;
 pub static MODELS: OnceLock<PathBuf> = OnceLock::new();
+#[macro_export]
+macro_rules! signal {
+    ($channel: ident, $message: expr) => {
+        if let Err(e) = $channel.send($message) {
+            println!("Channel emission failed: {e}");
+        }
+    };
+}
+macro_rules! emit_state {
+    ($app: ident, $message: expr) => {
+        if let Err(e) = $app.emit("state", $message) {
+            println!("State event emission failed: {e}");
+        }
+    };
+}
 
 const TEXT_DETECTION_URL: &str =
     "https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.rten";
 const TEXT_RECOGNITION_URL: &str =
     "https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.rten";
-const TEXT_DETECTION_HASH: &str =
-    "f15cfb56bd02c4bf478a20343986504a1f01e1665c2b3a0ad66340f054b1b5ca";
-const TEXT_RECOGNITION_HASH: &str =
-    "e484866d4cce403175bd8d00b128feb08ab42e208de30e42cd9889d8f1735a6e";
+const TEXT_DETECTION_HASH: [u8; 32] =
+    hex_literal::hex!("f16cfb56bd02c4bf478a20343986504a1f01e1665c2b3a0ad66340f054b1b5ca");
+const TEXT_RECOGNITION_HASH: [u8; 32] =
+    hex_literal::hex!("e484866d4cce403175bd8d00b128feb08ab42e208de30e42cd9889d8f1735a6e");
 pub fn get_or_download_models(frontend_channel: Channel<ModelDownload>) -> Result<(), String> {
     let mut cache_dir = dirs::cache_dir().ok_or("unsupported operating system".to_string())?;
     cache_dir.push("quikscore");
@@ -47,84 +62,251 @@ pub fn get_or_download_models(frontend_channel: Channel<ModelDownload>) -> Resul
         .try_exists()
         .map_err(|e| format!("error while trying to locate detection model: {e}"))?;
 
+    let detection_model_exists = false;
+    let recognition_model_exists = false;
+
     let mut hasher = Sha256::new();
     let need_download_detection = if detection_model_exists {
-        let mut detection_model_file = File::open(detection_model)
+        let mut detection_model_file = File::open(&detection_model)
             .map_err(|e| format!("error opening detection model file for hashing: {e}"))?;
         _ = std::io::copy(&mut detection_model_file, &mut hasher)
             .map_err(|e| format!("error hashing detection model: {e}"))?;
-        hasher.finalize() != TEXT_DETECTION_HASH
+        let hash = hasher.finalize_reset();
+        hash[..] != TEXT_DETECTION_HASH[..]
     } else {
         true
     };
-    hasher.reset();
     let need_download_recognition = if recognition_model_exists {
-        let mut recognition_model_file = File::open(recognition_model)
+        let mut recognition_model_file = File::open(&recognition_model)
             .map_err(|e| format!("error opening recognition model file for hashing: {e}"))?;
         _ = std::io::copy(&mut recognition_model_file, &mut hasher)
             .map_err(|e| format!("error hashing recognition model: {e}"))?;
-        hasher.finalize() != TEXT_RECOGNITION_HASH
+        hasher.finalize()[..] != TEXT_RECOGNITION_HASH[..]
     } else {
         true
     };
 
-    enum DownloadSource {
-        Detection,
-        Recognition,
-    }
+    if need_download_detection || need_download_recognition {
+        println!("downloading detection: {need_download_detection}, recognition: {need_download_recognition}");
 
-    println!("downloading detection: {need_download_detection}, recognition: {need_download_recognition}");
-    tauri::async_runtime::block_on(async {
+        #[derive(Debug)]
+        enum Progress {
+            Detection { downloaded: u32, total: u32 },
+            DetectionDone,
+            Recognition { downloaded: u32, total: u32 },
+            RecognitionDone,
+        }
+        let (tx, mut rx) = tauri::async_runtime::channel::<Result<Progress, String>>(1024);
+        let (mut progress_detection, mut progress_recognition, mut totals) =
+            (0u32, 0u32, [0u32, 0u32]);
+
         let client = reqwest::Client::new();
-        let bodies = futures::stream::iter([
-            need_download_detection.then_some(DownloadSource::Detection),
-            need_download_recognition.then_some(DownloadSource::Recognition),
-        ])
-        .map(|need| {
-            let client = &client;
-            async move {
-                let Some(need) = need else { return None };
-                let resp = client
-                    .get(match need {
-                        DownloadSource::Detection => TEXT_DETECTION_URL,
-                        DownloadSource::Recognition => TEXT_RECOGNITION_URL,
-                    })
+        if need_download_detection {
+            let client = client.clone();
+            let tx = tx.clone();
+            tauri::async_runtime::spawn(async move {
+                let resp_head = match client
+                    .head(TEXT_DETECTION_URL)
                     .send()
-                    .await;
-                let resp = match resp {
-                    Ok(resp) => resp.bytes().await,
-                    Err(e) => Err(e),
-                };
-                Some((resp, need))
-            }
-        })
-        .buffer_unordered(2);
-
-        bodies
-            .for_each(|r| async {
-                match r {
-                    Some((Ok(b), src)) => println!(
-                        "Downloaded {} model ({} bytes))",
-                        match src {
-                            DownloadSource::Detection => "detection",
-                            DownloadSource::Recognition => "recognition",
-                        },
-                        b.len()
-                    ),
-                    Some((Err(e), src)) => {
-                        println!(
-                            "Error downloading {} model: {e}",
-                            match src {
-                                DownloadSource::Detection => "detection",
-                                DownloadSource::Recognition => "recognition",
-                            }
-                        )
+                    .await
+                    .map_err(|e| format!("error getting response for detection model: {e}"))
+                {
+                    Ok(it) => it,
+                    Err(err) => {
+                        _ = tx.send(Err(err)).await;
+                        return;
                     }
-                    None => (),
+                };
+                let total = match resp_head
+                    .headers()
+                    .get(reqwest::header::CONTENT_LENGTH)
+                    .ok_or("error obtaining content length for detection model".to_string())
+                    .and_then(|h| {
+                        h.to_str()
+                            .map_err(|e| format!("error converting content len to str: {e}"))
+                    })
+                    .and_then(|s| {
+                        s.parse::<u32>()
+                            .map_err(|e| format!("cannot parse content length: {e}"))
+                    }) {
+                    Ok(it) => it,
+                    Err(err) => {
+                        _ = tx.send(Err(err)).await;
+                        return;
+                    }
+                };
+
+                let resp = match client
+                    .get(TEXT_DETECTION_URL)
+                    .send()
+                    .await
+                    .map_err(|e| format!("error requesting detection model: {e}"))
+                {
+                    Ok(it) => it,
+                    Err(err) => {
+                        _ = tx.send(Err(err)).await;
+                        return;
+                    }
+                };
+                let mut file = match tokio::fs::File::create(detection_model)
+                    .await
+                    .map_err(|e| format!("error creating detection model on disk: {e}"))
+                {
+                    Ok(it) => it,
+                    Err(err) => {
+                        _ = tx.send(Err(err)).await;
+                        return;
+                    }
+                };
+                let mut stream = resp.bytes_stream();
+
+                let mut downloaded = 0u32;
+
+                while let Some(chunk) = stream.next().await {
+                    println!("downloading detect {downloaded}");
+                    let chunk = match chunk.map_err(|e| format!("error reading chunk: {e}")) {
+                        Ok(it) => it,
+                        Err(err) => {
+                            _ = tx.send(Err(err)).await;
+                            return;
+                        }
+                    };
+                    match file
+                        .write_all(&chunk)
+                        .await
+                        .map_err(|e| format!("error writing detection model on disk: {e}"))
+                    {
+                        Ok(it) => it,
+                        Err(err) => {
+                            _ = tx.send(Err(err)).await;
+                            return;
+                        }
+                    };
+                    downloaded += chunk.len() as u32;
+
+                    // send progress update (ignoring send errors if receiver closed)
+                    let _ = tx.send(Ok(Progress::Detection { downloaded, total })).await;
                 }
-            })
-            .await;
-    });
+                let _ = tx.send(Ok(Progress::DetectionDone)).await;
+            });
+        }
+        if need_download_recognition {
+            let client = client.clone();
+            let tx = tx.clone();
+            tauri::async_runtime::spawn(async move {
+                let resp_head = match client
+                    .head(TEXT_RECOGNITION_URL)
+                    .send()
+                    .await
+                    .map_err(|e| format!("error getting response for recognition model: {e}"))
+                {
+                    Ok(it) => it,
+                    Err(err) => {
+                        _ = tx.send(Err(err)).await;
+                        return;
+                    }
+                };
+                let total = match resp_head
+                    .headers()
+                    .get(reqwest::header::CONTENT_LENGTH)
+                    .ok_or("error obtaining content length for recognition model".to_string())
+                    .and_then(|h| {
+                        h.to_str()
+                            .map_err(|e| format!("error converting content len to str: {e}"))
+                    })
+                    .and_then(|s| {
+                        s.parse::<u32>()
+                            .map_err(|e| format!("cannot parse content length: {e}"))
+                    }) {
+                    Ok(it) => it,
+                    Err(err) => {
+                        _ = tx.send(Err(err)).await;
+                        return;
+                    }
+                };
+
+                let resp = match client
+                    .get(TEXT_RECOGNITION_URL)
+                    .send()
+                    .await
+                    .map_err(|e| format!("error requesting recognition model: {e}"))
+                {
+                    Ok(it) => it,
+                    Err(err) => {
+                        _ = tx.send(Err(err)).await;
+                        return;
+                    }
+                };
+                let mut file = match tokio::fs::File::create(recognition_model)
+                    .await
+                    .map_err(|e| format!("error creating recognition model on disk: {e}"))
+                {
+                    Ok(it) => it,
+                    Err(err) => {
+                        _ = tx.send(Err(err)).await;
+                        return;
+                    }
+                };
+                let mut stream = resp.bytes_stream();
+
+                let mut downloaded = 0u32;
+
+                while let Some(chunk) = stream.next().await {
+                    println!("downloading recog {downloaded}");
+                    let chunk = match chunk.map_err(|e| format!("error reading chunk: {e}")) {
+                        Ok(it) => it,
+                        Err(err) => {
+                            _ = tx.send(Err(err)).await;
+                            return;
+                        }
+                    };
+                    match file
+                        .write_all(&chunk)
+                        .await
+                        .map_err(|e| format!("error writing recognition model on disk: {e}"))
+                    {
+                        Ok(it) => it,
+                        Err(err) => {
+                            _ = tx.send(Err(err)).await;
+                            return;
+                        }
+                    };
+                    downloaded += chunk.len() as u32;
+
+                    // send progress update (ignoring send errors if receiver closed)
+                    let _ = tx
+                        .send(Ok(Progress::Recognition { downloaded, total }))
+                        .await;
+                }
+                let _ = tx.send(Ok(Progress::RecognitionDone)).await;
+            });
+        }
+
+        while let Some(p) = rx.blocking_recv() {
+            println!("got some {p:?}");
+            match p {
+                Ok(Progress::Detection { downloaded, total }) => {
+                    progress_detection = downloaded;
+                    totals[0] = total;
+                }
+                Ok(Progress::Recognition { downloaded, total }) => {
+                    progress_recognition = downloaded;
+                    totals[1] = total;
+                }
+                Err(e) => return Err(e),
+                _ => (),
+            }
+            signal!(
+                frontend_channel,
+                ModelDownload::Progress {
+                    progress_detection,
+                    progress_recognition,
+                    total: totals.iter().sum()
+                }
+            )
+        }
+        signal!(frontend_channel, ModelDownload::Success)
+    }
 
     Ok(())
 }
@@ -147,22 +329,6 @@ pub fn init_thread_ocr() -> Option<OcrEngine> {
         ..Default::default()
     })
     .ok()
-}
-
-#[macro_export]
-macro_rules! signal {
-    ($channel: ident, $message: expr) => {
-        if let Err(e) = $channel.send($message) {
-            println!("Channel emission failed: {e}");
-        }
-    };
-}
-macro_rules! emit_state {
-    ($app: ident, $message: expr) => {
-        if let Err(e) = $app.emit("state", $message) {
-            println!("State event emission failed: {e}");
-        }
-    };
 }
 
 #[derive(Default)]
@@ -623,9 +789,6 @@ pub enum ModelDownload {
         progress_recognition: u32,
         total: u32,
     },
-    Error {
-        error: String,
-    },
     Success,
 }
 #[derive(Clone, Serialize, Deserialize)]
@@ -744,7 +907,7 @@ mod unit_tests {
     }
 
     fn setup_ocr_data() {
-        get_or_download_models(Some(PathBuf::from("tests/assets")))
+        _ = MODELS.set(PathBuf::from("tests/assets"))
     }
 
     fn compare_mats(a: &Mat, b: &Mat) -> bool {

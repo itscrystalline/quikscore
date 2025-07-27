@@ -28,14 +28,11 @@ listen<AppState>("state", (event) => {
 })
 
 const modelDownloadEventHandler = (msg: ModelDownload): void => {
+  console.log(msg);
   switch (msg.event) {
     case "progress":
       const { total, progressDetection, progressRecognition } = msg.data
       keyProgressBar.value = { type: "progress", max: total, progressTop: progressDetection, progressBottom: progressDetection + progressRecognition };
-      return;
-    case "error":
-      keyProgressBar.value = undefined;
-      keyStatus.value = msg.data.error;
       return;
     case "success":
       keyProgressBar.value = { type: "indeterminate" };
@@ -160,7 +157,11 @@ const elapsed = ref<TimeElapsed>("notCounting");
 async function ensureModels() {
   const modelDownloadChannel = new Channel<ModelDownload>();
   modelDownloadChannel.onmessage = modelDownloadEventHandler;
-  await invoke("ensure_models", { channel: modelDownloadChannel });
+  try {
+    await invoke("ensure_models", { channel: modelDownloadChannel });
+  } catch (e) {
+    console.error("failed to ensure models: " + e);
+  }
 }
 
 async function uploadKey() {
