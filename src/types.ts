@@ -4,6 +4,17 @@ export type AppState =
   | "WithKeyAndWeights"
   | "Scoring"
   | "Scored";
+
+export type ModelDownload =
+  | {
+      event: "progress";
+      data: {
+        progressDetection: number;
+        progressRecognition: number;
+        total: number;
+      };
+    }
+  | { event: "success" };
 export type KeyUpload =
   | {
       event: "cancelled";

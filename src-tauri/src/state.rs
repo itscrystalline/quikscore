@@ -8,7 +8,6 @@ use std::{
     sync::{Mutex, OnceLock},
 };
 use tauri::{ipc::Channel, Emitter, Manager, Runtime};
-// use tesseract_rs::TesseractAPI;
 
 use opencv::core::Mat;
 
@@ -20,31 +19,6 @@ use crate::{
 
 pub type StateMutex = Mutex<AppState>;
 pub static MODELS: OnceLock<PathBuf> = OnceLock::new();
-
-pub fn init_model_dir(models_path: PathBuf) {
-    _ = MODELS.set(models_path);
-}
-pub fn init_thread_ocr() -> OcrEngine {
-    println!("initializing thread OcrEngine");
-    let model_path = MODELS
-        .get()
-        .expect("model path should be set at this point");
-    let detection_model = model_path.join("text-detection.rten");
-    let recognition_model = model_path.join("text-recognition.rten");
-
-    let detection =
-        rten::Model::load_file(detection_model).expect("should succeed in loading detection model");
-    let recognition = rten::Model::load_file(recognition_model)
-        .expect("should succeed in loading recognition model");
-
-    OcrEngine::new(ocrs::OcrEngineParams {
-        detection_model: Some(detection),
-        recognition_model: Some(recognition),
-        ..Default::default()
-    })
-    .expect("should be able to start the engine")
-}
-
 #[macro_export]
 macro_rules! signal {
     ($channel: ident, $message: expr) => {
@@ -59,6 +33,27 @@ macro_rules! emit_state {
             println!("State event emission failed: {e}");
         }
     };
+}
+
+pub fn init_thread_ocr() -> Option<OcrEngine> {
+    let model_path = MODELS.get()?;
+    let detection_model = model_path.join("text-detection.rten");
+    let recognition_model = model_path.join("text-recognition.rten");
+    println!("initializing thread OcrEngine");
+
+    let detection = rten::Model::load_file(detection_model)
+        .inspect_err(|e| println!("error loading detection model: {e}"))
+        .ok()?;
+    let recognition = rten::Model::load_file(recognition_model)
+        .inspect_err(|e| println!("error loading recognition model: {e}"))
+        .ok()?;
+
+    OcrEngine::new(ocrs::OcrEngineParams {
+        detection_model: Some(detection),
+        recognition_model: Some(recognition),
+        ..Default::default()
+    })
+    .ok()
 }
 
 #[derive(Default)]
@@ -622,7 +617,7 @@ mod unit_tests {
     }
 
     fn setup_ocr_data() {
-        init_model_dir(PathBuf::from("tests/assets"))
+        _ = MODELS.set(PathBuf::from("tests/assets"))
     }
 
     fn compare_mats(a: &Mat, b: &Mat) -> bool {

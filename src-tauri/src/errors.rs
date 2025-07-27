@@ -29,3 +29,28 @@ pub enum SheetError {
     // #[error("Tesseract Error: {0}")]
     // TesseractError(#[from] tesseract_rs::TesseractError),
 }
+
+#[derive(thiserror::Error, Debug)]
+pub enum ModelDownloadError {
+    #[error("Unsupported Operating System (cannot determine cache dir)")]
+    CacheDirUnknown,
+    #[error("I/O error while trying to access models: {0}")]
+    IOError(#[from] std::io::Error),
+    #[error("Error making network request: {0}")]
+    ReqwestError(#[from] reqwest::Error),
+    #[error("Error converting header to string: {0}")]
+    ToStrError(#[from] reqwest::header::ToStrError),
+    #[error("Error converting header string to number: {0}")]
+    ParseIntError(#[from] std::num::ParseIntError),
+    #[error("Response is missing content length")]
+    NoContentLength,
+}
+
+impl serde::Serialize for ModelDownloadError {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        self.to_string().serialize(serializer)
+    }
+}

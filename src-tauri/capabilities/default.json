@@ -33,7 +33,6 @@
           "path": "$CACHE/**/*"
         }
       ]
-    },
-    "upload:default"
+    }
   ]
 }

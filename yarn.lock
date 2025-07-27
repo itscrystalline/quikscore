@@ -382,13 +382,6 @@
   dependencies:
     "@tauri-apps/api" "^2.6.0"
 
-"@tauri-apps/plugin-upload@~2":
-  version "2.3.0"
-  resolved "https://registry.yarnpkg.com/@tauri-apps/plugin-upload/-/plugin-upload-2.3.0.tgz#253ed37b26c79cff5f29e9965283c71ed6161200"
-  integrity sha512-XpjQEh3wcsEDyYwCwETGCelfQBPeDqR2T4vsCcNxpxT+6fuFgeN0hwZdwyMzEwlXmDvss4EetdaTGJZi+nUWuQ==
-  dependencies:
-    "@tauri-apps/api" "^2.6.0"
-
 "@types/chai@^5.2.2":
   version "5.2.2"
   resolved "https://registry.yarnpkg.com/@types/chai/-/chai-5.2.2.tgz#6f14cea18180ffc4416bc0fd12be05fdd73bdd6b"

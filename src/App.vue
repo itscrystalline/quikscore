@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import { Ref, ref, watch } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { AnswerScoreResult, AnswerUpload, AppState, KeyUpload } from "./messages";
-import { download } from '@tauri-apps/plugin-upload';
-import * as path from '@tauri-apps/api/path';
-import { exists, mkdir } from "@tauri-apps/plugin-fs";
+import { AnswerScoreResult, AnswerUpload, AppState, KeyUpload, ModelDownload } from "./types";
 import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
 import { listen } from "@tauri-apps/api/event";
 
@@ -23,35 +20,6 @@ const hms = (secs: number): string => {
   }
 }
 
-async function ensureModel(textRef: Ref<string>): Promise<string> {
-  const cache = await path.cacheDir();
-  const modelPath = await path.join(cache, "quikscore");
-  if (!await exists("quikscore", { baseDir: path.BaseDirectory.Cache })) {
-    await mkdir("quikscore", { baseDir: path.BaseDirectory.Cache });
-  }
-
-  const detectionPath = await path.join(modelPath, "text-detection.rten");
-  const recognitionPath = await path.join(modelPath, "text-recognition.rten");
-
-  textRef.value = "Verifying OCR models...";
-  if (!await exists(detectionPath)) {
-    textRef.value = "Downloading Detection Model...";
-    await download(
-      'https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.rten',
-      detectionPath,
-    );
-  }
-  if (!await exists(recognitionPath)) {
-    textRef.value = "Downloading Recognition Model...";
-    await download(
-      'https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.rten',
-      recognitionPath,
-    );
-  }
-  textRef.value = "Please upload an image...";
-
-  return modelPath;
-}
 
 const appState = ref<AppState>("Init");
 listen<AppState>("state", (event) => {
@@ -59,17 +27,28 @@ listen<AppState>("state", (event) => {
   console.log("state changed to " + appState.value);
 })
 
+const modelDownloadEventHandler = (progressBar: Ref<undefined | ProgressBarProps>) => (msg: ModelDownload): void => {
+  switch (msg.event) {
+    case "progress":
+      const { total, progressDetection, progressRecognition } = msg.data
+      progressBar.value = { type: "progress", max: total, progressTop: progressDetection, progressBottom: progressDetection + progressRecognition };
+      return;
+    case "success":
+      progressBar.value = { type: "indeterminate" };
+      return;
+  }
+}
 const keyEventHandler = (msg: KeyUpload): void => {
   switch (msg.event) {
     case "cancelled":
       keyStatus.value = "User cancelled upload";
-      keyProgressBar.value = false;
+      keyProgressBar.value = undefined;
       break;
 
     case "clearImage":
       keyImage.value = "";
       keyStatus.value = "";
-      keyProgressBar.value = false;
+      keyProgressBar.value = undefined;
       break;
 
     case "clearWeights":
@@ -80,7 +59,7 @@ const keyEventHandler = (msg: KeyUpload): void => {
     case "image":
       keyImage.value = msg.data.base64;
       keyStatus.value = "";
-      keyProgressBar.value = false;
+      keyProgressBar.value = undefined;
       break;
 
     case "uploadedWeights":
@@ -94,7 +73,7 @@ const keyEventHandler = (msg: KeyUpload): void => {
 
     case "error":
       keyStatus.value = msg.data.error;
-      keyProgressBar.value = false;
+      keyProgressBar.value = undefined;
       break;
 
     default:
@@ -154,7 +133,7 @@ watch(ocr, async (new_ocr, _) => { await invoke("set_ocr", { ocr: new_ocr }) });
 const keyImage = ref("");
 const keyHasWeights = ref<"notUploaded" | "missingWeights" | "yes">("notUploaded");
 const keyStatus = ref("");
-const keyProgressBar = ref(false);
+const keyProgressBar = ref<undefined | ProgressBarProps>(undefined);
 
 const canUploadKey = () => appState.value == "Init" || appState.value == "WithKey";
 const canChangeKey = () => appState.value == "WithKey" || appState.value == "WithKeyAndWeights";
@@ -173,9 +152,25 @@ const answerProgressBar = ref<undefined | ProgressBarProps>(undefined);
 
 const elapsed = ref<TimeElapsed>("notCounting");
 
+
+async function ensureModels(progressBar: Ref<undefined | ProgressBarProps>, status: Ref<string>) {
+  let retries = 0;
+  while (retries < 3) {
+    try {
+      const modelDownloadChannel = new Channel<ModelDownload>();
+      modelDownloadChannel.onmessage = modelDownloadEventHandler(progressBar);
+      await invoke("ensure_models", { channel: modelDownloadChannel });
+      retries = 3;
+    } catch (e) {
+      status.value = "failed to ensure models: " + e + (retries < 2 ? ", retrying" : "");
+      retries += 1;
+    }
+  }
+}
+
 async function uploadKey() {
-  const path = await ensureModel(keyStatus);
-  keyProgressBar.value = true;
+  const path = await ensureModels(keyProgressBar, keyStatus);
+  keyProgressBar.value = { type: "indeterminate" };
   const keyEventChannel = new Channel<KeyUpload>();
   keyEventChannel.onmessage = keyEventHandler;
   await invoke("upload_key_image", { channel: keyEventChannel, modelDir: path });
@@ -198,7 +193,7 @@ async function clearWeights() {
 }
 
 async function uploadSheets() {
-  const path = await ensureModel(answerStatus);
+  const path = await ensureModels(answerProgressBar, answerStatus);
   answerProgressBar.value = { type: "indeterminate" };
   const answerEventChannel = new Channel<AnswerUpload>();
   answerEventChannel.onmessage = answerEventHandler;
@@ -253,7 +248,7 @@ async function clearSheets() {
       <p class="placeholder" v-if="keyStatus !== '' || !keyImage">
         {{ keyStatus === "" ? "Upload a key..." : keyStatus }}
       </p>
-      <StackedProgressBar v-if="keyProgressBar" type="indeterminate" />
+      <StackedProgressBar v-if="keyProgressBar" v-bind="keyProgressBar" />
       <div :style="keyImage == '' ? 'display: none;' : ''" class="key-image-container">
         <div :class="keyHasWeights == 'notUploaded' ? 'yellow' : keyHasWeights == 'missingWeights' ? 'red' : 'green'">
           <img v-if="keyHasWeights == 'notUploaded'" src="/src/assets/no_weights.svg" />

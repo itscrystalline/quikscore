@@ -50,7 +50,10 @@ pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         return;
     };
     let Options { ocr } = AppState::get_options(app);
-    match handle_upload(file_path, ocr.then(state::init_thread_ocr).as_ref()) {
+    match handle_upload(
+        file_path,
+        ocr.then(state::init_thread_ocr).flatten().as_ref(),
+    ) {
         Ok((base64_image, mat, key)) => {
             AppState::upload_key(app, channel, base64_image, mat, key.into())
         }
@@ -95,7 +98,7 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
                 || {
                     (
                         tx.clone(),
-                        ocr.then(state::init_thread_ocr),
+                        ocr.then(state::init_thread_ocr).flatten(),
                         Arc::clone(&stop_moved),
                     )
                 },
@@ -711,7 +714,7 @@ mod unit_tests {
     }
 
     fn setup_ocr_data() {
-        state::init_model_dir(PathBuf::from("tests/assets"));
+        _ = state::MODELS.set(PathBuf::from("tests/assets"))
     }
 
     fn not_image() -> FilePath {
@@ -785,6 +788,7 @@ mod unit_tests {
             path,
             cfg!(feature = "ocr-tests")
                 .then(state::init_thread_ocr)
+                .flatten()
                 .as_ref(),
         );
         assert!(result.is_ok());
@@ -802,6 +806,7 @@ mod unit_tests {
             path,
             cfg!(feature = "ocr-tests")
                 .then(state::init_thread_ocr)
+                .flatten()
                 .as_ref(),
         );
         assert!(result.is_err());
@@ -891,7 +896,7 @@ mod unit_tests {
     #[cfg(feature = "ocr-tests")]
     fn check_extracted_ids_ocr() -> Result<(), SheetError> {
         setup_ocr_data();
-        let ocr = &state::init_thread_ocr();
+        let ocr = &state::init_thread_ocr().unwrap();
 
         for (i, path) in test_images().into_iter().enumerate() {
             let mat = read_from_path(path).expect("Failed to read image");
@@ -926,7 +931,7 @@ mod unit_tests {
     #[cfg(feature = "ocr-tests")]
     fn check_ocr_function() -> Result<(), SheetError> {
         setup_ocr_data();
-        let ocr = &state::init_thread_ocr();
+        let ocr = &state::init_thread_ocr().unwrap();
 
         for (i, path) in test_images().into_iter().enumerate() {
             println!("image #{i}");
