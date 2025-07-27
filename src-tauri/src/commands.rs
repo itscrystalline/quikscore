@@ -1,13 +1,12 @@
-use crate::scoring::upload_weights_impl;
-use crate::state;
-use crate::state::ModelDownload;
-use std::path::PathBuf;
+use crate::{
+    download::{self, ModelDownload},
+    errors::ModelDownloadError,
+    image::{upload_key_image_impl, upload_sheet_images_impl},
+    scoring::upload_weights_impl,
+    state::{AnswerUpload, KeyUpload},
+    AppState,
+};
 
-use crate::image::upload_key_image_impl;
-use crate::image::upload_sheet_images_impl;
-use crate::state::AnswerUpload;
-use crate::state::KeyUpload;
-use crate::AppState;
 use tauri::ipc::Channel;
 use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
@@ -59,7 +58,7 @@ pub fn set_ocr(app: AppHandle, ocr: bool) {
     AppState::set_ocr(&app, ocr);
 }
 
-#[tauri::command]
-pub fn ensure_models(channel: Channel<ModelDownload>) -> Result<(), String> {
-    state::get_or_download_models(channel)
+#[tauri::command(async)]
+pub async fn ensure_models(channel: Channel<ModelDownload>) -> Result<(), ModelDownloadError> {
+    download::get_or_download_models(channel).await
 }

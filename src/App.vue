@@ -28,7 +28,6 @@ listen<AppState>("state", (event) => {
 })
 
 const modelDownloadEventHandler = (msg: ModelDownload): void => {
-  console.log(msg);
   switch (msg.event) {
     case "progress":
       const { total, progressDetection, progressRecognition } = msg.data
