@@ -15,7 +15,7 @@ const TEXT_DETECTION_URL: &str =
 const TEXT_RECOGNITION_URL: &str =
     "https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.rten";
 const TEXT_DETECTION_HASH: [u8; 32] =
-    hex_literal::hex!("f16cfb56bd02c4bf478a20343986504a1f01e1665c2b3a0ad66340f054b1b5ca");
+    hex_literal::hex!("f15cfb56bd02c4bf478a20343986504a1f01e1665c2b3a0ad66340f054b1b5ca");
 const TEXT_RECOGNITION_HASH: [u8; 32] =
     hex_literal::hex!("e484866d4cce403175bd8d00b128feb08ab42e208de30e42cd9889d8f1735a6e");
 pub async fn get_or_download_models(
@@ -40,9 +40,10 @@ pub async fn get_or_download_models(
     let need_download_detection = if detection_model_exists {
         let mut detection_model_file = File::open(&detection_model)?;
         _ = std::io::copy(&mut detection_model_file, &mut hasher)?;
-        let hash_not_passed = hasher.finalize_reset()[..] != TEXT_DETECTION_HASH[..];
+        let hash = hasher.finalize_reset();
+        let hash_not_passed = hash[..] != TEXT_DETECTION_HASH[..];
         if hash_not_passed {
-            println!("detection model hash mismatch, redownloading")
+            println!("detection model hash mismatch, redownloading");
         }
         hash_not_passed
     } else {
