@@ -26,29 +26,33 @@ pub async fn get_or_download_models(
     let detection_model_exists = detection_model.try_exists()?;
     let recognition_model_exists = recognition_model.try_exists()?;
 
-    let detection_model_exists = false;
-    let recognition_model_exists = false;
-
     let mut hasher = Sha256::new();
     let need_download_detection = if detection_model_exists {
         let mut detection_model_file = File::open(&detection_model)?;
         _ = std::io::copy(&mut detection_model_file, &mut hasher)?;
-        let hash = hasher.finalize_reset();
-        hash[..] != TEXT_DETECTION_HASH[..]
+        let hash_passed = hasher.finalize_reset()[..] != TEXT_DETECTION_HASH[..];
+        if !hash_passed {
+            println!("detection model hash mismatch, redownloading")
+        }
+        hash_passed
     } else {
+        println!("downloading detection model");
         true
     };
     let need_download_recognition = if recognition_model_exists {
         let mut recognition_model_file = File::open(&recognition_model)?;
         _ = std::io::copy(&mut recognition_model_file, &mut hasher)?;
-        hasher.finalize()[..] != TEXT_RECOGNITION_HASH[..]
+        let hash_passed = hasher.finalize()[..] != TEXT_DETECTION_HASH[..];
+        if !hash_passed {
+            println!("recognition model hash mismatch, redownloading")
+        }
+        hash_passed
     } else {
+        println!("downloading recognition model");
         true
     };
 
     if need_download_detection || need_download_recognition {
-        println!("downloading detection: {need_download_detection}, recognition: {need_download_recognition}");
-
         #[derive(Debug)]
         enum Progress {
             Detection { downloaded: u32, total: u32 },
@@ -106,7 +110,6 @@ pub async fn get_or_download_models(
                 let mut downloaded = 0u32;
 
                 while let Some(chunk) = stream.next().await {
-                    println!("downloading detect {downloaded}");
                     let chunk = match chunk {
                         Ok(it) => it,
                         Err(err) => {
@@ -170,7 +173,6 @@ pub async fn get_or_download_models(
                 let mut downloaded = 0u32;
 
                 while let Some(chunk) = stream.next().await {
-                    println!("downloading recog {downloaded}");
                     let chunk = match chunk {
                         Ok(it) => it,
                         Err(err) => {
@@ -195,7 +197,6 @@ pub async fn get_or_download_models(
 
         let (mut detection_finished, mut recognition_finished) = (false, false);
         while let Some(p) = rx.recv().await {
-            println!("got some {p:?}");
             match p {
                 Ok(Progress::Detection { downloaded, total }) => {
                     progress_detection = downloaded;
