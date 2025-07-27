@@ -154,12 +154,17 @@ const elapsed = ref<TimeElapsed>("notCounting");
 
 
 async function ensureModels(progressBar: Ref<undefined | ProgressBarProps>, status: Ref<string>) {
-  const modelDownloadChannel = new Channel<ModelDownload>();
-  modelDownloadChannel.onmessage = modelDownloadEventHandler(progressBar);
-  try {
-    await invoke("ensure_models", { channel: modelDownloadChannel });
-  } catch (e) {
-    status.value = "failed to ensure models: " + e + ", please try again.";
+  let retries = 0;
+  while (retries < 3) {
+    try {
+      const modelDownloadChannel = new Channel<ModelDownload>();
+      modelDownloadChannel.onmessage = modelDownloadEventHandler(progressBar);
+      await invoke("ensure_models", { channel: modelDownloadChannel });
+      retries = 3;
+    } catch (e) {
+      status.value = "failed to ensure models: " + e + (retries < 2 ? ", retrying" : "");
+      retries += 1;
+    }
   }
 }
 
