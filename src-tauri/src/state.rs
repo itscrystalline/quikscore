@@ -1,4 +1,5 @@
 use core::hash;
+use futures::StreamExt;
 use ocrs::OcrEngine;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
@@ -24,6 +25,10 @@ use crate::{
 pub type StateMutex = Mutex<AppState>;
 pub static MODELS: OnceLock<PathBuf> = OnceLock::new();
 
+const TEXT_DETECTION_URL: &str =
+    "https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.rten";
+const TEXT_RECOGNITION_URL: &str =
+    "https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.rten";
 const TEXT_DETECTION_HASH: &str =
     "f15cfb56bd02c4bf478a20343986504a1f01e1665c2b3a0ad66340f054b1b5ca";
 const TEXT_RECOGNITION_HASH: &str =
@@ -63,7 +68,63 @@ pub fn get_or_download_models(frontend_channel: Channel<ModelDownload>) -> Resul
         true
     };
 
-    todo!();
+    enum DownloadSource {
+        Detection,
+        Recognition,
+    }
+
+    println!("downloading detection: {need_download_detection}, recognition: {need_download_recognition}");
+    tauri::async_runtime::block_on(async {
+        let client = reqwest::Client::new();
+        let bodies = futures::stream::iter([
+            need_download_detection.then_some(DownloadSource::Detection),
+            need_download_recognition.then_some(DownloadSource::Recognition),
+        ])
+        .map(|need| {
+            let client = &client;
+            async move {
+                let Some(need) = need else { return None };
+                let resp = client
+                    .get(match need {
+                        DownloadSource::Detection => TEXT_DETECTION_URL,
+                        DownloadSource::Recognition => TEXT_RECOGNITION_URL,
+                    })
+                    .send()
+                    .await;
+                let resp = match resp {
+                    Ok(resp) => resp.bytes().await,
+                    Err(e) => Err(e),
+                };
+                Some((resp, need))
+            }
+        })
+        .buffer_unordered(2);
+
+        bodies
+            .for_each(|r| async {
+                match r {
+                    Some((Ok(b), src)) => println!(
+                        "Downloaded {} model ({} bytes))",
+                        match src {
+                            DownloadSource::Detection => "detection",
+                            DownloadSource::Recognition => "recognition",
+                        },
+                        b.len()
+                    ),
+                    Some((Err(e), src)) => {
+                        println!(
+                            "Error downloading {} model: {e}",
+                            match src {
+                                DownloadSource::Detection => "detection",
+                                DownloadSource::Recognition => "recognition",
+                            }
+                        )
+                    }
+                    None => (),
+                }
+            })
+            .await;
+    });
 
     Ok(())
 }
