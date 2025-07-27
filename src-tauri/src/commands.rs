@@ -59,6 +59,9 @@ pub fn set_ocr(app: AppHandle, ocr: bool) {
 }
 
 #[tauri::command(async)]
-pub async fn ensure_models(channel: Channel<ModelDownload>) -> Result<(), ModelDownloadError> {
-    download::get_or_download_models(channel).await
+pub async fn ensure_models(
+    app: AppHandle,
+    channel: Channel<ModelDownload>,
+) -> Result<(), ModelDownloadError> {
+    download::get_or_download_models(app, channel).await
 }

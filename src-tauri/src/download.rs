@@ -1,9 +1,13 @@
-use crate::{errors::ModelDownloadError, signal};
+use crate::{
+    errors::ModelDownloadError,
+    signal,
+    state::{AppState, Options, MODELS},
+};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs::File;
-use tauri::ipc::Channel;
+use tauri::{ipc::Channel, AppHandle};
 use tokio::io::AsyncWriteExt;
 
 const TEXT_DETECTION_URL: &str =
@@ -15,8 +19,14 @@ const TEXT_DETECTION_HASH: [u8; 32] =
 const TEXT_RECOGNITION_HASH: [u8; 32] =
     hex_literal::hex!("e484866d4cce403175bd8d00b128feb08ab42e208de30e42cd9889d8f1735a6e");
 pub async fn get_or_download_models(
+    app: AppHandle,
     frontend_channel: Channel<ModelDownload>,
 ) -> Result<(), ModelDownloadError> {
+    let Options { ocr } = AppState::get_options(&app);
+    if !ocr {
+        return Ok(());
+    }
+
     let mut cache_dir = dirs::cache_dir().ok_or(ModelDownloadError::CacheDirUnknown)?;
     cache_dir.push("quikscore");
 
@@ -30,11 +40,11 @@ pub async fn get_or_download_models(
     let need_download_detection = if detection_model_exists {
         let mut detection_model_file = File::open(&detection_model)?;
         _ = std::io::copy(&mut detection_model_file, &mut hasher)?;
-        let hash_passed = hasher.finalize_reset()[..] != TEXT_DETECTION_HASH[..];
-        if !hash_passed {
+        let hash_not_passed = hasher.finalize_reset()[..] != TEXT_DETECTION_HASH[..];
+        if hash_not_passed {
             println!("detection model hash mismatch, redownloading")
         }
-        hash_passed
+        hash_not_passed
     } else {
         println!("downloading detection model");
         true
@@ -42,11 +52,11 @@ pub async fn get_or_download_models(
     let need_download_recognition = if recognition_model_exists {
         let mut recognition_model_file = File::open(&recognition_model)?;
         _ = std::io::copy(&mut recognition_model_file, &mut hasher)?;
-        let hash_passed = hasher.finalize()[..] != TEXT_DETECTION_HASH[..];
-        if !hash_passed {
+        let hash_not_passed = hasher.finalize()[..] != TEXT_RECOGNITION_HASH[..];
+        if hash_not_passed {
             println!("recognition model hash mismatch, redownloading")
         }
-        hash_passed
+        hash_not_passed
     } else {
         println!("downloading recognition model");
         true
@@ -241,6 +251,7 @@ pub async fn get_or_download_models(
         println!("download success");
     }
 
+    _ = MODELS.set(cache_dir);
     Ok(())
 }
 
