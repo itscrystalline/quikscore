@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { Ref, ref, watch } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { AnswerScoreResult, AnswerUpload, AppState, KeyUpload, ModelDownload } from "./types";
 import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
@@ -27,14 +27,14 @@ listen<AppState>("state", (event) => {
   console.log("state changed to " + appState.value);
 })
 
-const modelDownloadEventHandler = (msg: ModelDownload): void => {
+const modelDownloadEventHandler = (progressBar: Ref<undefined | ProgressBarProps>) => (msg: ModelDownload): void => {
   switch (msg.event) {
     case "progress":
       const { total, progressDetection, progressRecognition } = msg.data
-      keyProgressBar.value = { type: "progress", max: total, progressTop: progressDetection, progressBottom: progressDetection + progressRecognition };
+      progressBar.value = { type: "progress", max: total, progressTop: progressDetection, progressBottom: progressDetection + progressRecognition };
       return;
     case "success":
-      keyProgressBar.value = { type: "indeterminate" };
+      progressBar.value = { type: "indeterminate" };
       return;
   }
 }
@@ -153,18 +153,18 @@ const answerProgressBar = ref<undefined | ProgressBarProps>(undefined);
 const elapsed = ref<TimeElapsed>("notCounting");
 
 
-async function ensureModels() {
+async function ensureModels(progressBar: Ref<undefined | ProgressBarProps>, status: Ref<string>) {
   const modelDownloadChannel = new Channel<ModelDownload>();
-  modelDownloadChannel.onmessage = modelDownloadEventHandler;
+  modelDownloadChannel.onmessage = modelDownloadEventHandler(progressBar);
   try {
     await invoke("ensure_models", { channel: modelDownloadChannel });
   } catch (e) {
-    console.error("failed to ensure models: " + e);
+    status.value = "failed to ensure models: " + e + ", please try again.";
   }
 }
 
 async function uploadKey() {
-  const path = await ensureModels();
+  const path = await ensureModels(keyProgressBar, keyStatus);
   keyProgressBar.value = { type: "indeterminate" };
   const keyEventChannel = new Channel<KeyUpload>();
   keyEventChannel.onmessage = keyEventHandler;
@@ -188,7 +188,7 @@ async function clearWeights() {
 }
 
 async function uploadSheets() {
-  const path = await ensureModels();
+  const path = await ensureModels(answerProgressBar, answerStatus);
   answerProgressBar.value = { type: "indeterminate" };
   const answerEventChannel = new Channel<AnswerUpload>();
   answerEventChannel.onmessage = answerEventHandler;
