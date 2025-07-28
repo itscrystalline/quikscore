@@ -3,8 +3,8 @@ use std::array;
 use tauri::ipc::Channel;
 
 use crate::errors::{SheetError, UploadError};
-use crate::scoring::{AnswerSheetResult, CheckedAnswer, grade_and_export_csv};
-use crate::state::{StateMutex};
+use crate::scoring::{grade_and_export_csv, AnswerSheetResult, CheckedAnswer};
+use crate::state::StateMutex;
 use crate::{signal, state};
 use base64::Engine;
 use itertools::Itertools;
@@ -128,55 +128,6 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
                             }
                         })
                         .collect();
-                
-                    let mutex = app.state::<StateMutex>();
-                    let state = mutex.lock().expect("poisoned");
-
-                    if let Some(key_sheet) = state.get_key_sheet() {
-                        for (i, sheet) in answer_sheets.iter().enumerate() {
-                            let Some(Ok((_base64, mat, _))) = list.get(i) else {
-                                eprintln!("Failed to retrieve matching mat for answer sheet at index {}", i);
-                                continue;
-                            };
-                            let resized = match resize_relative_img(&mat, 0.3333) {
-                                Ok(res) => res,
-                                Err(e) => {
-                                    eprintln!("Failed to resize answer sheet: {}", e);
-                                    return;
-                            }};
-
-                            let (_aligned_for_display, subject_id, student_id, _answer_sheet) = match fix_answer_sheet(resized) {
-                                Ok(val) => val,
-                                Err(e) => {
-                                    eprintln!("Failed to fix answer sheet: {}", e);
-                                    return;
-                                }
-                            };
-
-                            let subject_id_string = match extract_digits_for_sub_stu(&subject_id, 2, false) {
-                                Ok(val) => val,
-                                Err(e) => {
-                                    eprintln!("Failed to extract subject ID: {}", e);
-                                    return;
-                                }
-                            };
-
-                            let student_id_string = match extract_digits_for_sub_stu(&student_id, 9, true) {
-                                Ok(val) => val,
-                                Err(e) => {
-                                    eprintln!("Failed to extract student ID: {}", e);
-                                    return;
-                                }
-                            };
-
-                            let filename = format!("output/score_{}_{}.csv", student_id_string, subject_id_string);
-                            if let Err(e) = grade_and_export_csv(sheet, key_sheet, &filename) {
-                                eprintln!("Failed to grade and export CSV: {:?}", e);
-                            }
-                        }
-                    } else {
-                        eprintln!("No answer key sheet available for grading.");
-                    }
                     AppState::upload_answer_sheets(app, &channel, list);
                     processing_thread.abort();
                     break;

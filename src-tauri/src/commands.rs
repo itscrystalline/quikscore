@@ -1,4 +1,6 @@
 use crate::state;
+use crate::state::CsvExport;
+use crate::storage;
 use std::path::PathBuf;
 
 use crate::image::upload_key_image_impl;
@@ -40,4 +42,15 @@ pub fn clear_sheet_images(app: AppHandle, channel: Channel<AnswerUpload>) {
 #[tauri::command]
 pub fn set_ocr(app: AppHandle, ocr: bool) {
     AppState::set_ocr(&app, ocr);
+}
+
+#[tauri::command]
+pub fn export_csv(app: AppHandle, channel: Channel<CsvExport>) {
+    println!("exporting results");
+    app.dialog()
+        .file()
+        .add_filter("Comma Seperated Value files (*.csv)", &["csv"])
+        .save_file(move |file_path| {
+            storage::export_to_csv_impl(&app, file_path, channel);
+        });
 }

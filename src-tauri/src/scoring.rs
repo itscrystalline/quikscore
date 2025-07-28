@@ -1,7 +1,7 @@
 use itertools::Itertools;
 
 use crate::state::{Answer, AnswerKeySheet, AnswerSheet, NumberType, QuestionGroup};
-use crate::storage::{DetailedScore, export_to_csv};
+use crate::storage::{export_to_csv_impl, DetailedScore};
 use std::error::Error;
 
 pub fn grade_and_export_csv(
@@ -11,10 +11,9 @@ pub fn grade_and_export_csv(
 ) -> Result<(), Box<dyn Error>> {
     let result = answer_sheet.score(key_sheet);
     let detailed = DetailedScore::from_result(&result);
-    export_to_csv(&detailed, filename)?;
+    export_to_csv_impl(&detailed, filename)?;
     Ok(())
 }
-
 
 #[derive(Debug, Clone)]
 pub struct AnswerSheetResult {
@@ -322,10 +321,10 @@ mod unit_tests {
     #[test]
     fn test_export_csv() -> Result<(), Box<dyn std::error::Error>> {
         let correct_group = QuestionGroup {
-           A: answer(1),
-           B: answer(2),
-           C: answer(3),
-           D: answer(4),
+            A: answer(1),
+            B: answer(2),
+            C: answer(3),
+            D: answer(4),
             E: none_answer(),
         };
         let student_group = QuestionGroup {
@@ -349,5 +348,4 @@ mod unit_tests {
         grade_and_export_csv(&answer_sheet, &key_sheet, "test_scores.csv")?;
         Ok(())
     }
-
 }

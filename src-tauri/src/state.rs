@@ -88,7 +88,7 @@ pub enum AppStatePipeline {
         key_image: Mat,
         key: AnswerKeySheet,
         subject_code: String,
-        _answer_sheets: HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>,
+        answer_sheets: HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>,
     },
 }
 impl Display for AppStatePipeline {
@@ -103,11 +103,13 @@ impl Display for AppStatePipeline {
 }
 
 impl AppState {
-    pub fn get_key_sheet(&self) -> Option<&AnswerKeySheet> {
-        match &self.state {
-            AppStatePipeline::WithKey { key, .. } => Some(key),
-            AppStatePipeline::Scoring { key, .. } => Some(key),
-            AppStatePipeline::Scored { key, .. } => Some(key),
+    pub fn get_scored_answers<R: Runtime, A: Emitter<R> + Manager<R>>(
+        app: &A,
+    ) -> Option<&HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>> {
+        let mutex = app.state::<StateMutex>();
+        let mut state = mutex.lock().expect("poisoned");
+        match &state.state {
+            AppStatePipeline::Scored { answer_sheets, .. } => Some(answer_sheets),
             _ => None,
         }
     }
@@ -269,7 +271,7 @@ impl AppState {
                     key_image: key_image.clone(),
                     key: key.clone(),
                     subject_code: subject_code.clone(),
-                    _answer_sheets: answer_sheets,
+                    answer_sheets,
                 };
                 signal!(channel, AnswerUpload::Done { uploaded: to_send });
             }
@@ -407,6 +409,18 @@ pub enum AnswerUpload {
     Error {
         error: String,
     },
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "event",
+    content = "data"
+)]
+pub enum CsvExport {
+    Cancelled,
+    Done,
+    Error { error: String },
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(
@@ -633,11 +647,7 @@ mod unit_tests {
         let current_count = {
             let mutex = app.state::<StateMutex>();
             let state = mutex.lock().expect("poisoned");
-            let AppStatePipeline::Scored {
-                _answer_sheets: answer_sheets,
-                ..
-            } = &state.state
-            else {
+            let AppStatePipeline::Scored { answer_sheets, .. } = &state.state else {
                 unreachable!()
             };
             answer_sheets.len()
@@ -647,11 +657,7 @@ mod unit_tests {
 
         let mutex = app.state::<StateMutex>();
         let state = mutex.lock().unwrap();
-        if let AppStatePipeline::Scored {
-            _answer_sheets: answer_sheets,
-            ..
-        } = &state.state
-        {
+        if let AppStatePipeline::Scored { answer_sheets, .. } = &state.state {
             assert_ne!(current_count, answer_sheets.len());
         } else {
             unreachable!()
@@ -693,11 +699,7 @@ mod unit_tests {
         {
             let mutex = app.state::<StateMutex>();
             let state = mutex.lock().unwrap();
-            let AppStatePipeline::Scored {
-                _answer_sheets: answer_sheets,
-                ..
-            } = &state.state
-            else {
+            let AppStatePipeline::Scored { answer_sheets, .. } = &state.state else {
                 unreachable!()
             };
 

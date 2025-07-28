@@ -1,8 +1,14 @@
-use std::collections::BTreeMap;
+use crate::{
+    scoring::CheckedAnswer,
+    signal,
+    state::{AppState, CsvExport},
+};
 use serde::Serialize;
-use std::fs::File;
+use std::collections::BTreeMap;
 use std::error::Error;
-use crate::scoring::CheckedAnswer;
+use std::fs::File;
+use tauri::{ipc::Channel, Emitter, Manager, Runtime};
+use tauri_plugin_fs::FilePath;
 
 #[derive(Debug, Clone)]
 pub struct DetailedScore {
@@ -14,7 +20,6 @@ pub struct QuestionScoreRow {
     pub question_id: String,
     pub score: u8,
 }
-
 
 impl DetailedScore {
     pub fn from_result(result: &crate::scoring::AnswerSheetResult) -> Self {
@@ -57,15 +62,38 @@ impl DetailedScore {
     }
 }
 
-pub fn export_to_csv(score: &DetailedScore, path: &str) -> Result<(), Box<dyn Error>> {
-    let file = File::create(path)?;
+pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
+    app: &A,
+    path: Option<FilePath>,
+    channel: Channel<CsvExport>,
+) {
+    let Some(path) = path else {
+        signal!(channel, CsvExport::Cancelled);
+        return;
+    };
+    let path = match path.into_path() {
+        Ok(it) => it,
+        Err(e) => {
+            signal!(
+                channel,
+                CsvExport::Error {
+                    error: format!("error trying to export csv to {path}: {e}")
+                }
+            );
+            return;
+        }
+    };
+    let file = match File::create(path) {
+        Ok(it) => it,
+        Err(err) => return Err(err),
+    };
     let mut wtr = csv::Writer::from_writer(file);
+
+    let results = AppState::get_scored_answers(&app);
 
     for row in score.to_rows() {
         wtr.serialize(row)?;
     }
 
     wtr.flush()?;
-    Ok(())
 }
-
