@@ -1,10 +1,12 @@
+use std::path::PathBuf;
+
 use crate::{
     download::{self, ModelDownload},
     errors::ModelDownloadError,
     image::{upload_key_image_impl, upload_sheet_images_impl},
     scoring::upload_weights_impl,
-    state::{AnswerUpload, KeyUpload},
-    AppState,
+    state::{self, AnswerUpload, CsvExport, KeyUpload},
+    storage, AppState,
 };
 
 use tauri::ipc::Channel;
@@ -64,4 +66,15 @@ pub async fn ensure_models(
     channel: Channel<ModelDownload>,
 ) -> Result<(), ModelDownloadError> {
     download::get_or_download_models(app, channel).await
+}
+
+#[tauri::command]
+pub fn export_csv(app: AppHandle, channel: Channel<CsvExport>) {
+    println!("exporting results");
+    app.dialog()
+        .file()
+        .add_filter("Comma Seperated Value files (*.csv)", &["csv"])
+        .save_file(move |file_path| {
+            storage::export_to_csv_impl(&app, file_path, channel);
+        });
 }

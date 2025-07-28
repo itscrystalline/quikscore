@@ -202,7 +202,7 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
                         } else {
                             eprintln!("No answer key sheet available for grading.");
                         }
-                        AppState::upload_answer_sheets(app, &channel, list);
+
                         processing_thread.abort();
                         break;
                     }

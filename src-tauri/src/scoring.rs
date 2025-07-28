@@ -1,5 +1,7 @@
 use std::{collections::HashMap, fs::File, io::BufReader};
 
+use crate::state::{Answer, AnswerKeySheet, AnswerSheet, NumberType, QuestionGroup};
+use crate::storage::{export_to_csv_impl, DetailedScore};
 use csv::DeserializeRecordsIntoIter;
 use itertools::{multizip, Itertools};
 use std::error::Error;
@@ -19,7 +21,7 @@ pub fn grade_and_export_csv(
 ) -> Result<(), Box<dyn Error>> {
     let result = answer_sheet.score(key_sheet);
     let detailed = DetailedScore::from_result(&result);
-    export_to_csv(&detailed, filename)?;
+    export_to_csv_impl(&detailed, filename)?;
     Ok(())
 }
 
