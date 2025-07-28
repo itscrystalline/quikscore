@@ -27,11 +27,12 @@ listen<AppState>("state", (event) => {
   console.log("state changed to " + appState.value);
 })
 
-const modelDownloadEventHandler = (progressBar: Ref<undefined | ProgressBarProps>) => (msg: ModelDownload): void => {
+const modelDownloadEventHandler = (progressBar: Ref<undefined | ProgressBarProps>, status: Ref<string>) => (msg: ModelDownload): void => {
   switch (msg.event) {
     case "progress":
       const { total, progressDetection, progressRecognition } = msg.data
       progressBar.value = { type: "progress", max: total, progressTop: progressDetection, progressBottom: progressDetection + progressRecognition };
+      status.value = "Downloading " + ((progressDetection + progressRecognition) * 100 / total).toFixed(2) + "%";
       return;
     case "success":
       progressBar.value = { type: "indeterminate" };
@@ -154,11 +155,13 @@ const elapsed = ref<TimeElapsed>("notCounting");
 
 
 async function ensureModels(progressBar: Ref<undefined | ProgressBarProps>, status: Ref<string>) {
+  progressBar.value = { type: "indeterminate" };
+  status.value = "Verifying OCR Models...";
   let retries = 0;
   while (retries < 3) {
     try {
       const modelDownloadChannel = new Channel<ModelDownload>();
-      modelDownloadChannel.onmessage = modelDownloadEventHandler(progressBar);
+      modelDownloadChannel.onmessage = modelDownloadEventHandler(progressBar, status);
       await invoke("ensure_models", { channel: modelDownloadChannel });
       retries = 3;
     } catch (e) {
@@ -170,6 +173,7 @@ async function ensureModels(progressBar: Ref<undefined | ProgressBarProps>, stat
 
 async function uploadKey() {
   const path = await ensureModels(keyProgressBar, keyStatus);
+  keyStatus.value = "Upload A Key...";
   keyProgressBar.value = { type: "indeterminate" };
   const keyEventChannel = new Channel<KeyUpload>();
   keyEventChannel.onmessage = keyEventHandler;
@@ -194,6 +198,7 @@ async function clearWeights() {
 
 async function uploadSheets() {
   const path = await ensureModels(answerProgressBar, answerStatus);
+  answerStatus.value = "Upload files to see results here";
   answerProgressBar.value = { type: "indeterminate" };
   const answerEventChannel = new Channel<AnswerUpload>();
   answerEventChannel.onmessage = answerEventHandler;

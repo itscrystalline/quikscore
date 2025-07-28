@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 #[derive(thiserror::Error, Debug)]
 pub enum UploadError {
     #[error("Invalid path: {0}")]
@@ -34,11 +36,11 @@ pub enum SheetError {
 pub enum ModelDownloadError {
     #[error("Unsupported Operating System (cannot determine cache dir)")]
     CacheDirUnknown,
-    #[error("I/O error while trying to access models: {0}")]
+    #[error("I/O error while trying to access models: {}", fmt_error_chain_of(.0))]
     IOError(#[from] std::io::Error),
-    #[error("Error making network request: {0}")]
+    #[error("Error making network request: {}", fmt_error_chain_of(.0))]
     ReqwestError(#[from] reqwest::Error),
-    #[error("Error converting header to string: {0}")]
+    #[error("Error converting header to string: {}", fmt_error_chain_of(.0))]
     ToStrError(#[from] reqwest::header::ToStrError),
     #[error("Error converting header string to number: {0}")]
     ParseIntError(#[from] std::num::ParseIntError),
@@ -53,4 +55,13 @@ impl serde::Serialize for ModelDownloadError {
     {
         self.to_string().serialize(serializer)
     }
+}
+
+fn fmt_error_chain_of(mut err: &dyn std::error::Error) -> String {
+    let mut str = err.to_string();
+    while let Some(src) = err.source() {
+        _ = write!(str, ", caused by {src}");
+        err = src;
+    }
+    str
 }
