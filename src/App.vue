@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Ref, ref, watch } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { AnswerScoreResult, AnswerUpload, KeyUpload } from "./messages";
+import { AnswerScoreResult, AnswerUpload, CsvExport, KeyUpload } from "./messages";
 import { download } from '@tauri-apps/plugin-upload';
 import * as path from '@tauri-apps/api/path';
 import { exists, mkdir } from "@tauri-apps/plugin-fs";
@@ -121,6 +121,20 @@ const answerEventHandler = (msg: AnswerUpload): void => {
       break;
   }
 }
+const csvExportEventHandler = (msg: CsvExport) => {
+  switch (msg.event) {
+    case "cancelled":
+      answerStatus.value = "Export cancelled";
+      break;
+    case "done":
+      answerStatus.value = "Export success!";
+      break;
+    case "error":
+      answerStatus.value = `Export failed: ${msg.data.error}`;
+      break;
+  }
+  answerProgressBar.value = undefined;
+}
 
 const ocr = ref(true);
 watch(ocr, async (new_ocr, _) => { await invoke("set_ocr", { ocr: new_ocr }) });
@@ -161,6 +175,12 @@ async function clearSheets() {
   const answerEventChannel = new Channel<AnswerUpload>();
   answerEventChannel.onmessage = answerEventHandler;
   await invoke("clear_sheet_images", { channel: answerEventChannel });
+}
+async function exportCsv() {
+  answerProgressBar.value = { type: "indeterminate" };
+  const csvExportChannel = new Channel<CsvExport>();
+  csvExportChannel.onmessage = csvExportEventHandler;
+  await invoke("export_csv", { channel: csvExportChannel });
 }
 </script>
 
@@ -206,6 +226,9 @@ async function clearSheets() {
         Clear
         Answer
         Sheets</button>
+      <button class="btn-clear" @click="exportCsv" :disabled="keyImage == ''" v-if="answerImages.length !== 0">
+        Export to CSV...
+      </button>
     </div>
     <!-- 📦 Result Placeholder -->
     <div class="card">

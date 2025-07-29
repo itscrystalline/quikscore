@@ -62,6 +62,7 @@ pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     }
 
     wtr.flush()?;
+    println!("finished exporting");
     Ok(())
 }
 
