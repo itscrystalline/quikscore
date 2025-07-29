@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { Ref, ref, watch } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { AnswerScoreResult, AnswerUpload, AppState, KeyUpload, ModelDownload } from "./types";
+import { AnswerScoreResult, AnswerUpload, KeyUpload, CsvExport, ModelDownload, AppState } from "./types";
 import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
 import { listen } from "@tauri-apps/api/event";
+import { download } from "@tauri-apps/plugin-upload";
+import * as path from "@tauri-apps/api/path";
+import { exists, mkdir } from "@tauri-apps/plugin-fs";
 
 type TimeElapsed = | "notCounting" | number;
 const hms = (secs: number): string => {
@@ -127,6 +130,20 @@ const answerEventHandler = (msg: AnswerUpload): void => {
       answerStatus.value = "Unhandled event";
   }
 }
+const csvExportEventHandler = (msg: CsvExport) => {
+  switch (msg.event) {
+    case "cancelled":
+      answerStatus.value = "Export cancelled";
+      break;
+    case "done":
+      answerStatus.value = "Export success!";
+      break;
+    case "error":
+      answerStatus.value = `Export failed: ${msg.data.error}`;
+      break;
+  }
+  answerProgressBar.value = undefined;
+}
 
 const ocr = ref(true);
 watch(ocr, async (new_ocr, _) => { await invoke("set_ocr", { ocr: new_ocr }) });
@@ -213,6 +230,12 @@ async function clearSheets() {
   const answerEventChannel = new Channel<AnswerUpload>();
   answerEventChannel.onmessage = answerEventHandler;
   await invoke("clear_sheet_images", { channel: answerEventChannel });
+}
+async function exportCsv() {
+  answerProgressBar.value = { type: "indeterminate" };
+  const csvExportChannel = new Channel<CsvExport>();
+  csvExportChannel.onmessage = csvExportEventHandler;
+  await invoke("export_csv", { channel: csvExportChannel });
 }
 </script>
 
