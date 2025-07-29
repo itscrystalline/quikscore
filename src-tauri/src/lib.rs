@@ -22,7 +22,8 @@ pub fn run() {
             commands::clear_key_image,
             commands::upload_sheet_images,
             commands::clear_sheet_images,
-            commands::set_ocr
+            commands::set_ocr,
+            commands::export_csv,
         ])
         .setup(|app| {
             app.manage(Mutex::new(AppState::default()));

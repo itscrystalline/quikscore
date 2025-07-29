@@ -1,8 +1,6 @@
 use itertools::Itertools;
 
 use crate::state::{Answer, AnswerKeySheet, AnswerSheet, NumberType, QuestionGroup};
-use crate::storage::{export_to_csv_impl, DetailedScore};
-use std::error::Error;
 
 #[derive(Debug, Clone)]
 pub struct AnswerSheetResult {
@@ -225,7 +223,7 @@ mod unit_tests {
         };
 
         let answer_sheet = AnswerSheet {
-            subject_code: 1001.to_string(),
+            subject_id: 1001.to_string(),
             student_id: 123456.to_string(),
             answers: array::from_fn(|_| student_group.clone()),
         };
@@ -325,7 +323,7 @@ mod unit_tests {
         };
 
         let answer_sheet = AnswerSheet {
-            subject_code: "1001".to_string(),
+            subject_id: "1001".to_string(),
             student_id: "123456".to_string(),
             answers: std::array::from_fn(|_| student_group.clone()),
         };
