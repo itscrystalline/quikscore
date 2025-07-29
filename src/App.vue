@@ -168,6 +168,7 @@ const canUploadSheets = () => appState.value == "WithKeyAndWeights";
 const canChangeSheets = () => appState.value == "Scored";
 const canCancelSheetUpload = () => appState.value == "Scoring";
 const canClearSheets = () => appState.value == "Scored";
+const canExportCsv = () => appState.value == "Scored";
 
 const answerImages = ref<AnswerScoreResult[]>([]);
 const answerStatus = ref("");
@@ -308,10 +309,10 @@ async function exportCsv() {
         v-if="canCancelSheetUpload()">
         Cancel Upload
       </button>
-      <button class="btn-clear" @click="clearSheets" :disabled="!canClearSheets()" v-if="answerImages.length !== 0">
+      <button class="btn-clear" @click="clearSheets" :disabled="!canClearSheets()" v-if="canClearSheets()">
         🔄 Clear Answer Sheets
       </button>
-      <button class="btn-clear" @click="exportCsv" :disabled="keyImage == ''" v-if="answerImages.length !== 0">
+      <button class="btn-sheet" @click="exportCsv" :disabled="!canExportCsv()" v-if="canExportCsv()">
         Export to CSV...
       </button>
     </div>
