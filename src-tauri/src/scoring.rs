@@ -4,17 +4,6 @@ use crate::state::{Answer, AnswerKeySheet, AnswerSheet, NumberType, QuestionGrou
 use crate::storage::{export_to_csv_impl, DetailedScore};
 use std::error::Error;
 
-pub fn grade_and_export_csv(
-    answer_sheet: &AnswerSheet,
-    key_sheet: &AnswerKeySheet,
-    filename: &str,
-) -> Result<(), Box<dyn Error>> {
-    let result = answer_sheet.score(key_sheet);
-    let detailed = DetailedScore::from_result(&result);
-    export_to_csv_impl(&detailed, filename)?;
-    Ok(())
-}
-
 #[derive(Debug, Clone)]
 pub struct AnswerSheetResult {
     pub correct: u32,

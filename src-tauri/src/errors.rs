@@ -25,3 +25,15 @@ pub enum SheetError {
     // #[error("Tesseract Error: {0}")]
     // TesseractError(#[from] tesseract_rs::TesseractError),
 }
+
+#[derive(thiserror::Error, Debug)]
+pub enum CsvError {
+    #[error("Invalid path: {0}")]
+    InvalidPath(#[from] tauri_plugin_fs::Error),
+    #[error("Non UTF-8 path")]
+    NonUtfPath,
+    #[error("Cannot open file: {0}")] // TODO: use format_error_trace when merged with main
+    FileOpenFailed(#[from] std::io::Error),
+    #[error("Tried to export CSV while in an incorrect state. This is a bug.")]
+    IncorrectState,
+}

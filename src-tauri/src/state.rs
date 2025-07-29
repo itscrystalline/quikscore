@@ -105,11 +105,11 @@ impl Display for AppStatePipeline {
 impl AppState {
     pub fn get_scored_answers<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,
-    ) -> Option<&HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>> {
+    ) -> Option<HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>> {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
         match &state.state {
-            AppStatePipeline::Scored { answer_sheets, .. } => Some(answer_sheets),
+            AppStatePipeline::Scored { answer_sheets, .. } => Some(answer_sheets.clone()),
             _ => None,
         }
     }

@@ -3,7 +3,7 @@ use std::array;
 use tauri::ipc::Channel;
 
 use crate::errors::{SheetError, UploadError};
-use crate::scoring::{grade_and_export_csv, AnswerSheetResult, CheckedAnswer};
+use crate::scoring::{AnswerSheetResult, CheckedAnswer};
 use crate::state::StateMutex;
 use crate::{signal, state};
 use base64::Engine;
