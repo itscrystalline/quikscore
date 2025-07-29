@@ -163,14 +163,6 @@ pub fn resize_relative_img(src: &Mat, relative: f64) -> opencv::Result<Mat> {
     Ok(dst)
 }
 
-// fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
-//     println!("showing window {window_name}");
-//     highgui::named_window(window_name, 0)?;
-//     highgui::imshow(window_name, mat)?;
-//     highgui::wait_key(10000)?;
-//     Ok(())
-// }
-
 fn handle_upload(
     path: FilePath,
     ocr: Option<&OcrEngine>,
