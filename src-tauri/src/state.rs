@@ -515,7 +515,7 @@ pub enum NumberType {
     PlusOrMinus,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(
     rename_all = "camelCase",
     rename_all_fields = "camelCase",
@@ -531,7 +531,7 @@ pub enum KeyUpload {
     Image { base64: String },
     Error { error: String },
 }
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(
     rename_all = "camelCase",
     rename_all_fields = "camelCase",
@@ -594,6 +594,7 @@ mod unit_tests {
     use crate::image::upload_key_image_impl;
     use crate::image::upload_sheet_images_impl;
     use crate::scoring::upload_weights_impl;
+    use std::fmt::Debug;
     use std::sync::Arc;
     use std::{path::PathBuf, sync::Mutex};
 
@@ -658,7 +659,7 @@ mod unit_tests {
         nz == 0
     }
 
-    fn setup_channel_msgs<T: DeserializeOwned + Send + Sync + 'static>(
+    fn setup_channel_msgs<T: Debug + DeserializeOwned + Send + Sync + 'static>(
     ) -> (Channel<T>, Arc<Mutex<Vec<T>>>) {
         let channel_msgs = Arc::new(Mutex::new(Vec::<T>::new()));
         let channel_msgs_ref = Arc::clone(&channel_msgs);
@@ -666,6 +667,9 @@ mod unit_tests {
             Channel::new(move |msg| {
                 let mut vec = channel_msgs_ref.lock().unwrap();
                 let msg: T = msg.deserialize().unwrap();
+                let mut fmt = format!("got message: {msg:?}");
+                fmt.truncate(200);
+                println!("{fmt}");
                 vec.push(msg);
                 Ok(())
             }),

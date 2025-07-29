@@ -130,7 +130,6 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
                 ProcessingState::Starting => started += 1,
                 ProcessingState::Finishing => finished += 1,
                 ProcessingState::Done(list) => {
-                    signal!(channel, AnswerUpload::AlmostDone);
                     AppState::upload_answer_sheets(app, &channel, list);
                     processing_thread.abort();
                     break;
@@ -142,15 +141,15 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
                 }
             },
         }
+        signal!(
+            channel,
+            AnswerUpload::Processing {
+                total: images_count,
+                started,
+                finished
+            }
+        );
     }
-    signal!(
-        channel,
-        AnswerUpload::Processing {
-            total: images_count,
-            started,
-            finished
-        }
-    );
 }
 
 pub fn resize_relative_img(src: &Mat, relative: f64) -> opencv::Result<Mat> {

@@ -109,7 +109,7 @@ fn map_to_csv(
                         student_name: student_name.clone().unwrap_or_default(),
                         exam_room: exam_room.clone().unwrap_or_default(),
                         exam_seat: exam_seat.clone().unwrap_or_default(),
-                        question_number: format!("{i:0>2}"),
+                        question_number: format!("{i:02}"),
                         A: score_for(c.A),
                         B: score_for(c.B),
                         C: score_for(c.C),
