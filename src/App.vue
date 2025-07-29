@@ -255,7 +255,7 @@ async function exportCsv() {
     <p class="instructions">Upload your key sheet and some answer sheets!</p>
     <div class="header" style="justify-content: center;">
       <input type="checkbox" id="ocr-ck" v-model="ocr" />
-      <label for="ocr-ck" style="padding-left: 1vh;">Enable OCR</label>
+      <label for="ocr-ck" style="padding-left: 1vh;">Enable OCR (potentially high memory usage)</label>
     </div>
 
     <div class="header">
