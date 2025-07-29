@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { Ref, ref, watch } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { AnswerScoreResult, AnswerUpload, KeyUpload, CsvExport, ModelDownload, AppState } from "./types";
+import {
+  AnswerScoreResult,
+  AnswerUpload,
+  KeyUpload,
+  CsvExport,
+  ModelDownload,
+  AppState,
+} from "./types"; // or "./messages" — choose the correct one based on where these types are actually defined
+
 import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
 import { listen } from "@tauri-apps/api/event";
 import { download } from "@tauri-apps/plugin-upload";
@@ -296,16 +304,29 @@ async function exportCsv() {
 
     <div class="header">
       <h2>Answer Sheets</h2>
-      <button class="btn-sheet" @click="uploadSheets" :disabled="!(canUploadSheets() || canChangeSheets())">
+      <<<<<<< HEAD <button class="btn-sheet" @click="uploadSheets"
+        :disabled="!(canUploadSheets() || canChangeSheets())">
         {{ canChangeSheets() ? "Change Answer Sheets" : "🧾 Upload Answer Sheets..." }}
-      </button>
-      <button class="btn-clear" @click="cancelUploadSheets" :disabled="!canCancelSheetUpload()"
-        v-if="canCancelSheetUpload()">
-        Cancel Upload
-      </button>
-      <button class="btn-clear" @click="clearSheets" :disabled="!canClearSheets()" v-if="answerImages.length !== 0">
-        🔄 Clear Answer Sheets
-      </button>
+        </button>
+        <button class="btn-clear" @click="cancelUploadSheets" :disabled="!canCancelSheetUpload()"
+          v-if="canCancelSheetUpload()">
+          Cancel Upload
+        </button>
+        <button class="btn-clear" @click="clearSheets" :disabled="!canClearSheets()" v-if="answerImages.length !== 0">
+          🔄 Clear Answer Sheets
+          =======
+          <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ?
+            "🧾 Upload Answer Sheets..." :
+            "Change Answer Sheets"
+            }}</button>
+          <button class="btn-clear" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄
+            Clear
+            Answer
+            Sheets</button>
+          <button class="btn-clear" @click="exportCsv" :disabled="keyImage == ''" v-if="answerImages.length !== 0">
+            Export to CSV...
+            >>>>>>> 10e4075cb5d325a4f594cb0253fa2af47bb28c87
+          </button>
     </div>
     <!-- 📦 Result Placeholder -->
     <div class="card">
