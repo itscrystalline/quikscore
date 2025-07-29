@@ -65,3 +65,15 @@ fn fmt_error_chain_of(mut err: &dyn std::error::Error) -> String {
     }
     str
 }
+
+#[derive(thiserror::Error, Debug)]
+pub enum CsvError {
+    #[error("Invalid path: {0}")]
+    InvalidPath(#[from] tauri_plugin_fs::Error),
+    #[error("Cannot open/write file: {}", fmt_error_chain_of(.0))]
+    FileOperationFailed(#[from] std::io::Error),
+    #[error("Tried to export CSV while in an incorrect state. This is a bug.")]
+    IncorrectState,
+    #[error("Failed to serialize CSV: {0}")]
+    Csv(#[from] csv::Error),
+}

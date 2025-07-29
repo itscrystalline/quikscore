@@ -9,6 +9,7 @@ mod errors;
 mod image;
 mod scoring;
 mod state;
+mod storage;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -26,6 +27,7 @@ pub fn run() {
             commands::clear_sheet_images,
             commands::set_ocr,
             commands::ensure_models,
+            commands::export_csv,
         ])
         .setup(|app| {
             app.manage(Mutex::new(AppState::default()));

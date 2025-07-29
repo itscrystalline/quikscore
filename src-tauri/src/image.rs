@@ -15,7 +15,6 @@ use rayon::prelude::*;
 use std::fs;
 use std::path::Path;
 use tauri_plugin_dialog::FilePath;
-// use tesseract_rs::TesseractAPI;
 
 use tauri::{Emitter, Manager, Runtime};
 
@@ -164,14 +163,6 @@ pub fn resize_relative_img(src: &Mat, relative: f64) -> opencv::Result<Mat> {
     Ok(dst)
 }
 
-// fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
-//     println!("showing window {window_name}");
-//     highgui::named_window(window_name, 0)?;
-//     highgui::imshow(window_name, mat)?;
-//     highgui::wait_key(10000)?;
-//     Ok(())
-// }
-
 fn handle_upload(
     path: FilePath,
     ocr: Option<&OcrEngine>,
@@ -182,28 +173,9 @@ fn handle_upload(
     let (aligned_for_display, subject_id, student_id, answer_sheet) =
         fix_answer_sheet(resized_for_fix)?;
 
-    let subject_id_string = extract_digits_for_sub_stu(&subject_id, 2, false)?;
-    let student_id_string = extract_digits_for_sub_stu(&student_id, 9, true)?;
-    //testing
-    //#[cfg(not(test))]
-    //let _ = show_img(&aligned_for_processing, "resized & aligned image");
-    if let Some(ocr) = ocr {
-        let (subject_id_s_f, student_id_s_f) =
-            extract_subject_student_from_written_field(&resized, ocr)?;
-        println!("subject_id: {subject_id_s_f}");
-        println!("subject_id: {student_id_s_f}");
-        if subject_id_string != subject_id_s_f || student_id_string != student_id_s_f {
-            println!("User Fon and Enter differently");
-        }
-        let (name, subject, date, exam_room, seat) = extract_user_information(&mat, ocr)?;
-        println!("name: {name}");
-        println!("subject: {subject}");
-        println!("date: {date}");
-        println!("exam_room: {exam_room}");
-        println!("seat: {seat}");
-    }
     let base64 = mat_to_base64_png(&aligned_for_display).map_err(UploadError::from)?;
-    let answer_sheet: AnswerSheet = (subject_id, student_id, answer_sheet).try_into()?;
+    let answer_sheet =
+        AnswerSheet::try_convert(mat, resized, subject_id, student_id, answer_sheet, ocr)?;
     Ok((base64, aligned_for_display, answer_sheet))
 }
 
@@ -449,21 +421,42 @@ fn extract_digits_for_sub_stu(
     Ok(digits)
 }
 
-impl TryFrom<(Mat, Mat, Mat)> for AnswerSheet {
-    type Error = SheetError;
-    fn try_from(value: (Mat, Mat, Mat)) -> Result<Self, Self::Error> {
-        let (subject_code_mat, student_id_mat, answers_mat) = value;
-        let subject_id_string = extract_digits_for_sub_stu(&subject_code_mat, 2, false)?;
-        let student_id_string = extract_digits_for_sub_stu(&student_id_mat, 9, true)?;
-        let scanned_answers = extract_answers(&answers_mat)?;
+impl AnswerSheet {
+    fn try_convert(
+        original: Mat,
+        original_small: Mat,
+        subject_code_mat: Mat,
+        student_id_mat: Mat,
+        answers_mat: Mat,
+        ocr: Option<&OcrEngine>,
+    ) -> Result<Self, SheetError> {
+        let subject_id = extract_digits_for_sub_stu(&subject_code_mat, 2, false)?;
+        let student_id = extract_digits_for_sub_stu(&student_id_mat, 9, true)?;
+        let answers = extract_answers(&answers_mat)?;
 
-        // println!("subject_id: {subject_id_string}");
-        // println!("subject_id: {student_id_string}");
+        let (mut student_name, mut subject_name, mut exam_room, mut exam_seat) =
+            (None, None, None, None);
+        if let Some(ocr) = ocr {
+            let (written_subject_id, written_student_id) =
+                extract_subject_student_from_written_field(&original_small, ocr)?;
+            if subject_id != written_subject_id || student_id != written_student_id {
+                println!("User Fon and Enter differently");
+            }
+            let (name, subject, _, room, seat) = extract_user_information(&original, ocr)?;
+            _ = student_name.insert(name);
+            _ = subject_name.insert(subject);
+            _ = exam_room.insert(room);
+            _ = exam_seat.insert(seat);
+        }
 
         Ok(Self {
-            subject_code: subject_id_string,
-            student_id: student_id_string,
-            answers: scanned_answers,
+            subject_id,
+            student_id,
+            subject_name,
+            student_name,
+            exam_room,
+            exam_seat,
+            answers,
         })
     }
 }
@@ -502,7 +495,7 @@ impl AnswerSheetResult {
                         height: ANSWER_HEIGHT / 5,
                     };
                     let color: Option<opencv::core::Scalar> = result_here.and_then(|c| match c {
-                        CheckedAnswer::Correct => Some((43, 160, 64).into()),
+                        CheckedAnswer::Correct(_) => Some((43, 160, 64).into()),
                         CheckedAnswer::Incorrect => Some((57, 15, 210).into()),
                         CheckedAnswer::Missing => Some((29, 142, 223).into()),
                         CheckedAnswer::NotCounted => None,

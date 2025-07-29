@@ -95,7 +95,7 @@ pub enum AppStatePipeline {
         key_image: Mat,
         key: AnswerKeySheet,
         weights: ScoreWeights,
-        _answer_sheets: HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>,
+        answer_sheets: HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>,
     },
 }
 impl Display for AppStatePipeline {
@@ -111,6 +111,16 @@ impl Display for AppStatePipeline {
 }
 
 impl AppState {
+    pub fn get_scored_answers<R: Runtime, A: Emitter<R> + Manager<R>>(
+        app: &A,
+    ) -> Option<HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>> {
+        let mutex = app.state::<StateMutex>();
+        let state = mutex.lock().expect("poisoned");
+        match &state.state {
+            AppStatePipeline::Scored { answer_sheets, .. } => Some(answer_sheets.clone()),
+            _ => None,
+        }
+    }
     pub fn upload_key<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,
         channel: Channel<KeyUpload>,
@@ -332,8 +342,8 @@ impl AppState {
                     .into_par_iter()
                     .map(|r| {
                         r.and_then(|t| {
-                            weights.weights.get(&t.2.subject_code).cloned().map_or_else(
-                                || Err(UploadError::MissingScoreWeights(t.2.clone().subject_code)),
+                            weights.weights.get(&t.2.subject_id).cloned().map_or_else(
+                                || Err(UploadError::MissingScoreWeights(t.2.clone().subject_id)),
                                 |w| Ok((t.0, t.1, t.2.clone(), w.0, w.1)),
                             )
                         })
@@ -396,7 +406,7 @@ impl AppState {
                     key_image: key_image.clone(),
                     key: key.clone(),
                     weights: weights.clone(),
-                    _answer_sheets: answer_sheets,
+                    answer_sheets,
                 };
                 signal!(channel, AnswerUpload::Done { uploaded: to_send });
             }
@@ -445,8 +455,12 @@ impl AppState {
 
 #[derive(Debug, Clone)]
 pub struct AnswerSheet {
-    pub subject_code: String,
+    pub subject_id: String,
     pub student_id: String,
+    pub subject_name: Option<String>,
+    pub student_name: Option<String>,
+    pub exam_room: Option<String>,
+    pub exam_seat: Option<String>,
     pub answers: [QuestionGroup; 36],
 }
 
@@ -458,7 +472,7 @@ pub struct AnswerKeySheet {
 impl From<AnswerSheet> for AnswerKeySheet {
     fn from(value: AnswerSheet) -> Self {
         Self {
-            subject_code: value.subject_code,
+            subject_code: value.subject_id,
             answers: value.answers,
         }
     }
@@ -501,7 +515,7 @@ pub enum NumberType {
     PlusOrMinus,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(
     rename_all = "camelCase",
     rename_all_fields = "camelCase",
@@ -517,7 +531,7 @@ pub enum KeyUpload {
     Image { base64: String },
     Error { error: String },
 }
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 #[serde(
     rename_all = "camelCase",
     rename_all_fields = "camelCase",
@@ -539,6 +553,18 @@ pub enum AnswerUpload {
     Error {
         error: String,
     },
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "event",
+    content = "data"
+)]
+pub enum CsvExport {
+    Cancelled,
+    Done,
+    Error { error: String },
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(
@@ -568,6 +594,7 @@ mod unit_tests {
     use crate::image::upload_key_image_impl;
     use crate::image::upload_sheet_images_impl;
     use crate::scoring::upload_weights_impl;
+    use std::fmt::Debug;
     use std::sync::Arc;
     use std::{path::PathBuf, sync::Mutex};
 
@@ -632,7 +659,7 @@ mod unit_tests {
         nz == 0
     }
 
-    fn setup_channel_msgs<T: DeserializeOwned + Send + Sync + 'static>(
+    fn setup_channel_msgs<T: Debug + DeserializeOwned + Send + Sync + 'static>(
     ) -> (Channel<T>, Arc<Mutex<Vec<T>>>) {
         let channel_msgs = Arc::new(Mutex::new(Vec::<T>::new()));
         let channel_msgs_ref = Arc::clone(&channel_msgs);
@@ -640,6 +667,9 @@ mod unit_tests {
             Channel::new(move |msg| {
                 let mut vec = channel_msgs_ref.lock().unwrap();
                 let msg: T = msg.deserialize().unwrap();
+                let mut fmt = format!("got message: {msg:?}");
+                fmt.truncate(200);
+                println!("{fmt}");
                 vec.push(msg);
                 Ok(())
             }),
@@ -913,11 +943,7 @@ mod unit_tests {
         let current_count = {
             let mutex = app.state::<StateMutex>();
             let state = mutex.lock().expect("poisoned");
-            let AppStatePipeline::Scored {
-                _answer_sheets: answer_sheets,
-                ..
-            } = &state.state
-            else {
+            let AppStatePipeline::Scored { answer_sheets, .. } = &state.state else {
                 unreachable!()
             };
             answer_sheets.len()
@@ -927,11 +953,7 @@ mod unit_tests {
 
         let mutex = app.state::<StateMutex>();
         let state = mutex.lock().unwrap();
-        if let AppStatePipeline::Scored {
-            _answer_sheets: answer_sheets,
-            ..
-        } = &state.state
-        {
+        if let AppStatePipeline::Scored { answer_sheets, .. } = &state.state {
             assert_ne!(current_count, answer_sheets.len());
         } else {
             unreachable!()
@@ -975,11 +997,7 @@ mod unit_tests {
         {
             let mutex = app.state::<StateMutex>();
             let state = mutex.lock().unwrap();
-            let AppStatePipeline::Scored {
-                _answer_sheets: answer_sheets,
-                ..
-            } = &state.state
-            else {
+            let AppStatePipeline::Scored { answer_sheets, .. } = &state.state else {
                 unreachable!()
             };
 

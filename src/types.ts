@@ -88,3 +88,8 @@ export type AnswerScoreResult =
       result: "error";
       data: { error: string };
     };
+
+export type CsvExport =
+  | { event: "cancelled" }
+  | { event: "done" }
+  | { event: "error"; data: { error: string } };

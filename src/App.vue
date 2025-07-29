@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import { Ref, ref, watch } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { AnswerScoreResult, AnswerUpload, AppState, KeyUpload, ModelDownload } from "./types";
+import {
+  AnswerScoreResult,
+  AnswerUpload,
+  KeyUpload,
+  CsvExport,
+  ModelDownload,
+  AppState,
+} from "./types";
+
 import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
 import { listen } from "@tauri-apps/api/event";
 
@@ -127,6 +135,20 @@ const answerEventHandler = (msg: AnswerUpload): void => {
       answerStatus.value = "Unhandled event";
   }
 }
+const csvExportEventHandler = (msg: CsvExport) => {
+  switch (msg.event) {
+    case "cancelled":
+      answerStatus.value = "Export cancelled";
+      break;
+    case "done":
+      answerStatus.value = "Export success!";
+      break;
+    case "error":
+      answerStatus.value = `Export failed: ${msg.data.error}`;
+      break;
+  }
+  answerProgressBar.value = undefined;
+}
 
 const ocr = ref(true);
 watch(ocr, async (new_ocr, _) => { await invoke("set_ocr", { ocr: new_ocr }) });
@@ -146,6 +168,7 @@ const canUploadSheets = () => appState.value == "WithKeyAndWeights";
 const canChangeSheets = () => appState.value == "Scored";
 const canCancelSheetUpload = () => appState.value == "Scoring";
 const canClearSheets = () => appState.value == "Scored";
+const canExportCsv = () => appState.value == "Scored";
 
 const answerImages = ref<AnswerScoreResult[]>([]);
 const answerStatus = ref("");
@@ -214,6 +237,12 @@ async function clearSheets() {
   answerEventChannel.onmessage = answerEventHandler;
   await invoke("clear_sheet_images", { channel: answerEventChannel });
 }
+async function exportCsv() {
+  answerProgressBar.value = { type: "indeterminate" };
+  const csvExportChannel = new Channel<CsvExport>();
+  csvExportChannel.onmessage = csvExportEventHandler;
+  await invoke("export_csv", { channel: csvExportChannel });
+}
 </script>
 
 <template>
@@ -226,7 +255,7 @@ async function clearSheets() {
     <p class="instructions">Upload your key sheet and some answer sheets!</p>
     <div class="header" style="justify-content: center;">
       <input type="checkbox" id="ocr-ck" v-model="ocr" />
-      <label for="ocr-ck" style="padding-left: 1vh;">Enable OCR</label>
+      <label for="ocr-ck" style="padding-left: 1vh;">Enable OCR (potentially high memory usage)</label>
     </div>
 
     <div class="header">
@@ -280,8 +309,11 @@ async function clearSheets() {
         v-if="canCancelSheetUpload()">
         Cancel Upload
       </button>
-      <button class="btn-clear" @click="clearSheets" :disabled="!canClearSheets()" v-if="answerImages.length !== 0">
+      <button class="btn-clear" @click="clearSheets" :disabled="!canClearSheets()" v-if="canClearSheets()">
         🔄 Clear Answer Sheets
+      </button>
+      <button class="btn-sheet" @click="exportCsv" :disabled="!canExportCsv()" v-if="canExportCsv()">
+        Export to CSV...
       </button>
     </div>
     <!-- 📦 Result Placeholder -->
