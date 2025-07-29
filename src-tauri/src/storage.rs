@@ -72,12 +72,15 @@ fn map_to_csv(
     #[inline(always)]
     fn score_for(ans: CheckedAnswer) -> String {
         match ans {
-            CheckedAnswer::Correct => "1",
-            CheckedAnswer::Incorrect => "0",
-            CheckedAnswer::Missing => "0",
-            CheckedAnswer::NotCounted => "",
+            CheckedAnswer::Correct(Some(score)) => format!("{score}"),
+            CheckedAnswer::Correct(None) => {
+                println!("bug: missing score in correct answer, using 1");
+                "1".to_string()
+            }
+            CheckedAnswer::Incorrect => "0".to_string(),
+            CheckedAnswer::Missing => "0".to_string(),
+            CheckedAnswer::NotCounted => "".to_string(),
         }
-        .to_string()
     }
 
     map.into_iter()

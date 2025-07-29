@@ -503,7 +503,7 @@ impl AnswerSheetResult {
                         height: ANSWER_HEIGHT / 5,
                     };
                     let color: Option<opencv::core::Scalar> = result_here.and_then(|c| match c {
-                        CheckedAnswer::Correct => Some((43, 160, 64).into()),
+                        CheckedAnswer::Correct(_) => Some((43, 160, 64).into()),
                         CheckedAnswer::Incorrect => Some((57, 15, 210).into()),
                         CheckedAnswer::Missing => Some((29, 142, 223).into()),
                         CheckedAnswer::NotCounted => None,
