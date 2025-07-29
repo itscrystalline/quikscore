@@ -27,6 +27,7 @@ pub fn run() {
             commands::clear_sheet_images,
             commands::set_ocr,
             commands::ensure_models,
+            commands::export_csv,
         ])
         .setup(|app| {
             app.manage(Mutex::new(AppState::default()));

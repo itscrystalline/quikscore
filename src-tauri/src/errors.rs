@@ -69,10 +69,10 @@ fn fmt_error_chain_of(mut err: &dyn std::error::Error) -> String {
 pub enum CsvError {
     #[error("Invalid path: {0}")]
     InvalidPath(#[from] tauri_plugin_fs::Error),
-    #[error("Non UTF-8 path")]
-    NonUtfPath,
-    #[error("Cannot open file: {0}")] // TODO: use format_error_trace when merged with main
-    FileOpenFailed(#[from] std::io::Error),
+    #[error("Cannot open/write file: {0}")] // TODO: use format_error_trace when merged with main
+    FileOperationFailed(#[from] std::io::Error),
     #[error("Tried to export CSV while in an incorrect state. This is a bug.")]
     IncorrectState,
+    #[error("Failed to serialize CSV: {0}")]
+    Csv(#[from] csv::Error),
 }

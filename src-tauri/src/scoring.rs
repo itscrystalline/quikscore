@@ -402,7 +402,7 @@ mod unit_tests {
         };
 
         let answer_sheet = AnswerSheet {
-            subject_code: 1001.to_string(),
+            subject_id: 1001.to_string(),
             student_id: 123456.to_string(),
             answers: array::from_fn(|_| student_group.clone()),
         };
@@ -558,7 +558,7 @@ subject_code,question_num,A,B,C,D,E
         };
 
         let answer_sheet = AnswerSheet {
-            subject_code: "1001".to_string(),
+            subject_id: "1001".to_string(),
             student_id: "123456".to_string(),
             answers: std::array::from_fn(|_| student_group.clone()),
         };

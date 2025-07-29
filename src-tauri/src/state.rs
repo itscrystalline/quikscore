@@ -116,7 +116,7 @@ impl AppState {
         app: &A,
     ) -> Option<HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>> {
         let mutex = app.state::<StateMutex>();
-        let mut state = mutex.lock().expect("poisoned");
+        let state = mutex.lock().expect("poisoned");
         match &state.state {
             AppStatePipeline::Scored { answer_sheets, .. } => Some(answer_sheets.clone()),
             _ => None,
@@ -457,8 +457,12 @@ impl AppState {
 
 #[derive(Debug, Clone)]
 pub struct AnswerSheet {
-    pub subject_code: String,
+    pub subject_id: String,
     pub student_id: String,
+    pub subject_name: Option<String>,
+    pub student_name: Option<String>,
+    pub exam_room: Option<String>,
+    pub exam_seat: Option<String>,
     pub answers: [QuestionGroup; 36],
 }
 
