@@ -75,6 +75,6 @@ pub fn export_csv(app: AppHandle, channel: Channel<CsvExport>) {
         .file()
         .add_filter("Comma Seperated Value files (*.csv)", &["csv"])
         .save_file(move |file_path| {
-            storage::export_to_csv_impl(&app, file_path, channel);
+            storage::export_to_csv_wrapper(&app, file_path, channel);
         });
 }

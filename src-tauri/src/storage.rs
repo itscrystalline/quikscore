@@ -1,4 +1,5 @@
 use crate::{
+    errors::CsvError,
     scoring::CheckedAnswer,
     signal,
     state::{AppState, CsvExport},
@@ -62,7 +63,7 @@ impl DetailedScore {
     }
 }
 
-pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
+pub fn export_to_csv_wrapper<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
     path: Option<FilePath>,
     channel: Channel<CsvExport>,
@@ -71,29 +72,31 @@ pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         signal!(channel, CsvExport::Cancelled);
         return;
     };
-    let path = match path.into_path() {
-        Ok(it) => it,
-        Err(e) => {
-            signal!(
-                channel,
-                CsvExport::Error {
-                    error: format!("error trying to export csv to {path}: {e}")
-                }
-            );
-            return;
-        }
-    };
-    let file = match File::create(path) {
-        Ok(it) => it,
-        Err(err) => return Err(err),
-    };
+    match export_to_csv_impl(app, path, &channel) {
+        Ok(_) => signal!(channel, CsvExport::Done),
+        Err(e) => signal!(
+            channel,
+            CsvExport::Error {
+                error: format!("error exporting to CSV: {e}")
+            }
+        ),
+    }
+}
+pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
+    app: &A,
+    path: FilePath,
+    channel: &Channel<CsvExport>,
+) -> Result<(), CsvError> {
+    let path = path.into_path()?;
+    let file = File::create(path)?;
     let mut wtr = csv::Writer::from_writer(file);
 
-    let results = AppState::get_scored_answers(&app);
+    let results = AppState::get_scored_answers(app).ok_or(CsvError::IncorrectState)?;
 
-    for row in score.to_rows() {
-        wtr.serialize(row)?;
-    }
+    // for row in score.to_rows() {
+    //     wtr.serialize(row)?;
+    // }
 
     wtr.flush()?;
+    Ok(())
 }
