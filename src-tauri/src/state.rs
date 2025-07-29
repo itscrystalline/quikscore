@@ -95,7 +95,6 @@ pub enum AppStatePipeline {
         key_image: Mat,
         key: AnswerKeySheet,
         weights: ScoreWeights,
-        subject_code: String,
         answer_sheets: HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>,
     },
 }
@@ -343,8 +342,8 @@ impl AppState {
                     .into_par_iter()
                     .map(|r| {
                         r.and_then(|t| {
-                            weights.weights.get(&t.2.subject_code).cloned().map_or_else(
-                                || Err(UploadError::MissingScoreWeights(t.2.clone().subject_code)),
+                            weights.weights.get(&t.2.subject_id).cloned().map_or_else(
+                                || Err(UploadError::MissingScoreWeights(t.2.clone().subject_id)),
                                 |w| Ok((t.0, t.1, t.2.clone(), w.0, w.1)),
                             )
                         })
@@ -407,7 +406,6 @@ impl AppState {
                     key_image: key_image.clone(),
                     key: key.clone(),
                     weights: weights.clone(),
-                    subject_code: subject_code.clone(),
                     answer_sheets,
                 };
                 signal!(channel, AnswerUpload::Done { uploaded: to_send });
@@ -474,7 +472,7 @@ pub struct AnswerKeySheet {
 impl From<AnswerSheet> for AnswerKeySheet {
     fn from(value: AnswerSheet) -> Self {
         Self {
-            subject_code: value.subject_code,
+            subject_code: value.subject_id,
             answers: value.answers,
         }
     }

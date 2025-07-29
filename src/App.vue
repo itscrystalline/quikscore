@@ -12,9 +12,6 @@ import {
 
 import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
 import { listen } from "@tauri-apps/api/event";
-import { download } from "@tauri-apps/plugin-upload";
-import * as path from "@tauri-apps/api/path";
-import { exists, mkdir } from "@tauri-apps/plugin-fs";
 
 type TimeElapsed = | "notCounting" | number;
 const hms = (secs: number): string => {
@@ -318,7 +315,7 @@ async function exportCsv() {
           <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ?
             "🧾 Upload Answer Sheets..." :
             "Change Answer Sheets"
-            }}</button>
+          }}</button>
           <button class="btn-clear" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄
             Clear
             Answer
