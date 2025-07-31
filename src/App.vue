@@ -3,6 +3,7 @@ import { ref } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import { AnswerScoreResult, AnswerUpload, KeyUpload } from "./messages";
 import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
+import Authen from "./Authen.vue";
 
 const keyEventHandler = (msg: KeyUpload): void => {
   switch (msg.event) {
@@ -95,65 +96,7 @@ async function clearSheets() {
 </script>
 
 <template>
-  <main class="container">
-    <div class="logo">
-      <img class="logonana" src="/src/assets/logo_fit.png" alt="Quikscore logo">
-      <span class="logo-text"><span class="q-letter"></span>uikscore</span>
-    </div>
-    <p class="credits">KOSEN-KMITL PBL Year 3 (C14, C35, C41, C43)</p>
-    <p class="instructions">Upload your key sheet and some answer sheets!</p>
-
-    <div class="header">
-      <h2>Answer Key</h2>
-      <button :class="`btn-key${answerImages.length !== 0 ? ' btn-disabled' : ''}`" @click="uploadKey"
-        v-bind:disabled="answerImages.length !== 0">{{ keyImage ===
-          ""
-          ?
-          "📥\nUpload Answer Key..." :
-          "Change Answer Key" }}</button>
-      <button :class="`btn-clear${answerImages.length !== 0 ? ' btn-disabled' : ''}`" @click="clearKey"
-        v-bind:disabled="answerImages.length !== 0" v-if="keyImage !== ''">🔄 Clear
-        Answer Key</button>
-    </div>
-    <div class="card">
-      <img v-bind:src="keyImage" :style="keyImage == '' ? 'display: none;' : ''"></img>
-      <p class="placeholder" v-if="!keyImage && answerImages.length === 0">{{ keyStatus === "" ? "Upload a key..." :
-        keyStatus }}</p>
-      <StackedProgressBar v-if="keyProgressBar" type="indeterminate" />
-    </div>
-
-    <div class="header">
-      <h2>Answer Sheets</h2>
-      <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ?
-        "🧾 Upload Answer Sheets..." :
-        "Change Answer Sheets"
-        }}</button>
-      <button class="btn-clear" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄
-        Clear
-        Answer
-        Sheets</button>
-    </div>
-    <!-- 📦 Result Placeholder -->
-    <div class="card">
-      <div v-for="{ result, data } in answerImages" class="pad">
-        <div v-if="result == 'ok'" class="result">
-          <img :src="data.base64"></img>
-          <div class="stats">
-            <p>ID {{ data.studentId }}</p>
-            <p>score: {{ data.correct }}</p>
-            <p>incorrect: {{ data.incorrect }}</p>
-            <p>questions not answered: {{ data.notAnswered }}</p>
-          </div>
-        </div>
-        <p v-else>
-          {{ data.error }}
-        </p>
-      </div>
-      <p class="placeholder" v-if="answerImages.length === 0">{{ answerStatus === "" ?
-        "Upload files to see results here" : answerStatus }}</p>
-      <StackedProgressBar v-if="answerProgressBar" v-bind="answerProgressBar" />
-    </div>
-  </main>
+  <Authen />
 </template>
 
 <style scoped>
