@@ -1,6 +1,6 @@
 [package]
 name = "quikscore"
-version = "0.1.0"
+version = "0.1.1"
 description = "Automatically scan and score answer sheets."
 authors = ["66991014", "66991035", "66991041", "66991043"]
 edition = "2021"
