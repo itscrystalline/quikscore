@@ -80,6 +80,7 @@ fn map_to_csv(
             CheckedAnswer::Incorrect => "0".to_string(),
             CheckedAnswer::Missing => "0".to_string(),
             CheckedAnswer::NotCounted => "".to_string(),
+            CheckedAnswer::Doubled => "0".to_string(),
         }
     }
 
