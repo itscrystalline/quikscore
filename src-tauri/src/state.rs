@@ -1,3 +1,4 @@
+use log::{error, info};
 use ocrs::OcrEngine;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
@@ -23,14 +24,14 @@ pub static MODELS: OnceLock<PathBuf> = OnceLock::new();
 macro_rules! signal {
     ($channel: ident, $message: expr) => {
         if let Err(e) = $channel.send($message) {
-            println!("Channel emission failed: {e}");
+            log::error!("Channel emission failed: {e}");
         }
     };
 }
 macro_rules! emit_state {
     ($app: ident, $message: expr) => {
         if let Err(e) = $app.emit("state", $message) {
-            println!("State event emission failed: {e}");
+            log::error!("State event emission failed: {e}");
         }
     };
 }
@@ -39,13 +40,13 @@ pub fn init_thread_ocr() -> Option<OcrEngine> {
     let model_path = MODELS.get()?;
     let detection_model = model_path.join("text-detection.rten");
     let recognition_model = model_path.join("text-recognition.rten");
-    println!("initializing thread OcrEngine");
+    info!("Initializing thread OcrEngine");
 
     let detection = rten::Model::load_file(detection_model)
-        .inspect_err(|e| println!("error loading detection model: {e}"))
+        .inspect_err(|e| error!("Error loading detection model: {e}"))
         .ok()?;
     let recognition = rten::Model::load_file(recognition_model)
-        .inspect_err(|e| println!("error loading recognition model: {e}"))
+        .inspect_err(|e| error!("Error loading recognition model: {e}"))
         .ok()?;
 
     OcrEngine::new(ocrs::OcrEngineParams {
