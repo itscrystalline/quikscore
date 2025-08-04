@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 #[derive(thiserror::Error, Debug)]
 pub enum UploadError {
     #[error("Invalid path: {0}")]
@@ -12,6 +14,10 @@ pub enum UploadError {
     NotAnswerSheet(#[from] SheetError),
     #[error("Pipe between processing threads and main thread unexpectetly broken")]
     UnexpectedPipeClosure,
+    #[error("Weights file does not contain weights for subject id {0}")]
+    MissingScoreWeights(String),
+    #[error("Processing has been prematurely cancelled")]
+    PrematureCancellaton,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -24,4 +30,50 @@ pub enum SheetError {
     OcrError(#[from] anyhow::Error),
     // #[error("Tesseract Error: {0}")]
     // TesseractError(#[from] tesseract_rs::TesseractError),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ModelDownloadError {
+    #[error("Unsupported Operating System (cannot determine cache dir)")]
+    CacheDirUnknown,
+    #[error("I/O error while trying to access models: {}", fmt_error_chain_of(.0))]
+    IOError(#[from] std::io::Error),
+    #[error("Error making network request: {}", fmt_error_chain_of(.0))]
+    ReqwestError(#[from] reqwest::Error),
+    #[error("Error converting header to string: {}", fmt_error_chain_of(.0))]
+    ToStrError(#[from] reqwest::header::ToStrError),
+    #[error("Error converting header string to number: {0}")]
+    ParseIntError(#[from] std::num::ParseIntError),
+    #[error("Response is missing content length")]
+    NoContentLength,
+}
+
+impl serde::Serialize for ModelDownloadError {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::ser::Serializer,
+    {
+        self.to_string().serialize(serializer)
+    }
+}
+
+fn fmt_error_chain_of(mut err: &dyn std::error::Error) -> String {
+    let mut str = err.to_string();
+    while let Some(src) = err.source() {
+        _ = write!(str, ", caused by {src}");
+        err = src;
+    }
+    str
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum CsvError {
+    #[error("Invalid path: {0}")]
+    InvalidPath(#[from] tauri_plugin_fs::Error),
+    #[error("Cannot open/write file: {}", fmt_error_chain_of(.0))]
+    FileOperationFailed(#[from] std::io::Error),
+    #[error("Tried to export CSV while in an incorrect state. This is a bug.")]
+    IncorrectState,
+    #[error("Failed to serialize CSV: {0}")]
+    Csv(#[from] csv::Error),
 }

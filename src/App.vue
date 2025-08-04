@@ -1,76 +1,92 @@
 <script setup lang="ts">
 import { Ref, ref, watch } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
-import { AnswerScoreResult, AnswerUpload, KeyUpload } from "./messages";
-import { download } from '@tauri-apps/plugin-upload';
-import * as path from '@tauri-apps/api/path';
-import { exists, mkdir } from "@tauri-apps/plugin-fs";
+import {
+  AnswerScoreResult,
+  AnswerUpload,
+  KeyUpload,
+  CsvExport,
+  ModelDownload,
+  AppState,
+} from "./types";
+
+import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
+import { listen } from "@tauri-apps/api/event";
 
 type TimeElapsed = | "notCounting" | number;
 const hms = (secs: number): string => {
-  var h = Math.floor(secs / 3600);
-  var m = Math.floor(secs % 3600 / 60);
-  var s = Math.floor(secs % 3600 % 60);
-  var hDisplay = h > 0 ? h + "h " : "";
-  var mDisplay = m > 0 ? m + "m " : "";
-  var sDisplay = s > 0 ? s + "s" : "";
-  return hDisplay + mDisplay + sDisplay;
+  if (secs > 0) {
+    var h = Math.floor(secs / 3600);
+    var m = Math.floor(secs % 3600 / 60);
+    var s = Math.floor(secs % 3600 % 60);
+    var hDisplay = h > 0 ? h + "h " : "";
+    var mDisplay = m > 0 ? m + "m " : "";
+    var sDisplay = s > 0 ? s + "s" : "";
+    return hDisplay + mDisplay + sDisplay;
+  } else {
+    return "<1s";
+  }
 }
 
-async function ensureModel(textRef: Ref<string>): Promise<string> {
-  const cache = await path.cacheDir();
-  const modelPath = await path.join(cache, "quikscore");
-  if (!await exists("quikscore", { baseDir: path.BaseDirectory.Cache })) {
-    await mkdir("quikscore", { baseDir: path.BaseDirectory.Cache });
-  }
 
-  const detectionPath = await path.join(modelPath, "text-detection.rten");
-  const recognitionPath = await path.join(modelPath, "text-recognition.rten");
+const appState = ref<AppState>("Init");
+listen<AppState>("state", (event) => {
+  appState.value = event.payload;
+  console.log("state changed to " + appState.value);
+})
 
-  textRef.value = "Verifying OCR models...";
-  if (!await exists(detectionPath)) {
-    textRef.value = "Downloading Detection Model...";
-    await download(
-      'https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.rten',
-      detectionPath,
-    );
+const modelDownloadEventHandler = (progressBar: Ref<undefined | ProgressBarProps>, status: Ref<string>) => (msg: ModelDownload): void => {
+  switch (msg.event) {
+    case "progress":
+      const { total, progressDetection, progressRecognition } = msg.data
+      progressBar.value = { type: "progress", max: total, progressTop: progressDetection, progressBottom: progressDetection + progressRecognition };
+      status.value = "Downloading " + ((progressDetection + progressRecognition) * 100 / total).toFixed(2) + "%";
+      return;
+    case "success":
+      progressBar.value = { type: "indeterminate" };
+      return;
   }
-  if (!await exists(recognitionPath)) {
-    textRef.value = "Downloading Recognition Model...";
-    await download(
-      'https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.rten',
-      recognitionPath,
-    );
-  }
-  textRef.value = "Please upload an image...";
-
-  return modelPath;
 }
-import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
-
 const keyEventHandler = (msg: KeyUpload): void => {
   switch (msg.event) {
     case "cancelled":
       keyStatus.value = "User cancelled upload";
-      keyProgressBar.value = false;
+      keyProgressBar.value = undefined;
       break;
 
-    case "clear":
+    case "clearImage":
       keyImage.value = "";
       keyStatus.value = "";
-      keyProgressBar.value = false;
+      keyProgressBar.value = undefined;
       break;
 
-    case "done":
+    case "clearWeights":
+      keyHasWeights.value = "notUploaded";
+      keyStatus.value = "";
+      break;
+
+    case "image":
       keyImage.value = msg.data.base64;
       keyStatus.value = "";
-      keyProgressBar.value = false;
+      keyProgressBar.value = undefined;
+      break;
+
+    case "uploadedWeights":
+      keyHasWeights.value = "yes";
+      keyStatus.value = "";
+      break;
+
+    case "missingWeights":
+      keyHasWeights.value = "missingWeights";
       break;
 
     case "error":
       keyStatus.value = msg.data.error;
-      keyProgressBar.value = false;
+      keyProgressBar.value = undefined;
       break;
+
+    default:
+      keyStatus.value = "Unhandled event";
   }
 }
 const answerEventHandler = (msg: AnswerUpload): void => {
@@ -81,20 +97,17 @@ const answerEventHandler = (msg: AnswerUpload): void => {
       elapsed.value = "notCounting";
       break;
     case "clear":
-      canUploadKey.value = true;
       answerStatus.value = "";
       answerImages.value = [];
       answerProgressBar.value = undefined;
       elapsed.value = "notCounting";
       break;
     case "almostDone":
-      canUploadKey.value = false;
       answerStatus.value = "Publishing results...";
       answerProgressBar.value = { type: "indeterminate" };
       elapsed.value = "notCounting";
       break;
     case "processing":
-      canUploadKey.value = false;
       const { total, started, finished } = msg.data;
       var secsPerImage = -1;
       if (elapsed.value == "notCounting") {
@@ -110,7 +123,6 @@ const answerEventHandler = (msg: AnswerUpload): void => {
     case "done":
       answerStatus.value = "";
       answerImages.value = msg.data.uploaded;
-      canUploadKey.value = answerImages.value.length === 0;
       answerProgressBar.value = undefined;
       elapsed.value = "notCounting";
       break;
@@ -119,17 +131,44 @@ const answerEventHandler = (msg: AnswerUpload): void => {
       answerProgressBar.value = undefined;
       elapsed.value = "notCounting";
       break;
+    default:
+      answerStatus.value = "Unhandled event";
   }
+}
+const csvExportEventHandler = (msg: CsvExport) => {
+  switch (msg.event) {
+    case "cancelled":
+      answerStatus.value = "Export cancelled";
+      break;
+    case "done":
+      answerStatus.value = "Export success!";
+      break;
+    case "error":
+      answerStatus.value = `Export failed: ${msg.data.error}`;
+      break;
+  }
+  answerProgressBar.value = undefined;
 }
 
 const ocr = ref(true);
 watch(ocr, async (new_ocr, _) => { await invoke("set_ocr", { ocr: new_ocr }) });
 
 const keyImage = ref("");
+const keyHasWeights = ref<"notUploaded" | "missingWeights" | "yes">("notUploaded");
 const keyStatus = ref("");
-const keyProgressBar = ref(false);
+const keyProgressBar = ref<undefined | ProgressBarProps>(undefined);
 
-const canUploadKey = ref(true);
+const canUploadKey = () => appState.value == "Init" || appState.value == "WithKey";
+const canChangeKey = () => appState.value == "WithKey" || appState.value == "WithKeyAndWeights";
+const canClearKey = () => appState.value == "WithKey";
+const canUploadWeights = () => appState.value == "WithKey" || appState.value == "WithKeyAndWeights";
+const canChangeWeights = () => appState.value == "WithKeyAndWeights";
+const canClearWeights = () => appState.value == "WithKeyAndWeights";
+const canUploadSheets = () => appState.value == "WithKeyAndWeights";
+const canChangeSheets = () => appState.value == "Scored";
+const canCancelSheetUpload = () => appState.value == "Scoring";
+const canClearSheets = () => appState.value == "Scored";
+const canExportCsv = () => appState.value == "Scored";
 
 const answerImages = ref<AnswerScoreResult[]>([]);
 const answerStatus = ref("");
@@ -137,9 +176,28 @@ const answerProgressBar = ref<undefined | ProgressBarProps>(undefined);
 
 const elapsed = ref<TimeElapsed>("notCounting");
 
+
+async function ensureModels(progressBar: Ref<undefined | ProgressBarProps>, status: Ref<string>) {
+  progressBar.value = { type: "indeterminate" };
+  status.value = "Verifying OCR Models...";
+  let retries = 0;
+  while (retries < 3) {
+    try {
+      const modelDownloadChannel = new Channel<ModelDownload>();
+      modelDownloadChannel.onmessage = modelDownloadEventHandler(progressBar, status);
+      await invoke("ensure_models", { channel: modelDownloadChannel });
+      retries = 3;
+    } catch (e) {
+      status.value = "failed to ensure models: " + e + (retries < 2 ? ", retrying" : "");
+      retries += 1;
+    }
+  }
+}
+
 async function uploadKey() {
-  const path = await ensureModel(keyStatus);
-  keyProgressBar.value = true;
+  const path = await ensureModels(keyProgressBar, keyStatus);
+  keyStatus.value = "Upload A Key...";
+  keyProgressBar.value = { type: "indeterminate" };
   const keyEventChannel = new Channel<KeyUpload>();
   keyEventChannel.onmessage = keyEventHandler;
   await invoke("upload_key_image", { channel: keyEventChannel, modelDir: path });
@@ -150,17 +208,40 @@ async function clearKey() {
   await invoke("clear_key_image", { channel: keyEventChannel });
 }
 
+async function uploadWeights() {
+  const keyEventChannel = new Channel<KeyUpload>();
+  keyEventChannel.onmessage = keyEventHandler;
+  await invoke("upload_weights", { channel: keyEventChannel });
+}
+async function clearWeights() {
+  const keyEventChannel = new Channel<KeyUpload>();
+  keyEventChannel.onmessage = keyEventHandler;
+  await invoke("clear_weights", { channel: keyEventChannel });
+}
+
 async function uploadSheets() {
-  const path = await ensureModel(answerStatus);
+  const path = await ensureModels(answerProgressBar, answerStatus);
+  answerStatus.value = "Upload files to see results here";
   answerProgressBar.value = { type: "indeterminate" };
   const answerEventChannel = new Channel<AnswerUpload>();
   answerEventChannel.onmessage = answerEventHandler;
   await invoke("upload_sheet_images", { channel: answerEventChannel, modelDir: path });
 }
+async function cancelUploadSheets() {
+  const answerEventChannel = new Channel<AnswerUpload>();
+  answerEventChannel.onmessage = answerEventHandler;
+  await invoke("cancel_upload_sheets", { channel: answerEventChannel });
+}
 async function clearSheets() {
   const answerEventChannel = new Channel<AnswerUpload>();
   answerEventChannel.onmessage = answerEventHandler;
   await invoke("clear_sheet_images", { channel: answerEventChannel });
+}
+async function exportCsv() {
+  answerProgressBar.value = { type: "indeterminate" };
+  const csvExportChannel = new Channel<CsvExport>();
+  csvExportChannel.onmessage = csvExportEventHandler;
+  await invoke("export_csv", { channel: csvExportChannel });
 }
 </script>
 
@@ -174,38 +255,66 @@ async function clearSheets() {
     <p class="instructions">Upload your key sheet and some answer sheets!</p>
     <div class="header" style="justify-content: center;">
       <input type="checkbox" id="ocr-ck" v-model="ocr" />
-      <label for="ocr-ck" style="padding-left: 1vh;">Enable OCR</label>
+      <label for="ocr-ck" style="padding-left: 1vh;">Enable OCR (potentially high memory usage)</label>
     </div>
 
     <div class="header">
-      <h2>Answer Key</h2>
-      <button :class="`btn-key${!canUploadKey ? ' btn-disabled' : ''}`" @click="uploadKey"
-        v-bind:disabled="!canUploadKey">{{ keyImage ===
-          ""
-          ?
-          "📥\nUpload Answer Key..." :
-          "Change Answer Key" }}</button>
-      <button :class="`btn-clear${!canUploadKey ? ' btn-disabled' : ''}`" @click="clearKey"
-        v-bind:disabled="!canUploadKey" v-if="keyImage !== ''">🔄 Clear
-        Answer Key</button>
+      <h2>Answer Key & Weights</h2>
+      <button :class="`btn-key${!(canUploadKey() || canChangeKey()) ? ' btn-disabled' : ''}`" @click="uploadKey"
+        v-bind:disabled="!(canUploadKey() || canChangeKey())">
+        {{ canChangeKey() ? "Change Answer Key" : "📥\nUpload Answer Key..." }}
+      </button>
+      <button :class="`btn-clear${!canClearKey() ? ' btn-disabled' : ''}`" @click="clearKey"
+        v-bind:disabled="!canClearKey()" v-if="keyImage !== ''">
+        🔄 Clear Answer Key
+      </button>
+
+      <button :class="`btn-key${!(canUploadWeights() || canChangeWeights()) ? ' btn-disabled' : ''}`"
+        @click="uploadWeights" v-bind:disabled="!(canUploadWeights() || canChangeWeights())">
+        {{ canChangeWeights() ? "Change Weights file" : "📥\nUpload Weights file..." }}
+      </button>
+      <button :class="`btn-clear${!canClearWeights() ? ' btn-disabled' : ''}`" @click="clearWeights"
+        v-bind:disabled="!canClearWeights()" v-if="keyImage !== ''">
+        🔄 Clear Weights
+      </button>
     </div>
     <div class="card">
-      <img v-bind:src="keyImage" :style="keyImage == '' ? 'display: none;' : ''"></img>
-      <p class="placeholder" v-if="!keyImage && canUploadKey">{{ keyStatus === "" ? "Upload a key..." :
-        keyStatus }}</p>
-      <StackedProgressBar v-if="keyProgressBar" type="indeterminate" />
+      <p class="placeholder" v-if="keyStatus !== '' || !keyImage">
+        {{ keyStatus === "" ? "Upload a key..." : keyStatus }}
+      </p>
+      <StackedProgressBar v-if="keyProgressBar" v-bind="keyProgressBar" />
+      <div :style="keyImage == '' ? 'display: none;' : ''" class="key-image-container">
+        <div :class="keyHasWeights == 'notUploaded' ? 'yellow' : keyHasWeights == 'missingWeights' ? 'red' : 'green'">
+          <img v-if="keyHasWeights == 'notUploaded'" src="/src/assets/no_weights.svg" />
+          <img v-if="keyHasWeights == 'missingWeights'" src="/src/assets/missing_weights.svg" />
+          <img v-if="keyHasWeights == 'yes'" src="/src/assets/have_weights.svg" />
+          <p>
+            {{
+              keyHasWeights == 'notUploaded' ? "Please upload weights for this key." :
+                keyHasWeights == 'missingWeights' ? "Weights missing for this key." :
+                  "Weights uploaded!"
+            }}
+          </p>
+        </div>
+        <img v-bind:src="keyImage" :style="keyImage == '' ? 'display: none;' : ''" />
+      </div>
     </div>
 
     <div class="header">
       <h2>Answer Sheets</h2>
-      <button class="btn-sheet" @click="uploadSheets" :disabled="keyImage == ''">{{ answerImages.length === 0 ?
-        "🧾 Upload Answer Sheets..." :
-        "Change Answer Sheets"
-      }}</button>
-      <button class="btn-clear" @click="clearSheets" :disabled="keyImage == ''" v-if="answerImages.length !== 0">🔄
-        Clear
-        Answer
-        Sheets</button>
+      <button class="btn-sheet" @click="uploadSheets" :disabled="!(canUploadSheets() || canChangeSheets())">
+        {{ canChangeSheets() ? "Change Answer Sheets" : "🧾 Upload Answer Sheets..." }}
+      </button>
+      <button class="btn-clear" @click="cancelUploadSheets" :disabled="!canCancelSheetUpload()"
+        v-if="canCancelSheetUpload()">
+        Cancel Upload
+      </button>
+      <button class="btn-clear" @click="clearSheets" :disabled="!canClearSheets()" v-if="canClearSheets()">
+        🔄 Clear Answer Sheets
+      </button>
+      <button class="btn-sheet" @click="exportCsv" :disabled="!canExportCsv()" v-if="canExportCsv()">
+        Export to CSV...
+      </button>
     </div>
     <!-- 📦 Result Placeholder -->
     <div class="card">
@@ -214,8 +323,7 @@ async function clearSheets() {
           <img :src="data.base64"></img>
           <div class="stats">
             <p>ID {{ data.studentId }}</p>
-            <p>score: {{ data.correct }}</p>
-            <p>incorrect: {{ data.incorrect }}</p>
+            <p>score: {{ data.score }}/{{ data.maxScore }}</p>
             <p>questions not answered: {{ data.notAnswered }}</p>
           </div>
         </div>
@@ -223,8 +331,9 @@ async function clearSheets() {
           {{ data.error }}
         </p>
       </div>
-      <p class="placeholder" v-if="answerImages.length === 0">{{ answerStatus === "" ?
-        "Upload files to see results here" : answerStatus }}</p>
+      <p class="placeholder" v-if="answerImages.length === 0 || answerStatus">
+        {{ answerStatus === "" ? "Upload files to see results here" : answerStatus }}
+      </p>
       <StackedProgressBar v-if="answerProgressBar" v-bind="answerProgressBar" />
     </div>
   </main>
@@ -444,6 +553,51 @@ button.btn-clear:hover:not(:disabled) {
 img {
   object-fit: contain;
   max-height: 100%;
+  max-width: 100%;
+}
+
+.key-image-container {
+  display: inline-block;
+  position: relative;
+}
+
+.key-image-container>div {
+  position: absolute;
+  width: 100%;
+  /* 100% bleeds outside the image for some reason */
+  height: 96%;
+  display: flex;
+  overflow: hidden;
+  align-items: self-end;
+  justify-content: start;
+}
+
+.key-image-container>div.red {
+  background: #E64553;
+  background: linear-gradient(0deg, rgba(230, 69, 83, 0.8) 0%, rgba(233, 94, 106, 0.6) 20%, rgba(255, 255, 255, 0) 75%);
+}
+
+.key-image-container>div.yellow {
+  background: #DF8E1D;
+  background: linear-gradient(0deg, rgba(223, 142, 29, 0.8) 0%, rgba(227, 158, 60, 0.6) 20%, rgba(255, 255, 255, 0) 75%);
+}
+
+.key-image-container>div.green {
+  background: #10B981;
+  background: linear-gradient(0deg, rgba(16, 185, 129, 0.8) 0%, rgba(79, 204, 162, 0.6) 20%, rgba(255, 255, 255, 0) 75%);
+}
+
+.key-image-container>div>* {
+  margin-left: 3vh;
+  margin-bottom: 3vh;
+  color: #eff1f5;
+  height: 2em;
+  font-size: 1.3em;
+  text-shadow: rgba(0, 0, 0, 0.25) 0px 54px 55px, rgba(0, 0, 0, 0.12) 0px -12px 30px, rgba(0, 0, 0, 0.12) 0px 4px 6px, rgba(0, 0, 0, 0.17) 0px 12px 13px, rgba(0, 0, 0, 0.09) 0px -3px 5px;
+
+}
+
+.key-image-container>img {
   max-width: 100%;
 }
 </style>

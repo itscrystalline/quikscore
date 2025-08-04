@@ -1,5 +1,6 @@
 use ocrs::{ImageSource, OcrEngine};
 use std::array;
+use std::sync::{Arc, RwLock};
 use tauri::ipc::Channel;
 
 use crate::errors::{SheetError, UploadError};
@@ -14,7 +15,6 @@ use rayon::prelude::*;
 use std::fs;
 use std::path::Path;
 use tauri_plugin_dialog::FilePath;
-// use tesseract_rs::TesseractAPI;
 
 use tauri::{Emitter, Manager, Runtime};
 
@@ -49,10 +49,12 @@ pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         return;
     };
     let Options { ocr } = AppState::get_options(app);
-    match handle_upload(file_path, ocr.then(state::init_thread_ocr).as_ref()) {
+    match handle_upload(
+        file_path,
+        ocr.then(state::init_thread_ocr).flatten().as_ref(),
+    ) {
         Ok((base64_image, mat, key)) => {
-            let subject = key.subject_code.clone();
-            AppState::upload_key(app, channel, base64_image, mat, subject, key.into())
+            AppState::upload_key(app, channel, base64_image, mat, key.into())
         }
         Err(e) => signal!(
             channel,
@@ -63,17 +65,17 @@ pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     }
 }
 
+pub enum ProcessingState {
+    Starting,
+    Finishing,
+    Cancel,
+    Done(Vec<Result<(String, Mat, AnswerSheet), UploadError>>),
+}
 pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
     paths: Option<Vec<FilePath>>,
     channel: Channel<AnswerUpload>,
 ) {
-    enum ProcessingState {
-        Starting,
-        Finishing,
-        Done(Vec<Result<(String, Mat, AnswerSheet), UploadError>>),
-    }
-
     let Some(paths) = paths else {
         signal!(channel, AnswerUpload::Cancelled);
         return;
@@ -82,20 +84,32 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     let images_count = paths.len();
     let Options { ocr } = AppState::get_options(app);
 
-    AppState::mark_scoring(app, &channel, images_count);
-
     let (tx, mut rx) = tauri::async_runtime::channel::<ProcessingState>(images_count);
+    let stop_flag = Arc::new(RwLock::new(false));
 
+    AppState::mark_scoring(app, &channel, images_count, tx.clone());
+
+    let stop_moved = Arc::clone(&stop_flag);
     let processing_thread = tauri::async_runtime::spawn(async move {
         let base64_list: Vec<Result<(String, Mat, AnswerSheet), UploadError>> = paths
             .into_par_iter()
             .map_init(
-                || (tx.clone(), ocr.then(state::init_thread_ocr)),
-                |(tx, ocr), file_path| {
-                    _ = tx.try_send(ProcessingState::Starting);
-                    let res = handle_upload(file_path, ocr.as_ref());
-                    _ = tx.try_send(ProcessingState::Finishing);
-                    res
+                || {
+                    (
+                        tx.clone(),
+                        ocr.then(state::init_thread_ocr).flatten(),
+                        Arc::clone(&stop_moved),
+                    )
+                },
+                |(tx, ocr, stop), file_path| {
+                    if !*stop.read().expect("not poisoned") {
+                        _ = tx.try_send(ProcessingState::Starting);
+                        let res = handle_upload(file_path, ocr.as_ref());
+                        _ = tx.try_send(ProcessingState::Finishing);
+                        res
+                    } else {
+                        Err(UploadError::PrematureCancellaton)
+                    }
                 },
             )
             .collect();
@@ -116,8 +130,12 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
                 ProcessingState::Starting => started += 1,
                 ProcessingState::Finishing => finished += 1,
                 ProcessingState::Done(list) => {
-                    signal!(channel, AnswerUpload::AlmostDone);
                     AppState::upload_answer_sheets(app, &channel, list);
+                    processing_thread.abort();
+                    break;
+                }
+                ProcessingState::Cancel => {
+                    *stop_flag.write().expect("not poisoned") = true;
                     processing_thread.abort();
                     break;
                 }
@@ -145,14 +163,6 @@ pub fn resize_relative_img(src: &Mat, relative: f64) -> opencv::Result<Mat> {
     Ok(dst)
 }
 
-// fn show_img(mat: &Mat, window_name: &str) -> opencv::Result<()> {
-//     println!("showing window {window_name}");
-//     highgui::named_window(window_name, 0)?;
-//     highgui::imshow(window_name, mat)?;
-//     highgui::wait_key(10000)?;
-//     Ok(())
-// }
-
 fn handle_upload(
     path: FilePath,
     ocr: Option<&OcrEngine>,
@@ -163,28 +173,9 @@ fn handle_upload(
     let (aligned_for_display, subject_id, student_id, answer_sheet) =
         fix_answer_sheet(resized_for_fix)?;
 
-    let subject_id_string = extract_digits_for_sub_stu(&subject_id, 2, false)?;
-    let student_id_string = extract_digits_for_sub_stu(&student_id, 9, true)?;
-    //testing
-    //#[cfg(not(test))]
-    //let _ = show_img(&aligned_for_processing, "resized & aligned image");
-    if let Some(ocr) = ocr {
-        let (subject_id_s_f, student_id_s_f) =
-            extract_subject_student_from_written_field(&resized, ocr)?;
-        println!("subject_id: {subject_id_s_f}");
-        println!("subject_id: {student_id_s_f}");
-        if subject_id_string != subject_id_s_f || student_id_string != student_id_s_f {
-            println!("User Fon and Enter differently");
-        }
-        let (name, subject, date, exam_room, seat) = extract_user_information(&mat, ocr)?;
-        println!("name: {name}");
-        println!("subject: {subject}");
-        println!("date: {date}");
-        println!("exam_room: {exam_room}");
-        println!("seat: {seat}");
-    }
     let base64 = mat_to_base64_png(&aligned_for_display).map_err(UploadError::from)?;
-    let answer_sheet: AnswerSheet = (subject_id, student_id, answer_sheet).try_into()?;
+    let answer_sheet =
+        AnswerSheet::try_convert(mat, resized, subject_id, student_id, answer_sheet, ocr)?;
     Ok((base64, aligned_for_display, answer_sheet))
 }
 
@@ -430,21 +421,42 @@ fn extract_digits_for_sub_stu(
     Ok(digits)
 }
 
-impl TryFrom<(Mat, Mat, Mat)> for AnswerSheet {
-    type Error = SheetError;
-    fn try_from(value: (Mat, Mat, Mat)) -> Result<Self, Self::Error> {
-        let (subject_code_mat, student_id_mat, answers_mat) = value;
-        let subject_id_string = extract_digits_for_sub_stu(&subject_code_mat, 2, false)?;
-        let student_id_string = extract_digits_for_sub_stu(&student_id_mat, 9, true)?;
-        let scanned_answers = extract_answers(&answers_mat)?;
+impl AnswerSheet {
+    fn try_convert(
+        original: Mat,
+        original_small: Mat,
+        subject_code_mat: Mat,
+        student_id_mat: Mat,
+        answers_mat: Mat,
+        ocr: Option<&OcrEngine>,
+    ) -> Result<Self, SheetError> {
+        let subject_id = extract_digits_for_sub_stu(&subject_code_mat, 2, false)?;
+        let student_id = extract_digits_for_sub_stu(&student_id_mat, 9, true)?;
+        let answers = extract_answers(&answers_mat)?;
 
-        // println!("subject_id: {subject_id_string}");
-        // println!("subject_id: {student_id_string}");
+        let (mut student_name, mut subject_name, mut exam_room, mut exam_seat) =
+            (None, None, None, None);
+        if let Some(ocr) = ocr {
+            let (written_subject_id, written_student_id) =
+                extract_subject_student_from_written_field(&original_small, ocr)?;
+            if subject_id != written_subject_id || student_id != written_student_id {
+                println!("User Fon and Enter differently");
+            }
+            let (name, subject, _, room, seat) = extract_user_information(&original, ocr)?;
+            _ = student_name.insert(name);
+            _ = subject_name.insert(subject);
+            _ = exam_room.insert(room);
+            _ = exam_seat.insert(seat);
+        }
 
         Ok(Self {
-            subject_code: subject_id_string,
-            student_id: student_id_string,
-            answers: scanned_answers,
+            subject_id,
+            student_id,
+            subject_name,
+            student_name,
+            exam_room,
+            exam_seat,
+            answers,
         })
     }
 }
@@ -483,7 +495,7 @@ impl AnswerSheetResult {
                         height: ANSWER_HEIGHT / 5,
                     };
                     let color: Option<opencv::core::Scalar> = result_here.and_then(|c| match c {
-                        CheckedAnswer::Correct => Some((43, 160, 64).into()),
+                        CheckedAnswer::Correct(_) => Some((43, 160, 64).into()),
                         CheckedAnswer::Incorrect => Some((57, 15, 210).into()),
                         CheckedAnswer::Missing => Some((29, 142, 223).into()),
                         CheckedAnswer::NotCounted => None,
@@ -695,7 +707,7 @@ mod unit_tests {
     }
 
     fn setup_ocr_data() {
-        state::init_model_dir(PathBuf::from("tests/assets"));
+        _ = state::MODELS.set(PathBuf::from("tests/assets"))
     }
 
     fn not_image() -> FilePath {
@@ -765,7 +777,13 @@ mod unit_tests {
     fn test_handle_upload_success() {
         setup_ocr_data();
         let path = test_key_image();
-        let result = handle_upload(path, Some(&state::init_thread_ocr()));
+        let result = handle_upload(
+            path,
+            cfg!(feature = "ocr-tests")
+                .then(state::init_thread_ocr)
+                .flatten()
+                .as_ref(),
+        );
         assert!(result.is_ok());
 
         let (base64_string, mat, _answer_sheet) = result.unwrap();
@@ -777,7 +795,13 @@ mod unit_tests {
     fn test_handle_upload_failure() {
         setup_ocr_data();
         let path = not_image();
-        let result = handle_upload(path, Some(&state::init_thread_ocr()));
+        let result = handle_upload(
+            path,
+            cfg!(feature = "ocr-tests")
+                .then(state::init_thread_ocr)
+                .flatten()
+                .as_ref(),
+        );
         assert!(result.is_err());
         assert!(matches!(result.unwrap_err(), UploadError::NotImage));
     }
@@ -862,9 +886,10 @@ mod unit_tests {
     }
 
     #[test]
+    #[cfg(feature = "ocr-tests")]
     fn check_extracted_ids_ocr() -> Result<(), SheetError> {
         setup_ocr_data();
-        let ocr = &state::init_thread_ocr();
+        let ocr = &state::init_thread_ocr().unwrap();
 
         for (i, path) in test_images().into_iter().enumerate() {
             let mat = read_from_path(path).expect("Failed to read image");
@@ -896,9 +921,10 @@ mod unit_tests {
     }
 
     #[test]
+    #[cfg(feature = "ocr-tests")]
     fn check_ocr_function() -> Result<(), SheetError> {
         setup_ocr_data();
-        let ocr = &state::init_thread_ocr();
+        let ocr = &state::init_thread_ocr().unwrap();
 
         for (i, path) in test_images().into_iter().enumerate() {
             println!("image #{i}");
