@@ -4,6 +4,7 @@ use crate::{
     signal,
     state::{AnswerSheet, AppState, CsvExport},
 };
+use log::{error, info};
 use opencv::prelude::Mat;
 use serde::Serialize;
 use std::{collections::HashMap, fs::File};
@@ -51,18 +52,20 @@ pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     path: FilePath,
 ) -> Result<(), CsvError> {
     let path = path.into_path()?;
+    info!("Exporing scanned results to {}...", path.display());
     let file = File::create(path)?;
     let mut wtr = csv::Writer::from_writer(file);
 
     let results = AppState::get_scored_answers(app).ok_or(CsvError::IncorrectState)?;
     let rows = map_to_csv(results);
+    let len = rows.len();
 
     for row in rows {
         wtr.serialize(row)?;
     }
 
     wtr.flush()?;
-    println!("finished exporting");
+    info!("Finished Exporting! Written {len} rows.");
     Ok(())
 }
 
@@ -74,7 +77,7 @@ fn map_to_csv(
         match ans {
             CheckedAnswer::Correct(Some(score)) => format!("{score}"),
             CheckedAnswer::Correct(None) => {
-                println!("bug: missing score in correct answer, using 1");
+                error!("bug: missing score in correct answer, using 1");
                 "1".to_string()
             }
             CheckedAnswer::Incorrect => "0".to_string(),

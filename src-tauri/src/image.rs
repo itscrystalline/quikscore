@@ -1,3 +1,4 @@
+use log::{debug, warn};
 use ocrs::{ImageSource, OcrEngine};
 use std::array;
 use std::sync::{Arc, RwLock};
@@ -280,8 +281,6 @@ fn extract_answers(answer_mat: &Mat) -> Result<[QuestionGroup; 36], SheetError> 
                 width: ANSWER_WIDTH,
                 height: ANSWER_HEIGHT,
             };
-            // println!("block ({x_idx}, {y_idx}) at ({x}, {y})");
-            // imgproc::rectangle_def(&mut mat_debug, rect, (255, 0, 0).into())?;
             let answers: Result<Vec<Option<Answer>>, SheetError> = (0..5)
                 .map(|row_idx| {
                     let row_y = y
@@ -410,14 +409,6 @@ fn extract_digits_for_sub_stu(
         }
         digits.push_str(&selected_digit.to_string());
     }
-    //if temp {
-    //    println!("Student:");
-    //} else {
-    //    println!("Subject");
-    //}
-    //for (i, row) in v.iter().enumerate() {
-    //    println!("Row {i}: {row:?}");
-    //}
     Ok(digits)
 }
 
@@ -440,7 +431,7 @@ impl AnswerSheet {
             let (written_subject_id, written_student_id) =
                 extract_subject_student_from_written_field(&original_small, ocr)?;
             if subject_id != written_subject_id || student_id != written_student_id {
-                println!("User Fon and Enter differently");
+                warn!("User Fon and Enter differently");
             }
             let (name, subject, _, room, seat) = extract_user_information(&original, ocr)?;
             _ = student_name.insert(name);
@@ -590,7 +581,7 @@ fn extract_user_information(
     let temp_dir = "temp";
     _ = fs::create_dir_all(temp_dir);
 
-    println!("Working directory: {:?}", std::env::current_dir());
+    debug!("Working directory: {:?}", std::env::current_dir());
 
     let (name, subject, date, exam_room, seat) = crop_each_part(mat)?;
 
@@ -619,12 +610,12 @@ fn extract_user_information(
 
 fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Error> {
     if mat.empty() {
-        println!(
+        warn!(
             "Warning: attempting to write an empty Mat to {:?}",
             path.as_ref()
         );
     } else {
-        println!("Writing debug image to {:?}", path.as_ref());
+        debug!("Writing debug image to {:?}", path.as_ref());
     }
     imgcodecs::imwrite(
         path.as_ref().to_str().unwrap(),

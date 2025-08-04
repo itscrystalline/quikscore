@@ -4,6 +4,7 @@ use crate::{
     state::{AppState, Options, MODELS},
 };
 use futures::StreamExt;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs::File;
@@ -43,11 +44,11 @@ pub async fn get_or_download_models(
         let hash = hasher.finalize_reset();
         let hash_not_passed = hash[..] != TEXT_DETECTION_HASH[..];
         if hash_not_passed {
-            println!("detection model hash mismatch, redownloading");
+            warn!("Detection model hash mismatch, redownloading");
         }
         hash_not_passed
     } else {
-        println!("downloading detection model");
+        info!("Downloading detection model...");
         true
     };
     let need_download_recognition = if recognition_model_exists {
@@ -55,11 +56,11 @@ pub async fn get_or_download_models(
         _ = std::io::copy(&mut recognition_model_file, &mut hasher)?;
         let hash_not_passed = hasher.finalize()[..] != TEXT_RECOGNITION_HASH[..];
         if hash_not_passed {
-            println!("recognition model hash mismatch, redownloading")
+            warn!("Recognition model hash mismatch, redownloading")
         }
         hash_not_passed
     } else {
-        println!("downloading recognition model");
+        info!("Downloading recognition model...");
         true
     };
 
@@ -249,7 +250,7 @@ pub async fn get_or_download_models(
             )
         }
         signal!(frontend_channel, ModelDownload::Success);
-        println!("download success");
+        info!("Download success!");
     }
 
     _ = MODELS.set(cache_dir);
