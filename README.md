@@ -9,20 +9,13 @@ Automatically scan and score answer sheets.
 prebuilt versions of `quikscore` built by our CI are available [here](https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main?preview)
 or in the table below.
 
-generally AVX support is preferred.
-
-| Version                      | Explaination                                            | Link                                                                                                  |
-| ---------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| quikscore-linux-aarch64-avx  | for Linux on 64-bit ARM Devices, with AVX support       | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-linux-aarch64-avx.zip  |
-| quikscore-linux-aarch64      | for Linux on 64-bit ARM Devices, without AVX support    | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-linux-aarch64.zip      |
-| quikscore-linux-x86_64-avx   | for Linux on 64-bit x86 Devices, with AVX support       | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-linux-x86_64-avx.zip   |
-| quikscore-linux-x86_64       | for Linux on 64-bit x86 Devices, without AVX support    | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-linux-x86_64.zip       |
-| quikscore-macos-aarch64-avx  | for macOS on Apple Silicon Devices, with AVX support    | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-macos-aarch64-avx.zip  |
-| quikscore-macos-aarch64      | for macOS on Apple Silicon Devices, without AVX support | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-macos-aarch64.zip      |
-| quikscore-macos-x86_64-avx   | for macOS on 64-bit Intel Devices, with AVX support     | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-macos-x86_64-avx.zip   |
-| quikscore-macos-x86_64       | for macOS on 64-bit Intel Devices, without AVX support  | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-macos-x86_64.zip       |
-| quikscore-windows-x86_64-avx | for Windows on 64-bit x86 Devices, with AVX support     | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-windows-x86_64-avx.zip |
-| quikscore-windows-x86_64     | for Windows on 64-bit x86 Devices, without AVX support  | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-windows-x86_64.zip     |
+| Version                  | Explaination                       | Link                                                                                              |
+| ------------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------- |
+| quikscore-linux-aarch64  | for Linux on 64-bit ARM Devices    | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-linux-aarch64.zip  |
+| quikscore-linux-x86_64   | for Linux on 64-bit x86 Devices    | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-linux-x86_64.zip   |
+| quikscore-macos-aarch64  | for macOS on Apple Silicon Devices | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-macos-aarch64.zip  |
+| quikscore-macos-x86_64   | for macOS on 64-bit Intel Devices  | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-macos-x86_64.zip   |
+| quikscore-windows-x86_64 | for Windows on 64-bit x86 Devices  | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-windows-x86_64.zip |
 
 ## Environment setup
 
