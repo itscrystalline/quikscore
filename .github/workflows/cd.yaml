@@ -81,15 +81,16 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+
+    - name: Set up Corepack 
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22.14'
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '22.14'
-
-    - name: Set up Yarn
-      uses: bahmutov/npm-install@v1
-      with:
-        useLockFile: true
+        cache: yarn
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@master
@@ -123,6 +124,7 @@ jobs:
 
     - name: Build Tauri app
       run: |
+        yarn install
         yarn tauri build --features avx512
 
     - name: Group Binary Bundle

@@ -2,6 +2,7 @@ use std::{collections::HashMap, fs::File, io::BufReader};
 
 use csv::DeserializeRecordsIntoIter;
 use itertools::{multizip, Itertools};
+use log::{debug, error};
 use tauri::{ipc::Channel, Emitter, Manager, Runtime};
 use tauri_plugin_fs::FilePath;
 
@@ -218,7 +219,7 @@ impl<R: std::io::Read> From<WeightsIter<R>> for ScoreWeights {
             let value_option = match value {
                 Ok(ok) => Some(ok),
                 Err(e) => {
-                    println!("error deserializing score weights: {e}");
+                    error!("Cannot deserialize score weights: {e}");
                     None
                 }
             };
@@ -236,16 +237,14 @@ impl<R: std::io::Read> From<WeightsIter<R>> for ScoreWeights {
                 macro_rules! conv {
                     ($i: expr) => {
                         $i.parse::<u8>().unwrap_or_else(|e| {
-                            println!(
-                                "warn: cannot read question answer weight: {e}, using 0 as weight"
-                            );
+                            debug!("Cannot read question answer weight: {e}, using 0 as weight");
                             0
                         })
                     };
                 }
 
                 let Ok(question_num) = question_num.parse::<usize>() else {
-                    println!("error reading question number: not a number ('{question_num}')");
+                    error!("Cannot read question number: not a number ('{question_num}')");
                     continue;
                 };
                 if let Some((subject_weights, max_score)) = weights.get_mut(&subject_code) {
