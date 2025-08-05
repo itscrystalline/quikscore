@@ -12,9 +12,18 @@
   "app": {
     "windows": [
       {
-        "title": "quikscore",
+        "title": "Quikscore",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "create": false
+      },
+      {
+        "title": "Quikscore Authentication",
+        "url": "auth.html",
+        "label": "auth",
+        "width": 800,
+        "height": 600,
+        "create": true
       }
     ],
     "security": {

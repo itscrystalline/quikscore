@@ -84,6 +84,7 @@ header {
 </style>
 
 <script setup>
+import { invoke } from '@tauri-apps/api/core'
 import { ref } from 'vue'
 
 const move = ref(false)
@@ -92,6 +93,10 @@ const isShuffling = ref(false)
 const targetCupIndex = ref(1)
 const isRevealed = ref(false)
 const result = ref("")
+
+async function authenticate() {
+  await invoke("auth_pass");
+}
 
 const shufflePositions = () => {
   const newPositions = [...cups.value]
@@ -122,6 +127,9 @@ const handleLoginClick = async () => {
 
   console.log("Start shuffle")
   startShuffle(6, 300)
+
+  // ======================== TODO call this when authenticated ===============================
+  // await authenticate();
 }
 
 const handleCupClick = (clickedIndex) => {
