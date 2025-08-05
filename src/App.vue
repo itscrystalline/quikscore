@@ -9,7 +9,6 @@ import {
   ModelDownload,
   AppState,
 } from "./types";
-
 import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
 import { listen } from "@tauri-apps/api/event";
 
