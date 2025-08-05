@@ -94,11 +94,15 @@ impl Answer {
                 if num.is_none() {
                     num = Some(idx - 3);
                 } else {
+                    debug!("found double circle");
                     return None;
                 }
             }
         }
-        Some(Answer { num_type, number: num? })
+        Some(Answer {
+            num_type,
+            number: num?,
+        })
     }
 }
 
@@ -410,7 +414,7 @@ mod unit_tests {
         };
 
         let key_sheet = AnswerKeySheet {
-            subject_code: 1001.to_string(),
+            subject_id: 1001.to_string(),
             answers: array::from_fn(|_| correct_group.clone()),
         };
 

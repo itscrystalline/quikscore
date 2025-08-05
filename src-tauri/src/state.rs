@@ -145,7 +145,7 @@ impl AppState {
                 );
             }
             AppStatePipeline::WithKeyAndWeights { weights, .. } => {
-                if weights.weights.contains_key(&key.subject_code) {
+                if weights.weights.contains_key(&key.subject_id) {
                     state.state = AppStatePipeline::WithKeyAndWeights {
                         key_image: image,
                         key,
@@ -184,7 +184,7 @@ impl AppState {
         match &state.state {
             AppStatePipeline::WithKey { key_image, key }
             | AppStatePipeline::WithKeyAndWeights { key_image, key, .. }
-                if weights.weights.contains_key(&key.subject_code) =>
+                if weights.weights.contains_key(&key.subject_id) =>
             {
                 state.state = AppStatePipeline::WithKeyAndWeights {
                     key_image: key_image.clone(),
@@ -200,7 +200,7 @@ impl AppState {
                     KeyUpload::Error {
                         error: format!(
                             "Cannot find weights mapping for subject ID {}",
-                            key.subject_code
+                            key.subject_id
                         )
                     }
                 );
@@ -467,13 +467,13 @@ pub struct AnswerSheet {
 
 #[derive(Debug, Clone)]
 pub struct AnswerKeySheet {
-    pub subject_code: String,
+    pub subject_id: String,
     pub answers: [QuestionGroup; 36],
 }
 impl From<AnswerSheet> for AnswerKeySheet {
     fn from(value: AnswerSheet) -> Self {
         Self {
-            subject_code: value.subject_id,
+            subject_id: value.subject_id,
             answers: value.answers,
         }
     }
