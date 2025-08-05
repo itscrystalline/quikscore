@@ -18,7 +18,7 @@
       system: let
         overlays = [(import oxalica)];
         pkgs = import nixpkgs {inherit system overlays;};
-        inherit (pkgs) lib stdenv fetchYarnDeps;
+        inherit (pkgs) lib stdenv yarn-berry_4;
         nightlyVersion = "2025-06-08";
         nightlyPlatform = pkgs.makeRustPlatform {
           cargo = pkgs.rust-bin.nightly.${nightlyVersion}.minimal;
@@ -43,21 +43,22 @@
 
           src = ./.;
 
-          yarnOfflineCache = fetchYarnDeps {
-            yarnLock = finalAttrs.src + "/yarn.lock";
-            hash = "sha256-g8Q8G90tgJ8FuCJTza22soaFOHHDuRK7PA9p/swQTXA=";
+          missingHashes = ./missing-hashes.json;
+          offlineCache = yarn-berry_4.fetchYarnBerryDeps {
+            inherit (finalAttrs) src missingHashes;
+            hash = "sha256-AqqycBDUoP2dbHOyJRuVV/tsWq9E8fruqszy+WSvnrM=";
           };
 
           nativeBuildInputs = with pkgs; [
-            yarnConfigHook
             cargo-tauri.hook
+            yarn-berry_4.yarnBerryConfigHook
             nightlyPlatform.bindgenHook
 
             nodejs
+            yarn-berry_4
             pkg-config
             clang
             patchelf
-            makeWrapper
           ];
 
           env = {

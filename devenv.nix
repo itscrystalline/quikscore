@@ -61,10 +61,7 @@ in {
   };
   languages.javascript = {
     enable = true;
-    yarn = {
-      enable = true;
-      install.enable = true;
-    };
+    corepack.enable = true;
   };
 
   #
