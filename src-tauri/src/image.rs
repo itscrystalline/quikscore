@@ -325,7 +325,7 @@ fn extract_answers(answer_mat: &Mat) -> Result<[QuestionGroup; 36], SheetError> 
                     let circled_in: Vec<u8> = bubbles
                         .into_iter()
                         .sorted_by(|&(_, a), &(_, b)| a.total_cmp(&b))
-                        .filter_map(|(idx, f)| if f < 0.45 { Some(idx) } else { None })
+                        .filter_map(|(idx, f)| if f < 0.39 { Some(idx) } else { None })
                         .collect();
                     Ok(Answer::from_bubbles_vec(circled_in))
                 })
