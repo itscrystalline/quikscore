@@ -378,7 +378,7 @@ impl AppState {
                                     student_id: student_id.clone(),
                                     base64,
                                     score: *score,
-                                    max_score: *max_score,
+                                    max_score: *max_score - weights.max_score_deduction(key),
                                     correct: *correct,
                                     incorrect: *incorrect,
                                     not_answered: *not_answered,
