@@ -113,7 +113,7 @@ impl QuestionGroup {
         let weight_arr = [weights.A, weights.B, weights.C, weights.D, weights.E];
         arr.iter_mut()
             .zip(weight_arr.iter())
-            .for_each(|(cpe, weight)| {
+            .for_each(|(c, weight)| {
                 if let CheckedAnswer::Correct(score) = c {
                     _ = score.insert(*weight);
                 }
