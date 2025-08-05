@@ -499,7 +499,6 @@ impl AnswerSheetResult {
                         CheckedAnswer::Incorrect => Some((57, 15, 210).into()),
                         CheckedAnswer::Missing => Some((29, 142, 223).into()),
                         CheckedAnswer::NotCounted => None,
-                        CheckedAnswer::Doubled => Some((255, 255, 0).into()),
                     });
                     if let Some(color) = color {
                         imgproc::rectangle(

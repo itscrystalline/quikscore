@@ -57,17 +57,10 @@ pub enum CheckedAnswer {
     Incorrect,
     Missing,
     NotCounted,
-    Doubled,
 }
 
 impl Answer {
     pub fn check_with(curr: Option<Answer>, key: Option<Answer>) -> CheckedAnswer {
-        if let Some(curr) = curr {
-            if curr.number == 255 {
-                return CheckedAnswer::Doubled;
-            }
-        }   
-        
         match (curr, key) {
             (Some(curr), Some(key)) => {
                 if curr == key {
@@ -83,7 +76,6 @@ impl Answer {
     pub fn from_bubbles_vec(vec: Vec<u8>) -> Option<Answer> {
         let mut num_type: Option<NumberType> = None;
         let mut num: Option<u8> = None;
-        let mut doubled = false;
 
         for idx in vec {
             if idx < 3 {
@@ -95,23 +87,17 @@ impl Answer {
                         _ => unreachable!(),
                     });
                 } else {
-                    doubled = true;
-                    break;
+                    return None;
                 }
             } else {
                 if num.is_none() {
                     num = Some(idx - 3);
                 } else {
-                    doubled = true;
-                    break;
+                    return None;
                 }
             }
         }
-        if doubled {
-            num = Some(255);
-        }
-
-        Some(Answer { num_type: num_type, number: num.unwrap() })
+        Some(Answer { num_type, number: num? })
     }
 }
 
@@ -127,7 +113,7 @@ impl QuestionGroup {
         let weight_arr = [weights.A, weights.B, weights.C, weights.D, weights.E];
         arr.iter_mut()
             .zip(weight_arr.iter())
-            .for_each(|(c, weight)| {
+            .for_each(|(cpe, weight)| {
                 if let CheckedAnswer::Correct(score) = c {
                     _ = score.insert(*weight);
                 }
@@ -148,7 +134,6 @@ impl CheckedQuestionGroup {
                 CheckedAnswer::Correct(_) => correct += 1,
                 CheckedAnswer::Missing => not_answered += 1,
                 CheckedAnswer::NotCounted => (),
-                CheckedAnswer::Doubled => incorrect += 1,
             }
         }
         (correct, incorrect, not_answered)
