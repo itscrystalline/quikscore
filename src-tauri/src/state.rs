@@ -1,3 +1,4 @@
+use crate::err_log;
 use log::{error, info};
 use ocrs::OcrEngine;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
@@ -165,12 +166,15 @@ impl AppState {
                     }
                 );
             }
-            s => signal!(
-                channel,
-                KeyUpload::Error {
-                    error: format!("Unexpected state: {s}")
-                }
-            ),
+            s => {
+                error!("Unexpected state: {s}");
+                signal!(
+                    channel,
+                    KeyUpload::Error {
+                        error: format!("Unexpected state: {s}")
+                    }
+                )
+            }
         }
         emit_state!(app, state.state.to_string());
     }
@@ -195,6 +199,10 @@ impl AppState {
             }
             AppStatePipeline::WithKey { key, .. }
             | AppStatePipeline::WithKeyAndWeights { key, .. } => {
+                error!(
+                    "Cannot find weights mapping for subject ID {}",
+                    key.subject_code
+                );
                 signal!(
                     channel,
                     KeyUpload::Error {
@@ -206,12 +214,15 @@ impl AppState {
                 );
                 signal!(channel, KeyUpload::MissingWeights);
             }
-            s => signal!(
-                channel,
-                KeyUpload::Error {
-                    error: format!("Unexpected state: {s}")
-                }
-            ),
+            s => {
+                error!("Unexpected state: {s}");
+                signal!(
+                    channel,
+                    KeyUpload::Error {
+                        error: format!("Unexpected state: {s}")
+                    }
+                )
+            }
         }
         emit_state!(app, state.state.to_string());
     }
@@ -280,12 +291,15 @@ impl AppState {
                     }
                 );
             }
-            s => signal!(
-                channel,
-                AnswerUpload::Error {
-                    error: format!("Unexpected State: {s}")
-                }
-            ),
+            s => {
+                error!("Unexpected state: {s}");
+                signal!(
+                    channel,
+                    AnswerUpload::Error {
+                        error: format!("Unexpected State: {s}")
+                    }
+                )
+            }
         }
         emit_state!(app, state.state.to_string());
     }
@@ -312,12 +326,15 @@ impl AppState {
                 };
                 signal!(channel, AnswerUpload::Cancelled);
             }
-            s => signal!(
-                channel,
-                AnswerUpload::Error {
-                    error: format!("Unexpected state: {s}")
-                }
-            ),
+            s => {
+                error!("Unexpected state: {s}");
+                signal!(
+                    channel,
+                    AnswerUpload::Error {
+                        error: format!("Unexpected state: {s}")
+                    }
+                )
+            }
         }
         emit_state!(app, state.state.to_string());
     }
@@ -383,14 +400,20 @@ impl AppState {
                                     incorrect: *incorrect,
                                     not_answered: *not_answered,
                                 },
-                                Err(e) => AnswerScoreResult::Error {
-                                    error: format!("{e}"),
-                                },
+                                Err(e) => {
+                                    err_log!(&e);
+                                    AnswerScoreResult::Error {
+                                        error: format!("{e}"),
+                                    }
+                                }
                             }
                         }
-                        Err(e) => AnswerScoreResult::Error {
-                            error: format!("{e}"),
-                        },
+                        Err(e) => {
+                            err_log!(e);
+                            AnswerScoreResult::Error {
+                                error: format!("{e}"),
+                            }
+                        }
                     })
                     .collect();
                 let answer_sheets = scored
@@ -411,12 +434,15 @@ impl AppState {
                 };
                 signal!(channel, AnswerUpload::Done { uploaded: to_send });
             }
-            s => signal!(
-                channel,
-                AnswerUpload::Error {
-                    error: format!("Unexpected state: {s}")
-                }
-            ),
+            s => {
+                error!("Unexpected state: {s}");
+                signal!(
+                    channel,
+                    AnswerUpload::Error {
+                        error: format!("Unexpected state: {s}")
+                    }
+                )
+            }
         }
         emit_state!(app, state.state.to_string());
     }

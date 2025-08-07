@@ -1,3 +1,4 @@
+use crate::err_log;
 use crate::{
     errors::ModelDownloadError,
     signal,
@@ -238,7 +239,10 @@ pub async fn get_or_download_models(
                         rx.close();
                     }
                 }
-                Err(e) => return Err(e),
+                Err(e) => {
+                    err_log!(&e);
+                    return Err(e);
+                }
             }
             signal!(
                 frontend_channel,
