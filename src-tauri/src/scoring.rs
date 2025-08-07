@@ -77,20 +77,26 @@ impl Answer {
     pub fn from_bubbles_vec(vec: Vec<u8>) -> Option<Answer> {
         let mut num_type: Option<NumberType> = None;
         let mut num: Option<u8> = None;
-        vec.iter().for_each(|&idx| {
+
+        for idx in vec {
             if idx < 3 {
                 if num_type.is_none() {
-                    num_type.replace(match idx {
+                    num_type = Some(match idx {
                         0 => NumberType::Plus,
                         1 => NumberType::Minus,
                         2 => NumberType::PlusOrMinus,
                         _ => unreachable!(),
                     });
+                } else {
+                    return None;
                 }
             } else if num.is_none() {
-                num.replace(idx - 3);
+                num = Some(idx - 3);
+            } else {
+                debug!("found double circle");
+                return None;
             }
-        });
+        }
         Some(Answer {
             num_type,
             number: num?,
@@ -270,6 +276,26 @@ impl<R: std::io::Read> From<WeightsIter<R>> for ScoreWeights {
         Self { weights }
     }
 }
+impl ScoreWeights {
+    pub fn max_score_deduction(&self, key: &AnswerKeySheet) -> u32 {
+        if let Some((weights, _)) = self.weights.get(&key.subject_id) {
+            key.answers.iter().zip(weights).fold(0, |acc, (q, w)| {
+                acc + [q.A, q.B, q.C, q.D, q.E]
+                    .iter()
+                    .zip([w.A, w.B, w.C, w.D, w.E])
+                    .fold(0u32, |acc, (ans, weight)| {
+                        if ans.is_none() {
+                            acc + weight as u32
+                        } else {
+                            acc
+                        }
+                    })
+            })
+        } else {
+            0
+        }
+    }
+}
 
 pub fn upload_weights_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
@@ -406,7 +432,7 @@ mod unit_tests {
         };
 
         let key_sheet = AnswerKeySheet {
-            subject_code: 1001.to_string(),
+            subject_id: 1001.to_string(),
             answers: array::from_fn(|_| correct_group.clone()),
         };
 
@@ -436,15 +462,8 @@ mod unit_tests {
     #[test]
     fn test_bubble_unclear() {
         let bubbles = vec![5u8, 8u8];
-        let ans = Answer::from_bubbles_vec(bubbles).unwrap();
-
-        assert!(matches!(
-            ans,
-            Answer {
-                num_type: None,
-                number: 2u8
-            }
-        ))
+        let ans = Answer::from_bubbles_vec(bubbles);
+        assert!(ans.is_none());
     }
     #[test]
     fn test_bubble_none() {
