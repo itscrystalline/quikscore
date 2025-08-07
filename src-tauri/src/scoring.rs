@@ -90,13 +90,11 @@ impl Answer {
                 } else {
                     return None;
                 }
+            } else if num.is_none() {
+                num = Some(idx - 3);
             } else {
-                if num.is_none() {
-                    num = Some(idx - 3);
-                } else {
-                    debug!("found double circle");
-                    return None;
-                }
+                debug!("found double circle");
+                return None;
             }
         }
         Some(Answer {
