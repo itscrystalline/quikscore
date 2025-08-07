@@ -1,3 +1,4 @@
+use crate::err_log;
 use log::{debug, warn};
 use ocrs::{ImageSource, OcrEngine};
 use std::array;
@@ -57,12 +58,15 @@ pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         Ok((base64_image, mat, key)) => {
             AppState::upload_key(app, channel, base64_image, mat, key.into())
         }
-        Err(e) => signal!(
-            channel,
-            KeyUpload::Error {
-                error: format!("{e}")
-            }
-        ),
+        Err(e) => {
+            err_log!(&e);
+            signal!(
+                channel,
+                KeyUpload::Error {
+                    error: format!("{e}")
+                }
+            )
+        }
     }
 }
 
@@ -121,12 +125,15 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
 
     loop {
         match rx.blocking_recv() {
-            None => signal!(
-                channel,
-                AnswerUpload::Error {
-                    error: format!("{}", UploadError::UnexpectedPipeClosure)
-                }
-            ),
+            None => {
+                err_log!(&UploadError::UnexpectedPipeClosure);
+                signal!(
+                    channel,
+                    AnswerUpload::Error {
+                        error: format!("{}", UploadError::UnexpectedPipeClosure)
+                    }
+                )
+            }
             Some(state) => match state {
                 ProcessingState::Starting => started += 1,
                 ProcessingState::Finishing => finished += 1,
