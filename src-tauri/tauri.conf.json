@@ -21,8 +21,8 @@
         "title": "Quikscore Authentication",
         "url": "auth.html",
         "label": "auth",
-        "width": 800,
-        "height": 600,
+        "width": 380,
+        "height": 480,
         "create": true
       }
     ],

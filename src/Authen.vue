@@ -5,12 +5,20 @@
   </header>
   <main class="container">
     <ul id="red_cups" class="red_cup" ref="redCupRef" :class="{ 'move-down': move }">
-      <li v-for="(left, index) in cups" :key="index" class="cup" :style="{ left: left + 'px' }"
+      <li v-for="(left, index) in cups" :key="index" class="cup" :class="{ 'cup-raised': raisedCups[index] }" :style="{ left: left + 'px' }"
         @click="handleCupClick(index)">
         <img class="element" src="/src/assets/red_cup.png" alt="cup">
       </li>
     </ul>
-    <button id="login_button" class="button" @click="handleLoginClick">Login</button>
+    <button
+      v-if="showLoginButton"
+      id="login_button"
+      class="button"
+      @click="handleLoginClick"
+      :style="buttonStyle"
+    >
+      Login
+    </button>
   </main>
 </template>
 
@@ -65,7 +73,13 @@ header {
 
 .cup {
   position: absolute;
-  transition: left 0.3s ease;
+  transition: left 0.3s ease, top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  top: 0;
+}
+
+.cup-raised {
+  top: -150px;
+  z-index: 3;
 }
 
 .element {
@@ -84,8 +98,11 @@ header {
 </style>
 
 <script setup>
-import { invoke } from '@tauri-apps/api/core'
-import { ref } from 'vue'
+//fix at w:380px h:480px
+//import { appWindow, LogicalSize } from '@tauri-apps/api/window'
+import { ref, onMounted, computed } from 'vue'
+//appWindow.setResizable(false)
+//appWindow.setSize({ width: 380, height: 480 })
 
 const move = ref(false)
 const cups = ref([0, 130, 260])
@@ -93,6 +110,16 @@ const isShuffling = ref(false)
 const targetCupIndex = ref(1)
 const isRevealed = ref(false)
 const result = ref("")
+const buttonZIndex = ref(1)
+const showLoginButton = ref(true)
+const raisedCups = ref([false, false, false])
+let buttonStyle = computed(() => {
+  // Depend on resizeTrigger so this recomputes on window resize
+  // At the start, button stays at its original place. After move, follow the middle cup.
+  const left = move.value ? (cups.value[1] + 35) + 'px' : "145px";
+  const top = '320px';
+  return { left, top, position: 'absolute', zIndex: buttonZIndex.value };
+});
 
 async function authenticate() {
   await invoke("auth_pass");
@@ -105,19 +132,24 @@ const shufflePositions = () => {
       ;[newPositions[i], newPositions[j]] = [newPositions[j], newPositions[i]]
   }
   cups.value = newPositions
+  // Reset raised cups after shuffle
+  raisedCups.value = Array(cups.value.length).fill(false)
 }
 
 const startShuffle = async (times = 5, delay = 300) => {
   isShuffling.value = true
+  buttonZIndex.value = 1 // Button behind during shuffle
   for (let i = 0; i < times; i++) {
     shufflePositions()
     await new Promise(resolve => setTimeout(resolve, delay))
   }
   isShuffling.value = false
+  showLoginButton.value = true
 }
 
 const handleLoginClick = async () => {
   if (isShuffling.value) return
+  showLoginButton.value = false
   move.value = true
   isRevealed.value = false
   result.value = ""
@@ -136,12 +168,16 @@ const handleCupClick = (clickedIndex) => {
   if (isShuffling.value || isRevealed.value) return
 
   isRevealed.value = true
+  // Raise the selected cup
+  raisedCups.value = cups.value.map((_, idx) => idx === clickedIndex)
 
   if (clickedIndex === targetCupIndex.value) {
     result.value = "Yeah"
   } else {
     result.value = "No"
   }
+  // Optionally, bring the button to front after selection
+  buttonZIndex.value = 10
 }
 
 </script>
