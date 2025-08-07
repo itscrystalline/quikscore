@@ -1,3 +1,4 @@
+use crate::err_log;
 use std::{collections::HashMap, fs::File, io::BufReader};
 
 use csv::DeserializeRecordsIntoIter;
@@ -284,6 +285,7 @@ pub fn upload_weights_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         Ok(path) => match File::open(path) {
             Ok(f) => f,
             Err(e) => {
+                err_log!(&e);
                 signal!(
                     channel,
                     KeyUpload::Error {
@@ -294,6 +296,7 @@ pub fn upload_weights_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
             }
         },
         Err(e) => {
+            err_log!(&e);
             signal!(
                 channel,
                 KeyUpload::Error {

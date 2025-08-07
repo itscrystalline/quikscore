@@ -1,3 +1,4 @@
+use crate::err_log;
 use crate::{
     errors::CsvError,
     scoring::{AnswerSheetResult, CheckedAnswer},
@@ -39,12 +40,15 @@ pub fn export_to_csv_wrapper<R: Runtime, A: Emitter<R> + Manager<R>>(
     };
     match export_to_csv_impl(app, path) {
         Ok(_) => signal!(channel, CsvExport::Done),
-        Err(e) => signal!(
-            channel,
-            CsvExport::Error {
-                error: format!("error exporting to CSV: {e}")
-            }
-        ),
+        Err(e) => {
+            err_log!(&e);
+            signal!(
+                channel,
+                CsvExport::Error {
+                    error: format!("error exporting to CSV: {e}")
+                }
+            )
+        }
     }
 }
 pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(

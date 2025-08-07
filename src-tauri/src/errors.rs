@@ -36,13 +36,13 @@ pub enum SheetError {
 pub enum ModelDownloadError {
     #[error("Unsupported Operating System (cannot determine cache dir)")]
     CacheDirUnknown,
-    #[error("I/O error while trying to access models: {}", fmt_error_chain_of(.0))]
+    #[error("I/O error while trying to access models: {0}")]
     IOError(#[from] std::io::Error),
-    #[error("Error making network request: {}", fmt_error_chain_of(.0))]
+    #[error("Cannot make network request: {0}")]
     ReqwestError(#[from] reqwest::Error),
-    #[error("Error converting header to string: {}", fmt_error_chain_of(.0))]
+    #[error("Cannot convert header to string: {0}")]
     ToStrError(#[from] reqwest::header::ToStrError),
-    #[error("Error converting header string to number: {0}")]
+    #[error("Cannot convert header string to number: {0}")]
     ParseIntError(#[from] std::num::ParseIntError),
     #[error("Response is missing content length")]
     NoContentLength,
@@ -57,20 +57,27 @@ impl serde::Serialize for ModelDownloadError {
     }
 }
 
-fn fmt_error_chain_of(mut err: &dyn std::error::Error) -> String {
+pub fn fmt_error_chain_of(mut err: &dyn std::error::Error) -> String {
     let mut str = err.to_string();
     while let Some(src) = err.source() {
-        _ = write!(str, ", caused by {src}");
+        _ = write!(str, "\n  -> Caused by {src}");
         err = src;
     }
     str
+}
+
+#[macro_export]
+macro_rules! err_log {
+    ($error: expr) => {
+        log::error!("Error: {}", $crate::errors::fmt_error_chain_of($error));
+    };
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum CsvError {
     #[error("Invalid path: {0}")]
     InvalidPath(#[from] tauri_plugin_fs::Error),
-    #[error("Cannot open/write file: {}", fmt_error_chain_of(.0))]
+    #[error("Cannot open/write file: {0}")]
     FileOperationFailed(#[from] std::io::Error),
     #[error("Tried to export CSV while in an incorrect state. This is a bug.")]
     IncorrectState,
