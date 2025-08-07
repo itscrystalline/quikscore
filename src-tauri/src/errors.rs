@@ -69,7 +69,7 @@ pub fn fmt_error_chain_of(mut err: &dyn std::error::Error) -> String {
 #[macro_export]
 macro_rules! err_log {
     ($error: expr) => {
-        log::error!("Error: {}", $crate::errors::fmt_error_chain_of($error));
+        log::error!("{}", $crate::errors::fmt_error_chain_of($error))
     };
 }
 
