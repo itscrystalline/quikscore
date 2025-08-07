@@ -44,10 +44,10 @@ pub fn init_thread_ocr() -> Option<OcrEngine> {
     info!("Initializing thread OcrEngine");
 
     let detection = rten::Model::load_file(detection_model)
-        .inspect_err(|e| error!("Error loading detection model: {e}"))
+        .inspect_err(|e| err_log!(e))
         .ok()?;
     let recognition = rten::Model::load_file(recognition_model)
-        .inspect_err(|e| error!("Error loading recognition model: {e}"))
+        .inspect_err(|e| err_log!(e))
         .ok()?;
 
     OcrEngine::new(ocrs::OcrEngineParams {
@@ -201,7 +201,7 @@ impl AppState {
             | AppStatePipeline::WithKeyAndWeights { key, .. } => {
                 error!(
                     "Cannot find weights mapping for subject ID {}",
-                    key.subject_code
+                    key.subject_id
                 );
                 signal!(
                     channel,
