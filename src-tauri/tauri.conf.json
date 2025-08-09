@@ -23,7 +23,9 @@
         "label": "auth",
         "width": 380,
         "height": 480,
-        "create": true
+        "create": true,
+        "resizable": false
+        
       }
     ],
     "security": {

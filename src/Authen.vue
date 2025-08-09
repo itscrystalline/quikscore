@@ -114,8 +114,7 @@ const buttonZIndex = ref(1)
 const showLoginButton = ref(true)
 const raisedCups = ref([false, false, false])
 let buttonStyle = computed(() => {
-  // Depend on resizeTrigger so this recomputes on window resize
-  // At the start, button stays at its original place. After move, follow the middle cup.
+
   const left = move.value ? (cups.value[1] + 35) + 'px' : "145px";
   const top = '320px';
   return { left, top, position: 'absolute', zIndex: buttonZIndex.value };
@@ -132,7 +131,6 @@ const shufflePositions = () => {
       ;[newPositions[i], newPositions[j]] = [newPositions[j], newPositions[i]]
   }
   cups.value = newPositions
-  // Reset raised cups after shuffle
   raisedCups.value = Array(cups.value.length).fill(false)
 }
 
@@ -161,23 +159,23 @@ const handleLoginClick = async () => {
   startShuffle(6, 300)
 
   // ======================== TODO call this when authenticated ===============================
-  // await authenticate();
+  await authenticate();
 }
 
 const handleCupClick = (clickedIndex) => {
   if (isShuffling.value || isRevealed.value) return
 
   isRevealed.value = true
-  // Raise the selected cup
   raisedCups.value = cups.value.map((_, idx) => idx === clickedIndex)
 
   if (clickedIndex === targetCupIndex.value) {
     result.value = "Yeah"
+    showLoginButton.value = true
+    buttonZIndex.value = 10
   } else {
     result.value = "No"
+    showLoginButton.value = false 
   }
-  // Optionally, bring the button to front after selection
-  buttonZIndex.value = 10
 }
 
 </script>
