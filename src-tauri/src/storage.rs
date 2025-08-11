@@ -84,7 +84,7 @@ pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         wtr.serialize(row)?;
     }
     wtr.flush()?;
-    info!("Finished Exporting! Written {len} rows.");
+    //info!("Finished Exporting! Written {len} rows.");
     let student_totals = map_to_db_scores(results);
     if let Err(e) = store_scores_in_db(student_totals) {
         error!("Failed to store total scores in MongoDB: {}", e);
