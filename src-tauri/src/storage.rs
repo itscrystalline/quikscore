@@ -162,7 +162,7 @@ pub fn map_to_db_scores(
     #[inline(always)]
     fn score_for(ans: CheckedAnswer) -> f32 {
         match ans {
-            CheckedAnswer::Correct(Some(score)) => score,
+            CheckedAnswer::Correct(Some(score)) => score.into(),
             CheckedAnswer::Correct(None) => 1.0,
             CheckedAnswer::Incorrect => 0.0,
             CheckedAnswer::Missing => 0.0,
