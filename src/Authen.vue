@@ -142,6 +142,7 @@ const startShuffle = async (times = 5, delay = 300) => {
 
 const handleLoginClick = async () => {
   if (isShuffling.value) return
+  if (result.value == "Yeah") { await authenticate(); return; }
   showLoginButton.value = false
   move.value = true
   isRevealed.value = false
@@ -152,9 +153,6 @@ const handleLoginClick = async () => {
 
   console.log("Start shuffle")
   startShuffle(6, 300)
-
-  // ======================== TODO call this when authenticated ===============================
-  await authenticate();
 }
 
 const handleCupClick = (clickedIndex) => {
