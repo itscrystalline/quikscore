@@ -15,6 +15,8 @@ in {
   # fix not opening on gtk
   env.WEBKIT_DISABLE_COMPOSITING_MODE = 1;
   env.LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
+  env.RUST_LOG_STYLE = "always";
+  env.RUST_LOG = "debug";
   #
   # # https://devenv.sh/packages/
   packages = with pkgs;
