@@ -126,8 +126,8 @@ const buttonZIndex = ref(1)
 const showLoginButton = ref(true)
 const raisedCups = ref([false, false, false])
 let buttonStyle = computed(() => {
-
-  const left = move.value ? (cups.value[1] + 35) + 'px' : "145px";
+  // Only follow the cup after shuffle is done and button is visible
+  const left = (move.value && showLoginButton.value) ? (cups.value[1] + 35) + 'px' : "145px";
   const top = '320px';
   return { left, top, position: 'absolute', zIndex: buttonZIndex.value };
 });
@@ -148,13 +148,14 @@ const shufflePositions = () => {
 
 const startShuffle = async (times = 5, delay = 300) => {
   isShuffling.value = true
-  buttonZIndex.value = 1 // Button behind during shuffle
+  showLoginButton.value = false 
+  buttonZIndex.value = 1 
   for (let i = 0; i < times; i++) {
     shufflePositions()
     await new Promise(resolve => setTimeout(resolve, delay))
   }
   isShuffling.value = false
-  showLoginButton.value = true
+  showLoginButton.value = true 
 }
 
 const handleLoginClick = async () => {
