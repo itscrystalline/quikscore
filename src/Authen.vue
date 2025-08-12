@@ -16,7 +16,24 @@
   </main>
 </template>
 
-<style scoped>
+<style>
+:root {
+  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-size: 19px;
+  line-height: 60px;
+  font-weight: 400;
+  animation-duration: 0.1s;
+
+  color: #cdd6f4;
+  background-color: #111827;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
 header {
   display: flex;
   align-items: center;
