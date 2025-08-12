@@ -33,6 +33,9 @@ in {
 
       # cd testing
       act
+
+      # yarn hash
+      yarn-berry_4.yarn-berry-fetcher
     ]
     ++ lib.optionals pkgs.stdenv.isLinux [
       gobject-introspection
