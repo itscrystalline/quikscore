@@ -5,18 +5,12 @@
   </header>
   <main class="container">
     <ul id="red_cups" class="red_cup" ref="redCupRef" :class="{ 'move-down': move }">
-      <li v-for="(left, index) in cups" :key="index" class="cup" :class="{ 'cup-raised': raisedCups[index] }" :style="{ left: left + 'px' }"
-        @click="handleCupClick(index)">
+      <li v-for="(left, index) in cups" :key="index" class="cup" :class="{ 'cup-raised': raisedCups[index] }"
+        :style="{ left: left + 'px' }" @click="handleCupClick(index)">
         <img class="element" src="/src/assets/red_cup.png" alt="cup">
       </li>
     </ul>
-    <button
-      v-if="showLoginButton"
-      id="login_button"
-      class="button"
-      @click="handleLoginClick"
-      :style="buttonStyle"
-    >
+    <button v-if="showLoginButton" id="login_button" class="button" @click="handleLoginClick" :style="buttonStyle">
       Login
     </button>
   </main>
@@ -100,6 +94,7 @@ header {
 <script setup>
 //fix at w:380px h:480px
 //import { appWindow, LogicalSize } from '@tauri-apps/api/window'
+import { invoke } from '@tauri-apps/api/core'
 import { ref, onMounted, computed } from 'vue'
 //appWindow.setResizable(false)
 //appWindow.setSize({ width: 380, height: 480 })
@@ -174,7 +169,7 @@ const handleCupClick = (clickedIndex) => {
     buttonZIndex.value = 10
   } else {
     result.value = "No"
-    showLoginButton.value = false 
+    showLoginButton.value = false
   }
 }
 
