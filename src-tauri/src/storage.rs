@@ -7,13 +7,13 @@ use crate::{
 };
 use log::{error, info};
 use opencv::prelude::Mat;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs::File};
 use tauri::{ipc::Channel, Emitter, Manager, Runtime};
 use tauri_plugin_fs::FilePath;
 
-use mongodb::{options::ClientOptions, Client};
 use dotenvy;
+use mongodb::{options::ClientOptions, Client};
 
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -171,44 +171,46 @@ pub fn map_to_db_scores(
     }
 
     map.into_iter()
-        .map(|(
-            student_id,
-            (
-                _,
-                AnswerSheet {
-                    subject_id,
-                    subject_name,
-                    student_name,
-                    exam_room,
-                    exam_seat,
-                    ..
-                },
-                AnswerSheetResult {
-                    graded_questions, ..
-                },
-            ),
-        )| {
-            let total: f32 = graded_questions
-                .into_iter()
-                .map(|c| {
-                    score_for(c.A)
-                        + score_for(c.B)
-                        + score_for(c.C)
-                        + score_for(c.D)
-                        + score_for(c.E)
-                })
-                .sum();
-
-            StudentTotalScore {
-                subject_id,
+        .map(
+            |(
                 student_id,
-                subject_name: subject_name.unwrap_or_default(),
-                student_name: student_name.unwrap_or_default(),
-                exam_room: exam_room.unwrap_or_default(),
-                exam_seat: exam_seat.unwrap_or_default(),
-                total_score: total,
-            }
-        })
+                (
+                    _,
+                    AnswerSheet {
+                        subject_id,
+                        subject_name,
+                        student_name,
+                        exam_room,
+                        exam_seat,
+                        ..
+                    },
+                    AnswerSheetResult {
+                        graded_questions, ..
+                    },
+                ),
+            )| {
+                let total: f32 = graded_questions
+                    .into_iter()
+                    .map(|c| {
+                        score_for(c.A)
+                            + score_for(c.B)
+                            + score_for(c.C)
+                            + score_for(c.D)
+                            + score_for(c.E)
+                    })
+                    .sum();
+
+                StudentTotalScore {
+                    subject_id,
+                    student_id,
+                    subject_name: subject_name.unwrap_or_default(),
+                    student_name: student_name.unwrap_or_default(),
+                    exam_room: exam_room.unwrap_or_default(),
+                    exam_seat: exam_seat.unwrap_or_default(),
+                    total_score: total,
+                }
+            },
+        )
         .collect()
 }
 
@@ -221,12 +223,19 @@ fn store_scores_in_db(rows: Vec<StudentTotalScore>) -> Result<(), String> {
 
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
     rt.block_on(async {
-        let options = ClientOptions::parse(&uri).await.map_err(|e| e.to_string())?;
+        let options = ClientOptions::parse(&uri)
+            .await
+            .map_err(|e| e.to_string())?;
         let client = Client::with_options(options).map_err(|e| e.to_string())?;
 
-        let collection = client.database(&db_name).collection::<StudentTotalScore>("student_total_scores");
+        let collection = client
+            .database(&db_name)
+            .collection::<StudentTotalScore>("student_total_scores");
 
-        collection.insert_many(rows).await.map_err(|e| e.to_string())?;
+        collection
+            .insert_many(rows)
+            .await
+            .map_err(|e| e.to_string())?;
         info!("Inserted total scores into MongoDB Atlas successfully");
         Ok(())
     })
