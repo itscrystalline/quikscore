@@ -1,11 +1,12 @@
 use crate::err_log;
+use crate::errors::DatabaseError;
 use crate::{
     errors::CsvError,
     scoring::{AnswerSheetResult, CheckedAnswer},
     signal,
     state::{AnswerSheet, AppState, CsvExport},
 };
-use log::{error, info};
+use log::{error, info, warn};
 use opencv::prelude::Mat;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs::File};
@@ -84,10 +85,10 @@ pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         wtr.serialize(row)?;
     }
     wtr.flush()?;
-    //info!("Finished Exporting! Written {len} rows.");
+    info!("Finished exporting to CSV! Written {len} rows.");
     let student_totals = map_to_db_scores(results);
     if let Err(e) = store_scores_in_db(student_totals) {
-        error!("Failed to store total scores in MongoDB: {}", e);
+        err_log!(&e);
     }
 
     Ok(())
@@ -214,28 +215,41 @@ pub fn map_to_db_scores(
         .collect()
 }
 
-fn store_scores_in_db(rows: Vec<StudentTotalScore>) -> Result<(), String> {
-    dotenvy::dotenv().ok();
+fn store_scores_in_db(rows: Vec<StudentTotalScore>) -> Result<(), DatabaseError> {
+    dotenvy::dotenv()
+        .inspect_err(|e| {
+            if e.not_found() {
+                let mongodb_uri_not_found = std::env::var("MONGODB_URI").is_err_and(|e| matches!(e, std::env::VarError::NotPresent));
+                let my_database_not_found = std::env::var("MY_DATABASE").is_err_and(|e| matches!(e, std::env::VarError::NotPresent));
+                if mongodb_uri_not_found || my_database_not_found {
+                    warn!("Cannot find .env file in program directory, and environment variable{} not defined. Either provide a .env file containing the variables, or provide them directly.",
+                        match (mongodb_uri_not_found, my_database_not_found) {
+                            (true, true) => "s MONGODB_URI and MY_DATABASE are",
+                            (true, false) => " MONGODB_URI is",
+                            (false, true) => " MY_DATABASE is",
+                            (false, false) => unreachable!()
+                        }
+                    )
+                }
+            } else {
+                err_log!(e)
+            }
+        })
+        .ok();
     //println!("MONGODB_URI = {:?}", std::env::var("MONGODB_URI"));
     //println!("MY_DATABASE = {:?}", std::env::var("MY_DATABASE"));
-    let uri = std::env::var("MONGODB_URI").map_err(|e| e.to_string())?;
-    let db_name = std::env::var("MY_DATABASE").map_err(|e| e.to_string())?;
+    let uri = std::env::var("MONGODB_URI").map_err(DatabaseError::MissingMongoUri)?;
+    let db_name = std::env::var("MY_DATABASE").map_err(DatabaseError::MissingDbName)?;
 
-    let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
-    rt.block_on(async {
-        let options = ClientOptions::parse(&uri)
-            .await
-            .map_err(|e| e.to_string())?;
-        let client = Client::with_options(options).map_err(|e| e.to_string())?;
+    tauri::async_runtime::block_on(async {
+        let options = ClientOptions::parse(&uri).await?;
+        let client = Client::with_options(options)?;
 
         let collection = client
             .database(&db_name)
             .collection::<StudentTotalScore>("student_total_scores");
 
-        collection
-            .insert_many(rows)
-            .await
-            .map_err(|e| e.to_string())?;
+        collection.insert_many(rows).await?;
         info!("Inserted total scores into MongoDB Atlas successfully");
         Ok(())
     })
