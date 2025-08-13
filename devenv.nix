@@ -89,10 +89,6 @@ in {
     "quikscore:lint".exec = "cd $DEVENV_ROOT/src-tauri; RUSTFLAGS=\"-Dwarnings\" cargo-clippy";
     "quikscore:test-full".exec = "cd $DEVENV_ROOT/src-tauri; cargo nextest run --features ocr-tests";
     "quikscore:coverage".exec = "cd $DEVENV_ROOT/src-tauri; ${pkgs.cargo-tarpaulin}/bin/cargo-tarpaulin --color always --verbose --features ocr-tests --workspace --timeout 120 --out xml --no-dead-code --engine llvm --release";
-    "quikscore:update-hashes".exec = ''
-      yarn-berry-fetcher missing-hashes $DEVENV_ROOT/yarn.lock > $DEVENV_ROOT/missing-hashes.json
-      yarn-berry-fetcher prefetch $DEVENV_ROOT/yarn.lock $DEVENV_ROOT/missing-hashes.json
-    '';
   };
   #
   # # https://devenv.sh/tests/
