@@ -8,9 +8,30 @@ use crate::{
 };
 use log::{debug, info};
 
-use tauri::ipc::Channel;
-use tauri::AppHandle;
+use tauri::{ipc::Channel, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager};
 use tauri_plugin_dialog::DialogExt;
+
+#[tauri::command(async)]
+pub async fn auth_pass(app: AppHandle) {
+    info!("Authentication Passed!");
+    WebviewWindowBuilder::from_config(
+        &app,
+        app.config()
+            .app
+            .windows
+            .first()
+            .expect("the main window is not present in the config"),
+    )
+    .expect("cannot create main window")
+    .build()
+    .expect("cannot create main window");
+    app.webview_windows()
+        .get("auth")
+        .expect("missing auth window")
+        .close()
+        .expect("cannot close auth window");
+}
 
 #[tauri::command]
 pub fn upload_key_image(app: AppHandle, channel: Channel<KeyUpload>) {
