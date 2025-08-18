@@ -24,7 +24,7 @@ pub async fn get_or_download_models(
     app: AppHandle,
     frontend_channel: Channel<ModelDownload>,
 ) -> Result<(), ModelDownloadError> {
-    let Options { ocr } = AppState::get_options(&app);
+    let Options { ocr, mongo } = AppState::get_options(&app);
     if !ocr {
         return Ok(());
     }
