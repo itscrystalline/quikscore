@@ -323,7 +323,6 @@ async function exportCsv() {
           <div class="stats">
             <p>ID {{ data.studentId }}</p>
             <p>score: {{ data.score }}/{{ data.maxScore }}</p>
-            <p>questions not answered: {{ data.notAnswered }}</p>
           </div>
         </div>
         <p v-else>
