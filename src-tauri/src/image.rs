@@ -50,7 +50,7 @@ pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         signal!(channel, KeyUpload::Cancelled);
         return;
     };
-    let Options { ocr, mongo } = AppState::get_options(app);
+    let Options { ocr, mongo: _ } = AppState::get_options(app);
     match handle_upload(
         file_path,
         ocr.then(state::init_thread_ocr).flatten().as_ref(),
@@ -87,7 +87,7 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     };
 
     let images_count = paths.len();
-    let Options { ocr , mongo} = AppState::get_options(app);
+    let Options { ocr , mongo: _} = AppState::get_options(app);
 
     let (tx, mut rx) = tauri::async_runtime::channel::<ProcessingState>(images_count);
     let stop_flag = Arc::new(RwLock::new(false));

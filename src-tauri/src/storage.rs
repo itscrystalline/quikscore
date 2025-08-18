@@ -214,6 +214,7 @@ pub fn map_to_db_scores(
 
 fn store_scores_in_db(rows: Vec<StudentTotalScore>) -> Result<(), String> {
     dotenvy::dotenv().ok();
+    
     //println!("MONGODB_URI = {:?}", std::env::var("MONGODB_URI"));
     //println!("MY_DATABASE = {:?}", std::env::var("MY_DATABASE"));
     let uri = std::env::var("MONGODB_URI").map_err(|e| e.to_string())?;

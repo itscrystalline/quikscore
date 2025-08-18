@@ -87,5 +87,5 @@ pub fn export_csv(app: AppHandle, channel: Channel<CsvExport>) {
 #[tauri::command]
 pub fn enter_database_infomation(app: AppHandle, mongodb_uri: String, mongodb_name: String) {
     info!("Enter Database Information");
-    app.
+    AppState::set_mongodb(&app, mongodb_uri, mongodb_name);
 }

@@ -488,6 +488,12 @@ impl AppState {
         let state = mutex.lock().expect("poisoned");
         state.options.clone()
     }
+    pub fn set_mongodb<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A, mongo_db_uri: String, mongo_db_name: String) {
+        let mutex = app.state::<StateMutex>();
+        let mut state = mutex.lock().expect("poisoned");
+        let mongo_enum = MongoDB::Enable { mongo_db_uri, mongo_db_name };
+        state.options.mongo = mongo_enum;
+    }
 }
 
 #[derive(Debug, Clone)]

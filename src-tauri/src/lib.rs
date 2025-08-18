@@ -29,6 +29,7 @@ pub fn run() {
             commands::set_ocr,
             commands::ensure_models,
             commands::export_csv,
+            commands::enter_database_infomation,
         ])
         .setup(|app| {
             app.manage(Mutex::new(AppState::default()));
