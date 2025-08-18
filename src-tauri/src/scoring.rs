@@ -370,7 +370,7 @@ mod unit_tests {
         let a2 = answer(42);
         let a3 = answer(43);
 
-        assert_eq!(Answer::check_with(a1, a2), CheckedAnswer::Correct(None));
+        assert_eq!(Answer::check_with(a1, a2), CheckedAnswer::Correct);
         assert_eq!(Answer::check_with(a1, a3), CheckedAnswer::Incorrect);
         assert_eq!(Answer::check_with(None, a2), CheckedAnswer::Missing);
         assert_eq!(Answer::check_with(a2, None), CheckedAnswer::NotCounted);
@@ -394,27 +394,13 @@ mod unit_tests {
             E: answer(5),
         };
 
-        let checked = group1.check_with(&key, &ScoreWeight::identity());
+        let checked = group1.check_with(&key);
 
-        assert_eq!(checked.A, CheckedAnswer::Correct(Some(1)));
+        assert_eq!(checked.A, CheckedAnswer::Correct);
         assert_eq!(checked.B, CheckedAnswer::Incorrect);
-        assert_eq!(checked.C, CheckedAnswer::Correct(Some(1)));
+        assert_eq!(checked.C, CheckedAnswer::Correct);
         assert_eq!(checked.D, CheckedAnswer::NotCounted);
         assert_eq!(checked.E, CheckedAnswer::Missing);
-    }
-
-    #[test]
-    fn test_collect_stats() {
-        let checked = CheckedQuestionGroup {
-            A: CheckedAnswer::Correct(Some(1)),
-            B: CheckedAnswer::Incorrect,
-            C: CheckedAnswer::Incorrect,
-            D: CheckedAnswer::Missing,
-            E: CheckedAnswer::NotCounted,
-        };
-
-        let stats = checked.collect_stats();
-        assert_eq!(stats, (1, 2, 1));
     }
 
     #[test]
@@ -426,18 +412,31 @@ mod unit_tests {
             D: answer(4),
             E: none_answer(),
         };
-        let student_group = QuestionGroup {
+        let incorrect_group = QuestionGroup {
             A: answer(1),     // correct
             B: answer(9),     // incorrect
             C: answer(3),     // correct
             D: none_answer(), // missing
             E: answer(1),     // not counted
         };
+        let missing_group = QuestionGroup {
+            A: answer(1),
+            B: answer(2),
+            C: answer(3),
+            D: none_answer(),
+            E: none_answer(),
+        };
+
+        let combined = [correct_group.clone(), incorrect_group, missing_group];
+        let answers: [QuestionGroup; 36] = vec![combined; 12]
+            .into_flattened()
+            .try_into()
+            .expect("12 * 3 is not 36");
 
         let answer_sheet = AnswerSheet {
             subject_id: 1001.to_string(),
             student_id: 123456.to_string(),
-            answers: array::from_fn(|_| student_group.clone()),
+            answers,
             subject_name: None,
             student_name: None,
             exam_room: None,
@@ -449,13 +448,12 @@ mod unit_tests {
             answers: array::from_fn(|_| correct_group.clone()),
         };
 
-        let result = answer_sheet.score(&key_sheet, &[ScoreWeight::identity(); 36]);
+        let result = answer_sheet.score(&key_sheet, &[1; 36]);
 
         // Per group: 2 correct, 3 incorrect (since missing is also considered incorrect here)
-        assert_eq!(result.correct, 2 * 36);
-        assert_eq!(result.score, 2 * 36);
-        assert_eq!(result.incorrect, 36);
-        assert_eq!(result.not_answered, 36);
+        assert_eq!(result.correct, 12);
+        assert_eq!(result.score, 12);
+        assert_eq!(result.incorrect, 24);
         assert_eq!(result.graded_questions.len(), 36);
     }
 
@@ -515,48 +513,13 @@ mod unit_tests {
         ));
     }
 
-    macro_rules! weights {
-        // Match 5 args
-        ($a:expr, $b:expr, $c:expr, $d:expr, $e:expr) => {
-            ScoreWeight {
-                A: $a,
-                B: $b,
-                C: $c,
-                D: $d,
-                E: $e,
-            }
-        };
-        // Match 4 args
-        ($a:expr, $b:expr, $c:expr, $d:expr) => {
-            weights!($a, $b, $c, $d, 0)
-        };
-        // Match 3 args
-        ($a:expr, $b:expr, $c:expr) => {
-            weights!($a, $b, $c, 0, 0)
-        };
-        // Match 2 args
-        ($a:expr, $b:expr) => {
-            weights!($a, $b, 0, 0, 0)
-        };
-        // Match 1 arg
-        ($a:expr) => {
-            weights!($a, 0, 0, 0, 0)
-        };
-        // Match 0 args
-        () => {
-            weights!(0, 0, 0, 0, 0)
-        };
-    }
-
     #[test]
     fn read_weight_csv() {
+        let _ = env_logger::builder().is_test(true).try_init();
+
         let csv = "\
-subject_code,question_num,A,B,C,D,E
-10,1,2,3,1,,
-10,2,1,1,1,,
-10,3,4,,,,
-10,4,2,,,,
-10,5,2,3,,,
+subject_code,q1,q2,q3,q4,q5,q6,q7,q8,q9,q10,q11,q12,q13,q14,q15,q16,q17,q18,q19,q20,q21,q22,q23,q24,q25,q26,q27,q28,q29,q30,q31,q32,q33,q34,q35,q36
+10,2,3,1,1,1,1,4,2,2,3,,,,,,,,,,,,,,,,,,,,,,,,,,
 ";
 
         let reader = csv::Reader::from_reader(csv.as_bytes());
@@ -564,11 +527,16 @@ subject_code,question_num,A,B,C,D,E
         let (question_weights, max_score) = result.weights.remove("10").unwrap();
         let mut question_weights = question_weights.into_iter();
         assert_eq!(max_score, 2 + 3 + 1 + 1 + 1 + 1 + 4 + 2 + 2 + 3);
-        assert_eq!(question_weights.next(), Some(weights!(2, 3, 1)));
-        assert_eq!(question_weights.next(), Some(weights!(1, 1, 1)));
-        assert_eq!(question_weights.next(), Some(weights!(4)));
-        assert_eq!(question_weights.next(), Some(weights!(2)));
-        assert_eq!(question_weights.next(), Some(weights!(2, 3)));
+        assert_eq!(question_weights.next(), Some(2));
+        assert_eq!(question_weights.next(), Some(3));
+        assert_eq!(question_weights.next(), Some(1));
+        assert_eq!(question_weights.next(), Some(1));
+        assert_eq!(question_weights.next(), Some(1));
+        assert_eq!(question_weights.next(), Some(1));
+        assert_eq!(question_weights.next(), Some(4));
+        assert_eq!(question_weights.next(), Some(2));
+        assert_eq!(question_weights.next(), Some(2));
+        assert_eq!(question_weights.next(), Some(3));
     }
     // #[test]
     // fn test_export_csv() {
