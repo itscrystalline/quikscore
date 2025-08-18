@@ -1,9 +1,9 @@
 use crate::err_log;
-use std::{collections::HashMap, fs::File, io::BufReader};
+use std::{collections::HashMap, fs::File, io::BufReader, mem};
 
 use csv::DeserializeRecordsIntoIter;
 use itertools::{multizip, Itertools};
-use log::{debug, error};
+use log::{debug, error, warn};
 use tauri::{ipc::Channel, Emitter, Manager, Runtime};
 use tauri_plugin_fs::FilePath;
 
@@ -42,20 +42,18 @@ impl CheckedQuestionGroup {
             _ => None,
         }
     }
-    pub fn score(&self) -> u32 {
+    pub fn verdict(&self) -> bool {
         [self.A, self.B, self.C, self.D, self.E]
             .iter()
-            .fold(0, |acc, c| match c {
-                CheckedAnswer::Correct(Some(score)) => acc + *score as u32,
-                CheckedAnswer::Correct(None) => acc + 1,
-                _ => acc,
+            .fold(true, |acc, c| {
+                acc && matches!(c, CheckedAnswer::Correct | CheckedAnswer::NotCounted)
             })
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum CheckedAnswer {
-    Correct(Option<u8>),
+    Correct,
     Incorrect,
     Missing,
     NotCounted,
@@ -66,7 +64,7 @@ impl Answer {
         match (curr, key) {
             (Some(curr), Some(key)) => {
                 if curr == key {
-                    CheckedAnswer::Correct(None)
+                    CheckedAnswer::Correct
                 } else {
                     CheckedAnswer::Incorrect
                 }
@@ -106,7 +104,7 @@ impl Answer {
 }
 
 impl QuestionGroup {
-    pub fn check_with(&self, key: &Self, weights: &ScoreWeight) -> CheckedQuestionGroup {
+    pub fn check_with(&self, key: &Self) -> CheckedQuestionGroup {
         let mut arr = [
             Answer::check_with(self.A, key.A),
             Answer::check_with(self.B, key.B),
@@ -114,14 +112,6 @@ impl QuestionGroup {
             Answer::check_with(self.D, key.D),
             Answer::check_with(self.E, key.E),
         ];
-        let weight_arr = [weights.A, weights.B, weights.C, weights.D, weights.E];
-        arr.iter_mut()
-            .zip(weight_arr.iter())
-            .for_each(|(c, weight)| {
-                if let CheckedAnswer::Correct(score) = c {
-                    _ = score.insert(*weight);
-                }
-            });
         #[allow(non_snake_case)]
         let [A, B, C, D, E] = arr;
         CheckedQuestionGroup { A, B, C, D, E }
@@ -157,7 +147,7 @@ impl AnswerSheet {
 
         let (mut correct, mut incorrect, mut not_answered, mut score) = (0u32, 0u32, 0u32, 0u32);
         for qg in graded_questions {
-            score += qg.score();
+            score += qg.verdict();
             let (c, i, n) = qg.collect_stats();
             correct += c;
             incorrect += i;
@@ -178,46 +168,103 @@ impl AnswerSheet {
 #[derive(Debug, serde::Deserialize)]
 struct RawScoreWeights {
     subject_code: String,
-    question_num: String,
-    A: String,
-    B: String,
-    C: String,
-    D: String,
-    E: String,
+    q1: String,
+    q2: String,
+    q3: String,
+    q4: String,
+    q5: String,
+    q6: String,
+    q7: String,
+    q8: String,
+    q9: String,
+    q10: String,
+    q11: String,
+    q12: String,
+    q13: String,
+    q14: String,
+    q15: String,
+    q16: String,
+    q17: String,
+    q18: String,
+    q19: String,
+    q20: String,
+    q21: String,
+    q22: String,
+    q23: String,
+    q24: String,
+    q25: String,
+    q26: String,
+    q27: String,
+    q28: String,
+    q29: String,
+    q30: String,
+    q31: String,
+    q32: String,
+    q33: String,
+    q34: String,
+    q35: String,
+    q36: String,
 }
+impl RawScoreWeights {
+    fn weights_into_vec(self) -> Vec<u8> {
+        macro_rules! conv {
+            ($i: expr) => {
+                $i.parse::<u8>().unwrap_or_else(|e| {
+                    debug!("Cannot read question answer weight: {e}, using 0 as weight");
+                    0
+                })
+            };
+        }
+        vec![
+            conv!(self.q1),
+            conv!(self.q2),
+            conv!(self.q3),
+            conv!(self.q4),
+            conv!(self.q5),
+            conv!(self.q6),
+            conv!(self.q7),
+            conv!(self.q8),
+            conv!(self.q9),
+            conv!(self.q10),
+            conv!(self.q11),
+            conv!(self.q12),
+            conv!(self.q13),
+            conv!(self.q14),
+            conv!(self.q15),
+            conv!(self.q16),
+            conv!(self.q17),
+            conv!(self.q18),
+            conv!(self.q19),
+            conv!(self.q20),
+            conv!(self.q21),
+            conv!(self.q22),
+            conv!(self.q23),
+            conv!(self.q24),
+            conv!(self.q25),
+            conv!(self.q26),
+            conv!(self.q27),
+            conv!(self.q28),
+            conv!(self.q29),
+            conv!(self.q30),
+            conv!(self.q31),
+            conv!(self.q32),
+            conv!(self.q33),
+            conv!(self.q34),
+            conv!(self.q35),
+            conv!(self.q36),
+        ]
+    }
+}
+
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct ScoreWeights {
-    pub weights: HashMap<String, (Vec<ScoreWeight>, u32)>,
-}
-#[allow(non_snake_case)]
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ScoreWeight {
-    pub A: u8,
-    pub B: u8,
-    pub C: u8,
-    pub D: u8,
-    pub E: u8,
-}
-impl ScoreWeight {
-    fn max_score(&self) -> u32 {
-        self.A as u32 + self.B as u32 + self.C as u32 + self.D as u32 + self.E as u32
-    }
-    #[cfg(test)]
-    fn identity() -> Self {
-        Self {
-            A: 1,
-            B: 1,
-            C: 1,
-            D: 1,
-            E: 1,
-        }
-    }
+    pub weights: HashMap<String, (Vec<u8>, u32)>,
 }
 
 type WeightsIter<R> = DeserializeRecordsIntoIter<R, RawScoreWeights>;
 impl<R: std::io::Read> From<WeightsIter<R>> for ScoreWeights {
     fn from(values: WeightsIter<R>) -> Self {
-        let mut weights: HashMap<String, (Vec<ScoreWeight>, u32)> = HashMap::new();
+        let mut weights: HashMap<String, (Vec<u8>, u32)> = HashMap::new();
         for value in values {
             let value_option = match value {
                 Ok(ok) => Some(ok),
@@ -227,50 +274,14 @@ impl<R: std::io::Read> From<WeightsIter<R>> for ScoreWeights {
                 }
             };
 
-            if let Some(RawScoreWeights {
-                subject_code,
-                question_num,
-                A,
-                B,
-                C,
-                D,
-                E,
-            }) = value_option
-            {
-                macro_rules! conv {
-                    ($i: expr) => {
-                        $i.parse::<u8>().unwrap_or_else(|e| {
-                            debug!("Cannot read question answer weight: {e}, using 0 as weight");
-                            0
-                        })
-                    };
-                }
-
-                let Ok(question_num) = question_num.parse::<usize>() else {
-                    error!("Cannot read question number: not a number ('{question_num}')");
-                    continue;
-                };
-                if let Some((subject_weights, max_score)) = weights.get_mut(&subject_code) {
-                    let w = ScoreWeight {
-                        A: conv!(A),
-                        B: conv!(B),
-                        C: conv!(C),
-                        D: conv!(D),
-                        E: conv!(E),
-                    };
-                    *max_score += w.max_score();
-                    subject_weights[question_num - 1] = w;
+            if let Some(mut raw_weights) = value_option {
+                let subject_code = mem::take(&mut raw_weights.subject_code);
+                if weights.get_mut(&subject_code).is_none() {
+                    let w = raw_weights.weights_into_vec();
+                    let sum = w.iter().map(|s| *s as u32).sum();
+                    weights.insert(subject_code, (w, sum));
                 } else {
-                    let mut subject_weights = vec![ScoreWeight::default(); 36];
-                    let w = ScoreWeight {
-                        A: conv!(A),
-                        B: conv!(B),
-                        C: conv!(C),
-                        D: conv!(D),
-                        E: conv!(E),
-                    };
-                    subject_weights[question_num - 1] = w;
-                    weights.insert(subject_code, (subject_weights, w.max_score()));
+                    warn!("Duplicate entry for the same subject ID found. Ignoring.");
                 }
             }
         }
@@ -281,16 +292,16 @@ impl ScoreWeights {
     pub fn max_score_deduction(&self, key: &AnswerKeySheet) -> u32 {
         if let Some((weights, _)) = self.weights.get(&key.subject_id) {
             key.answers.iter().zip(weights).fold(0, |acc, (q, w)| {
-                acc + [q.A, q.B, q.C, q.D, q.E]
-                    .iter()
-                    .zip([w.A, w.B, w.C, w.D, w.E])
-                    .fold(0u32, |acc, (ans, weight)| {
-                        if ans.is_none() {
-                            acc + weight as u32
-                        } else {
-                            acc
-                        }
-                    })
+                acc + if q.A.is_some()
+                    && q.B.is_some()
+                    && q.C.is_some()
+                    && q.D.is_some()
+                    && q.E.is_some()
+                {
+                    0
+                } else {
+                    *w as u32
+                }
             })
         } else {
             0
