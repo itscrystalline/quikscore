@@ -175,7 +175,6 @@ const answerProgressBar = ref<undefined | ProgressBarProps>(undefined);
 
 const elapsed = ref<TimeElapsed>("notCounting");
 
-
 async function ensureModels(progressBar: Ref<undefined | ProgressBarProps>, status: Ref<string>) {
   progressBar.value = { type: "indeterminate" };
   status.value = "Verifying OCR Models...";
