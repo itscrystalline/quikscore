@@ -1,11 +1,11 @@
 use crate::err_log;
 use crate::{
     errors::CsvError,
-    scoring::{AnswerSheetResult, CheckedAnswer},
+    scoring::AnswerSheetResult,
     signal,
     state::{AnswerSheet, AppState, CsvExport},
 };
-use log::{error, info};
+use log::info;
 use opencv::prelude::Mat;
 use serde::Serialize;
 use std::{collections::HashMap, fs::File};
