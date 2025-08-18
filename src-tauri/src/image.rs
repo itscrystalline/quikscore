@@ -481,8 +481,9 @@ impl AnswerSheetResult {
                     height: ANSWER_HEIGHT,
                 };
                 for row_idx in 0..5usize {
-                    let result_here =
-                        self.graded_questions[(x_idx * 9 + y_idx) as usize].at(row_idx);
+                    let result_here = self.graded_questions[(x_idx * 9 + y_idx) as usize]
+                        .0
+                        .at(row_idx);
                     let row_y = y
                         + ((ANSWER_HEIGHT / 5) * row_idx as i32)
                             .clamp(0, rect.height - ANSWER_HEIGHT / 5);
@@ -493,7 +494,7 @@ impl AnswerSheetResult {
                         height: ANSWER_HEIGHT / 5,
                     };
                     let color: Option<opencv::core::Scalar> = result_here.and_then(|c| match c {
-                        CheckedAnswer::Correct(_) => Some((43, 160, 64).into()),
+                        CheckedAnswer::Correct => Some((43, 160, 64).into()),
                         CheckedAnswer::Incorrect => Some((57, 15, 210).into()),
                         CheckedAnswer::Missing => Some((29, 142, 223).into()),
                         CheckedAnswer::NotCounted => None,

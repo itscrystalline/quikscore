@@ -81,7 +81,6 @@ export type AnswerScoreResult =
         maxScore: number;
         correct: number;
         incorrect: number;
-        notAnswered: number;
       };
     }
   | {

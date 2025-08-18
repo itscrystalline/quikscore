@@ -16,9 +16,8 @@ use crate::{
 pub struct AnswerSheetResult {
     pub correct: u32,
     pub incorrect: u32,
-    pub not_answered: u32,
     pub score: u32,
-    pub graded_questions: [CheckedQuestionGroup; 36],
+    pub graded_questions: [(CheckedQuestionGroup, u8); 36],
 }
 
 #[allow(non_snake_case)]
@@ -42,12 +41,20 @@ impl CheckedQuestionGroup {
             _ => None,
         }
     }
-    pub fn verdict(&self) -> bool {
-        [self.A, self.B, self.C, self.D, self.E]
-            .iter()
-            .fold(true, |acc, c| {
-                acc && matches!(c, CheckedAnswer::Correct | CheckedAnswer::NotCounted)
-            })
+    pub fn verdict(&self) -> CheckedAnswer {
+        let mut verdict = CheckedAnswer::NotCounted;
+        for ele in [self.A, self.B, self.C, self.D, self.E] {
+            verdict = match (verdict, ele) {
+                (CheckedAnswer::Correct, CheckedAnswer::Correct) => CheckedAnswer::Correct,
+                (CheckedAnswer::Correct, CheckedAnswer::Incorrect) => CheckedAnswer::Incorrect,
+                (CheckedAnswer::Correct, CheckedAnswer::Missing) => CheckedAnswer::Missing,
+                (CheckedAnswer::Correct, CheckedAnswer::NotCounted) => CheckedAnswer::Correct,
+                (CheckedAnswer::Incorrect, _) => CheckedAnswer::Incorrect,
+                (CheckedAnswer::Missing, _) => CheckedAnswer::Missing,
+                (CheckedAnswer::NotCounted, c) => c,
+            };
+        }
+        verdict
     }
 }
 
@@ -105,7 +112,7 @@ impl Answer {
 
 impl QuestionGroup {
     pub fn check_with(&self, key: &Self) -> CheckedQuestionGroup {
-        let mut arr = [
+        let arr = [
             Answer::check_with(self.A, key.A),
             Answer::check_with(self.B, key.B),
             Answer::check_with(self.C, key.C),
@@ -118,46 +125,38 @@ impl QuestionGroup {
     }
 }
 
-impl CheckedQuestionGroup {
-    /// returns: (correct, incorrect, not_answered)
-    fn collect_stats(&self) -> (u32, u32, u32) {
-        let (mut correct, mut incorrect, mut not_answered) = (0u32, 0u32, 0u32);
-        for ans in [self.A, self.B, self.C, self.D, self.E] {
-            match ans {
-                CheckedAnswer::Incorrect => incorrect += 1,
-                CheckedAnswer::Correct(_) => correct += 1,
-                CheckedAnswer::Missing => not_answered += 1,
-                CheckedAnswer::NotCounted => (),
-            }
-        }
-        (correct, incorrect, not_answered)
-    }
-}
+impl CheckedQuestionGroup {}
 
 impl AnswerSheet {
-    pub fn score(&self, key_sheet: &AnswerKeySheet, weights: &[ScoreWeight]) -> AnswerSheetResult {
-        let graded_questions: [CheckedQuestionGroup; 36] = multizip((
-            self.answers.iter(),
-            key_sheet.answers.iter(),
-            weights.iter(),
-        ))
-        .map(|(curr, key, weights)| curr.check_with(key, weights))
-        .collect_array()
-        .expect("should always be of size 36");
+    pub fn score(&self, key_sheet: &AnswerKeySheet, weights: &[u8]) -> AnswerSheetResult {
+        let graded_questions: [CheckedQuestionGroup; 36] =
+            multizip((self.answers.iter(), key_sheet.answers.iter()))
+                .map(|(curr, key)| curr.check_with(key))
+                .collect_array()
+                .expect("should always be of size 36");
 
-        let (mut correct, mut incorrect, mut not_answered, mut score) = (0u32, 0u32, 0u32, 0u32);
-        for qg in graded_questions {
-            score += qg.verdict();
-            let (c, i, n) = qg.collect_stats();
-            correct += c;
-            incorrect += i;
-            not_answered += n;
-        }
+        let (mut correct, mut incorrect, mut score) = (0u32, 0u32, 0u32);
+        let graded_questions = graded_questions
+            .iter()
+            .zip(weights)
+            .map(|(qg, weight)| match qg.verdict() {
+                CheckedAnswer::Correct => {
+                    score += *weight as u32;
+                    correct += 1;
+                    (*qg, *weight)
+                }
+                CheckedAnswer::Incorrect | CheckedAnswer::Missing => {
+                    incorrect += 1;
+                    (*qg, 0)
+                }
+                CheckedAnswer::NotCounted => (*qg, 0),
+            })
+            .collect_array()
+            .expect("should always be of size 36");
 
         AnswerSheetResult {
             correct,
             incorrect,
-            not_answered,
             graded_questions,
             score,
         }
@@ -292,15 +291,15 @@ impl ScoreWeights {
     pub fn max_score_deduction(&self, key: &AnswerKeySheet) -> u32 {
         if let Some((weights, _)) = self.weights.get(&key.subject_id) {
             key.answers.iter().zip(weights).fold(0, |acc, (q, w)| {
-                acc + if q.A.is_some()
-                    && q.B.is_some()
-                    && q.C.is_some()
-                    && q.D.is_some()
-                    && q.E.is_some()
+                acc + if q.A.is_none()
+                    && q.B.is_none()
+                    && q.C.is_none()
+                    && q.D.is_none()
+                    && q.E.is_none()
                 {
-                    0
-                } else {
                     *w as u32
+                } else {
+                    0
                 }
             })
         } else {
