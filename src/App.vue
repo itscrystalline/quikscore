@@ -257,6 +257,21 @@ async function exportCsv() {
       <label for="ocr-ck" style="padding-left: 1vh;">Enable OCR (potentially high memory usage)</label>
     </div>
 
+    <div class="mongo_db_information_field">
+      <div class="form_group">
+         <div class="form_wrapper">
+            <label for="mongo_db_uri">MongoDB URI:  </label>
+            <input type="text" id="mongo_db_uri" placeholder="URI...."/>
+        </div>
+       <div class="form_wrapper">
+         <label for="mongo_db_name">MongoDB Name: </label>
+         <input type="text" id="mongo_db_name" placeholder="Name...."/>
+        </div>
+      </div>
+     <button class="mongo_db_enter">Enter</button>
+  </div>
+
+
     <div class="header">
       <h2>Answer Key & Weights</h2>
       <button :class="`btn-key${!(canUploadKey() || canChangeKey()) ? ' btn-disabled' : ''}`" @click="uploadKey"
@@ -440,6 +455,20 @@ p.credits {
   padding: 0;
   height: fit-content;
 }
+
+.mongo_db_information_field {
+  display: flex;
+  align-items: center;   
+  justify-content: center;  
+  gap: 1rem;                
+}
+
+.form_wrapper {
+  display: flex;
+  align-items: center;      
+  gap: 0.5rem;
+}
+
 
 .result {
   display: flex;
