@@ -1,10 +1,12 @@
 use crate::err_log;
+use crate::state::{MongoDB, Options};
 use crate::{
     errors::CsvError,
     scoring::{AnswerSheetResult, CheckedAnswer},
     signal,
     state::{AnswerSheet, AppState, CsvExport},
 };
+use anyhow::Ok;
 use log::{error, info};
 use opencv::prelude::Mat;
 use serde::{Serialize, Deserialize};
@@ -86,7 +88,7 @@ pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     wtr.flush()?;
     //info!("Finished Exporting! Written {len} rows.");
     let student_totals = map_to_db_scores(results);
-    if let Err(e) = store_scores_in_db(student_totals) {
+    if let Err(e) = store_scores_in_db(app, student_totals) {
         error!("Failed to store total scores in MongoDB: {}", e);
     }
 
@@ -212,23 +214,27 @@ pub fn map_to_db_scores(
         .collect()
 }
 
-fn store_scores_in_db(rows: Vec<StudentTotalScore>) -> Result<(), String> {
+fn store_scores_in_db<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A, rows: Vec<StudentTotalScore>) -> Result<(), DatabaseError> {
     dotenvy::dotenv().ok();
-    
-    //println!("MONGODB_URI = {:?}", std::env::var("MONGODB_URI"));
-    //println!("MY_DATABASE = {:?}", std::env::var("MY_DATABASE"));
-    let uri = std::env::var("MONGODB_URI").map_err(|e| e.to_string())?;
-    let db_name = std::env::var("MY_DATABASE").map_err(|e| e.to_string())?;
+    if let Options { mongo: MongoDB::Enable { mongo_db_uri, mongo_db_name }, .. } = AppState::get_options(app) {
+        //println!("MONGODB_URI = {:?}", std::env::var("MONGODB_URI"));
+        //println!("MY_DATABASE = {:?}", std::env::var("MY_DATABASE"));
 
-    let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
-    rt.block_on(async {
-        let options = ClientOptions::parse(&uri).await.map_err(|e| e.to_string())?;
-        let client = Client::with_options(options).map_err(|e| e.to_string())?;
+        let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
+        tauri::async_runtime::block_on(async {
+            let options = ClientOptions::parse(&mongo_db_uri).await?;
+            let client = Client::with_options(options)?;
 
-        let collection = client.database(&db_name).collection::<StudentTotalScore>("student_total_scores");
+            let collection = client
+                .database(&mongo_db_name)
+                .collection::<StudentTotalScore>("student_total_scores");
 
-        collection.insert_many(rows).await.map_err(|e| e.to_string())?;
-        info!("Inserted total scores into MongoDB Atlas successfully");
+            collection.insert_many(rows).await?;
+            info!("Inserted total scores into MongoDB Atlas successfully");
+            Ok(())
+        })
+    } else {
+        println!("You Chose not to upload to mongoDB");
         Ok(())
-    })
+    }
 }
