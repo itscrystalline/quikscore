@@ -39,14 +39,14 @@
 
         package = nightlyPlatform.buildRustPackage (finalAttrs: {
           pname = "quikscore";
-          version = "0.1.0";
+          version = "0.2.0";
 
           src = ./.;
 
           missingHashes = ./missing-hashes.json;
           offlineCache = yarn-berry_4.fetchYarnBerryDeps {
             inherit (finalAttrs) src missingHashes;
-            hash = "sha256-AqqycBDUoP2dbHOyJRuVV/tsWq9E8fruqszy+WSvnrM=";
+            hash = builtins.readFile ./yarn-hash.txt;
           };
 
           nativeBuildInputs = with pkgs; [

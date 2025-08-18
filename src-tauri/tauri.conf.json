@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "quikscore",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.quikscore.app",
   "build": {
     "beforeDevCommand": "yarn dev",
@@ -12,9 +12,19 @@
   "app": {
     "windows": [
       {
-        "title": "quikscore",
+        "title": "Quikscore",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "create": false
+      },
+      {
+        "title": "Quikscore Authentication",
+        "url": "auth.html",
+        "label": "auth",
+        "width": 380,
+        "height": 480,
+        "create": true,
+        "resizable": false
       }
     ],
     "security": {

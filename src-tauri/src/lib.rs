@@ -19,6 +19,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
+            commands::auth_pass,
             commands::upload_key_image,
             commands::upload_weights,
             commands::clear_key_image,

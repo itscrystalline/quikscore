@@ -4,8 +4,10 @@ use ocrs::OcrEngine;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{
+    array,
     collections::HashMap,
     fmt::Display,
+    mem,
     path::PathBuf,
     sync::{Mutex, OnceLock},
 };
@@ -142,7 +144,7 @@ impl AppState {
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        match &state.state {
+        match &mut state.state {
             AppStatePipeline::Init | AppStatePipeline::WithKey { .. } => {
                 state.state = AppStatePipeline::WithKey {
                     key_image: image,
@@ -160,7 +162,7 @@ impl AppState {
                     state.state = AppStatePipeline::WithKeyAndWeights {
                         key_image: image,
                         key,
-                        weights: weights.clone(),
+                        weights: mem::take(weights),
                     };
                 } else {
                     state.state = AppStatePipeline::WithKey {
@@ -195,14 +197,14 @@ impl AppState {
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        match &state.state {
+        match &mut state.state {
             AppStatePipeline::WithKey { key_image, key }
             | AppStatePipeline::WithKeyAndWeights { key_image, key, .. }
                 if weights.weights.contains_key(&key.subject_id) =>
             {
                 state.state = AppStatePipeline::WithKeyAndWeights {
-                    key_image: key_image.clone(),
-                    key: key.clone(),
+                    key_image: mem::take(key_image),
+                    key: mem::take(key),
                     weights,
                 };
                 signal!(channel, KeyUpload::UploadedWeights);
@@ -255,10 +257,10 @@ impl AppState {
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        if let AppStatePipeline::WithKeyAndWeights { key_image, key, .. } = &state.state {
+        if let AppStatePipeline::WithKeyAndWeights { key_image, key, .. } = &mut state.state {
             state.state = AppStatePipeline::WithKey {
-                key_image: key_image.clone(),
-                key: key.clone(),
+                key_image: mem::take(key_image),
+                key: mem::take(key),
             };
             signal!(channel, KeyUpload::ClearWeights);
         }
@@ -274,7 +276,7 @@ impl AppState {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
 
-        match &state.state {
+        match &mut state.state {
             AppStatePipeline::WithKeyAndWeights {
                 key_image,
                 key,
@@ -287,9 +289,9 @@ impl AppState {
                 ..
             } => {
                 state.state = AppStatePipeline::Scoring {
-                    key_image: key_image.clone(),
-                    key: key.clone(),
-                    weights: weights.clone(),
+                    key_image: mem::take(key_image),
+                    key: mem::take(key),
+                    weights: mem::take(weights),
                     processing_channel,
                 };
                 signal!(
@@ -319,7 +321,7 @@ impl AppState {
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        match &state.state {
+        match &mut state.state {
             AppStatePipeline::Scoring {
                 key_image,
                 key,
@@ -330,9 +332,9 @@ impl AppState {
                     .blocking_send(ProcessingState::Cancel)
                     .expect("called in async context (impossible)");
                 state.state = AppStatePipeline::WithKeyAndWeights {
-                    key_image: key_image.clone(),
-                    key: key.clone(),
-                    weights: weights.clone(),
+                    key_image: mem::take(key_image),
+                    key: mem::take(key),
+                    weights: mem::take(weights),
                 };
                 signal!(channel, AnswerUpload::Cancelled);
             }
@@ -356,7 +358,7 @@ impl AppState {
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        match &state.state {
+        match &mut state.state {
             AppStatePipeline::Scoring {
                 key_image,
                 key,
@@ -437,9 +439,9 @@ impl AppState {
                     })
                     .collect();
                 state.state = AppStatePipeline::Scored {
-                    key_image: key_image.clone(),
-                    key: key.clone(),
-                    weights: weights.clone(),
+                    key_image: mem::take(key_image),
+                    key: mem::take(key),
+                    weights: mem::take(weights),
                     answer_sheets,
                 };
                 signal!(channel, AnswerUpload::Done { uploaded: to_send });
@@ -467,12 +469,12 @@ impl AppState {
             key_image,
             weights,
             ..
-        } = &state.state
+        } = &mut state.state
         {
             state.state = AppStatePipeline::WithKeyAndWeights {
-                key_image: key_image.clone(),
-                key: key.clone(),
-                weights: weights.clone(),
+                key_image: mem::take(key_image),
+                key: mem::take(key),
+                weights: mem::take(weights),
             };
             signal!(channel, AnswerUpload::Clear);
         }
@@ -520,9 +522,17 @@ impl From<AnswerSheet> for AnswerKeySheet {
         }
     }
 }
+impl Default for AnswerKeySheet {
+    fn default() -> Self {
+        Self {
+            subject_id: String::default(),
+            answers: array::from_fn(|_| QuestionGroup::default()),
+        }
+    }
+}
 
 #[allow(non_snake_case)]
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct QuestionGroup {
     pub A: Option<Answer>,
     pub B: Option<Answer>,

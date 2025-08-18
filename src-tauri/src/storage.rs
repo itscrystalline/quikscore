@@ -1,4 +1,5 @@
 use crate::err_log;
+use crate::errors::DatabaseError;
 use crate::state::{MongoDB, Options};
 use crate::{
     errors::CsvError,
@@ -6,16 +7,14 @@ use crate::{
     signal,
     state::{AnswerSheet, AppState, CsvExport},
 };
-use anyhow::Ok;
 use log::{error, info};
 use opencv::prelude::Mat;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs::File};
 use tauri::{ipc::Channel, Emitter, Manager, Runtime};
 use tauri_plugin_fs::FilePath;
 
 use mongodb::{options::ClientOptions, Client};
-use dotenvy;
 
 #[allow(non_snake_case)]
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -86,10 +85,10 @@ pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         wtr.serialize(row)?;
     }
     wtr.flush()?;
-    //info!("Finished Exporting! Written {len} rows.");
+    info!("Finished exporting to CSV! Written {len} rows.");
     let student_totals = map_to_db_scores(results);
     if let Err(e) = store_scores_in_db(app, student_totals) {
-        error!("Failed to store total scores in MongoDB: {}", e);
+        err_log!(&e);
     }
 
     Ok(())
@@ -173,68 +172,68 @@ pub fn map_to_db_scores(
     }
 
     map.into_iter()
-        .map(|(
-            student_id,
-            (
-                _,
-                AnswerSheet {
-                    subject_id,
-                    subject_name,
-                    student_name,
-                    exam_room,
-                    exam_seat,
-                    ..
-                },
-                AnswerSheetResult {
-                    graded_questions, ..
-                },
-            ),
-        )| {
-            let total: f32 = graded_questions
-                .into_iter()
-                .map(|c| {
-                    score_for(c.A)
-                        + score_for(c.B)
-                        + score_for(c.C)
-                        + score_for(c.D)
-                        + score_for(c.E)
-                })
-                .sum();
-
-            StudentTotalScore {
-                subject_id,
+        .map(
+            |(
                 student_id,
-                subject_name: subject_name.unwrap_or_default(),
-                student_name: student_name.unwrap_or_default(),
-                exam_room: exam_room.unwrap_or_default(),
-                exam_seat: exam_seat.unwrap_or_default(),
-                total_score: total,
-            }
-        })
+                (
+                    _,
+                    AnswerSheet {
+                        subject_id,
+                        subject_name,
+                        student_name,
+                        exam_room,
+                        exam_seat,
+                        ..
+                    },
+                    AnswerSheetResult {
+                        graded_questions, ..
+                    },
+                ),
+            )| {
+                let total: f32 = graded_questions
+                    .into_iter()
+                    .map(|c| {
+                        score_for(c.A)
+                            + score_for(c.B)
+                            + score_for(c.C)
+                            + score_for(c.D)
+                            + score_for(c.E)
+                    })
+                    .sum();
+
+                StudentTotalScore {
+                    subject_id,
+                    student_id,
+                    subject_name: subject_name.unwrap_or_default(),
+                    student_name: student_name.unwrap_or_default(),
+                    exam_room: exam_room.unwrap_or_default(),
+                    exam_seat: exam_seat.unwrap_or_default(),
+                    total_score: total,
+                }
+            },
+        )
         .collect()
 }
 
 fn store_scores_in_db<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A, rows: Vec<StudentTotalScore>) -> Result<(), DatabaseError> {
-    dotenvy::dotenv().ok();
     if let Options { mongo: MongoDB::Enable { mongo_db_uri, mongo_db_name }, .. } = AppState::get_options(app) {
-        //println!("MONGODB_URI = {:?}", std::env::var("MONGODB_URI"));
-        //println!("MY_DATABASE = {:?}", std::env::var("MY_DATABASE"));
+    //println!("MONGODB_URI = {:?}", std::env::var("MONGODB_URI"));
+    //println!("MY_DATABASE = {:?}", std::env::var("MY_DATABASE"));
 
-        let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
-        tauri::async_runtime::block_on(async {
-            let options = ClientOptions::parse(&mongo_db_uri).await?;
-            let client = Client::with_options(options)?;
+    tauri::async_runtime::block_on(async {
+        let options = ClientOptions::parse(&mongo_db_uri).await?;
+        let client = Client::with_options(options)?;
 
-            let collection = client
-                .database(&mongo_db_name)
-                .collection::<StudentTotalScore>("student_total_scores");
+        let collection = client
+            .database(&mongo_db_name)
+            .collection::<StudentTotalScore>("student_total_scores");
 
-            collection.insert_many(rows).await?;
-            info!("Inserted total scores into MongoDB Atlas successfully");
-            Ok(())
-        })
+        collection.insert_many(rows).await?;
+        info!("Inserted total scores into MongoDB Atlas successfully");
+        Ok(())
+    })
     } else {
-        println!("You Chose not to upload to mongoDB");
+        println!("You choose to not user MongoDB");
         Ok(())
     }
 }
