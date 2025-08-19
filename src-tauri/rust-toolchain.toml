@@ -1,0 +1,4 @@
+[toolchain]
+channel = "nightly-2025-06-08"
+components = ["rustc", "cargo", "clippy", "rustfmt", "rust-analyzer", "rustc-codegen-cranelift-preview"]
+profile = "default"
