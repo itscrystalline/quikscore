@@ -696,13 +696,13 @@ mod unit_tests {
         FilePath::Path(PathBuf::from("tests/assets/sample_valid_image.jpg"))
     }
 
-    fn test_images() -> Vec<FilePath> {
-        vec![
-            FilePath::Path(PathBuf::from("tests/assets/image_001.jpg")),
-            FilePath::Path(PathBuf::from("tests/assets/image_002.jpg")),
-            FilePath::Path(PathBuf::from("tests/assets/image_003.jpg")),
-        ]
-    }
+    //fn test_images() -> Vec<FilePath> {
+    //    vec![
+    //        FilePath::Path(PathBuf::from("tests/assets/image_001.jpg")),
+    //        FilePath::Path(PathBuf::from("tests/assets/image_002.jpg")),
+    //        FilePath::Path(PathBuf::from("tests/assets/image_003.jpg")),
+    //    ]
+    //}
 
     fn setup_ocr_data() {
         _ = state::MODELS.set(PathBuf::from("tests/assets"))
