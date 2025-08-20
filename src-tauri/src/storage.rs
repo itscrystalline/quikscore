@@ -111,12 +111,12 @@ pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     let question_rows = map_to_csv(results.clone());
     let len = question_rows.len();
 
-    for row in question_rows {
+    for row in question_rows.clone() {
         wtr.serialize(row)?;
     }
     wtr.flush()?;
     info!("Finished exporting to CSV! Written {len} rows.");
-    let student_totals = map_to_db_scores(question_rows);
+    let student_totals = map_to_db_scores(question_rows.clone());
     if let Err(e) = store_scores_in_db(app, student_totals) {
         err_log!(&e);
     }
