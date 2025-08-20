@@ -3,11 +3,11 @@ use crate::errors::DatabaseError;
 use crate::state::{MongoDB, Options};
 use crate::{
     errors::CsvError,
-    scoring::{AnswerSheetResult, CheckedAnswer},
+    scoring::AnswerSheetResult,
     signal,
     state::{AnswerSheet, AppState, CsvExport},
 };
-use log::{error, info};
+use log::info;
 use opencv::prelude::Mat;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs::File};
@@ -25,12 +25,42 @@ pub struct QuestionScoreRow {
     pub student_name: String,
     pub exam_room: String,
     pub exam_seat: String,
-    pub question_number: String,
-    pub A: String,
-    pub B: String,
-    pub C: String,
-    pub D: String,
-    pub E: String,
+    q1: String,
+    q2: String,
+    q3: String,
+    q4: String,
+    q5: String,
+    q6: String,
+    q7: String,
+    q8: String,
+    q9: String,
+    q10: String,
+    q11: String,
+    q12: String,
+    q13: String,
+    q14: String,
+    q15: String,
+    q16: String,
+    q17: String,
+    q18: String,
+    q19: String,
+    q20: String,
+    q21: String,
+    q22: String,
+    q23: String,
+    q24: String,
+    q25: String,
+    q26: String,
+    q27: String,
+    q28: String,
+    q29: String,
+    q30: String,
+    q31: String,
+    q32: String,
+    q33: String,
+    q34: String,
+    q35: String,
+    q36: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -97,20 +127,6 @@ pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
 fn map_to_csv(
     map: HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>,
 ) -> Vec<QuestionScoreRow> {
-    #[inline(always)]
-    fn score_for(ans: CheckedAnswer) -> String {
-        match ans {
-            CheckedAnswer::Correct(Some(score)) => format!("{score}"),
-            CheckedAnswer::Correct(None) => {
-                error!("bug: missing score in correct answer, using 1");
-                "1".to_string()
-            }
-            CheckedAnswer::Incorrect => "0".to_string(),
-            CheckedAnswer::Missing => "0".to_string(),
-            CheckedAnswer::NotCounted => "".to_string(),
-        }
-    }
-
     map.into_iter()
         .map(
             |(
@@ -130,36 +146,62 @@ fn map_to_csv(
                     },
                 ),
             )| {
-                graded_questions
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, c)| QuestionScoreRow {
-                        subject_id: subject_id.clone(),
-                        student_id: student_id.clone(),
-                        subject_name: subject_name.clone().unwrap_or_default(),
-                        student_name: student_name.clone().unwrap_or_default(),
-                        exam_room: exam_room.clone().unwrap_or_default(),
-                        exam_seat: exam_seat.clone().unwrap_or_default(),
-                        question_number: format!("{i:02}"),
-                        A: score_for(c.A),
-                        B: score_for(c.B),
-                        C: score_for(c.C),
-                        D: score_for(c.D),
-                        E: score_for(c.E),
-                    })
-                    .collect::<Vec<_>>()
+                let mut graded = graded_questions.into_iter().map(|(_, w)| w);
+
+                QuestionScoreRow {
+                    subject_id: subject_id.clone(),
+                    student_id: student_id.clone(),
+                    subject_name: subject_name.clone().unwrap_or_default(),
+                    student_name: student_name.clone().unwrap_or_default(),
+                    exam_room: exam_room.clone().unwrap_or_default(),
+                    exam_seat: exam_seat.clone().unwrap_or_default(),
+                    q1: graded.next().unwrap_or_default().to_string(),
+                    q2: graded.next().unwrap_or_default().to_string(),
+                    q3: graded.next().unwrap_or_default().to_string(),
+                    q4: graded.next().unwrap_or_default().to_string(),
+                    q5: graded.next().unwrap_or_default().to_string(),
+                    q6: graded.next().unwrap_or_default().to_string(),
+                    q7: graded.next().unwrap_or_default().to_string(),
+                    q8: graded.next().unwrap_or_default().to_string(),
+                    q9: graded.next().unwrap_or_default().to_string(),
+                    q10: graded.next().unwrap_or_default().to_string(),
+                    q11: graded.next().unwrap_or_default().to_string(),
+                    q12: graded.next().unwrap_or_default().to_string(),
+                    q13: graded.next().unwrap_or_default().to_string(),
+                    q14: graded.next().unwrap_or_default().to_string(),
+                    q15: graded.next().unwrap_or_default().to_string(),
+                    q16: graded.next().unwrap_or_default().to_string(),
+                    q17: graded.next().unwrap_or_default().to_string(),
+                    q18: graded.next().unwrap_or_default().to_string(),
+                    q19: graded.next().unwrap_or_default().to_string(),
+                    q20: graded.next().unwrap_or_default().to_string(),
+                    q21: graded.next().unwrap_or_default().to_string(),
+                    q22: graded.next().unwrap_or_default().to_string(),
+                    q23: graded.next().unwrap_or_default().to_string(),
+                    q24: graded.next().unwrap_or_default().to_string(),
+                    q25: graded.next().unwrap_or_default().to_string(),
+                    q26: graded.next().unwrap_or_default().to_string(),
+                    q27: graded.next().unwrap_or_default().to_string(),
+                    q28: graded.next().unwrap_or_default().to_string(),
+                    q29: graded.next().unwrap_or_default().to_string(),
+                    q30: graded.next().unwrap_or_default().to_string(),
+                    q31: graded.next().unwrap_or_default().to_string(),
+                    q32: graded.next().unwrap_or_default().to_string(),
+                    q33: graded.next().unwrap_or_default().to_string(),
+                    q34: graded.next().unwrap_or_default().to_string(),
+                    q35: graded.next().unwrap_or_default().to_string(),
+                    q36: graded.next().unwrap_or_default().to_string(),
+                }
             },
         )
-        .reduce(|mut acc, v| {
-            acc.extend(v);
-            acc
-        })
-        .unwrap_or_else(Vec::new)
+        .collect()
 }
 
 pub fn map_to_db_scores(
     map: HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>,
 ) -> Vec<StudentTotalScore> {
+    use crate::scoring::CheckedAnswer;
+
     #[inline(always)]
     fn score_for(ans: CheckedAnswer) -> f32 {
         match ans {
@@ -214,6 +256,7 @@ pub fn map_to_db_scores(
         )
         .collect()
 }
+
 
 fn store_scores_in_db<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A, rows: Vec<StudentTotalScore>) -> Result<(), DatabaseError> {
     if let Options { mongo: MongoDB::Enable { mongo_db_uri, mongo_db_name }, .. } = AppState::get_options(app) {

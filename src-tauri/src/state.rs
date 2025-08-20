@@ -394,7 +394,6 @@ impl AppState {
                             AnswerSheetResult {
                                 correct,
                                 incorrect,
-                                not_answered,
                                 score,
                                 ..
                             },
@@ -410,7 +409,6 @@ impl AppState {
                                     max_score: *max_score - weights.max_score_deduction(key),
                                     correct: *correct,
                                     incorrect: *incorrect,
-                                    not_answered: *not_answered,
                                 },
                                 Err(e) => {
                                     err_log!(&e);
@@ -635,7 +633,6 @@ pub enum AnswerScoreResult {
         max_score: u32,
         correct: u32,
         incorrect: u32,
-        not_answered: u32,
     },
     Error {
         error: String,

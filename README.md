@@ -6,7 +6,8 @@ Automatically scan and score answer sheets.
 
 ## Downloads
 
-prebuilt versions of `quikscore` built by our CI are available [here](https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main?preview)
+prebuilt versions of `quikscore` built by our CI are available
+[here](https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main?preview)
 or in the table below.
 
 | Version                  | Explaination                       | Link                                                                                              |
@@ -19,10 +20,11 @@ or in the table below.
 
 ## Environment setup
 
-install [node.js](https://nodejs.org/en/download), then install [yarn](https://yarnpkg.com/getting-started/install)
+install [node.js](https://nodejs.org/en/download), then install
+[yarn](https://yarnpkg.com/getting-started/install)
 
 ```shell
-$ npm install -g corepack
+npm install -g corepack
 ```
 
 next, install [rust](https://www.rust-lang.org/) from https://rustup.rs
@@ -37,7 +39,8 @@ install [chocolatey](https://chocolatey.org/install) by running
 Set-ExecutionPolicy Bypass -Scope Process -Force; [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1'))
 ```
 
-(if the command fails, run `Set-ExecutionPolicy Unrestricted` then rerun the above command.)
+(if the command fails, run `Set-ExecutionPolicy Unrestricted` then rerun the
+above command.)
 
 then, run
 
@@ -47,18 +50,21 @@ choco install llvm opencv -y
 
 to install OpenCV and LLVM libraries.
 
-after that, confirm that `C:\tools\opencv` exists.
-next, you need to define 3 environment variables.
+after that, confirm that `C:\tools\opencv` exists. next, you need to define 3
+environment variables.
 
 `OPENCV_INCLUDE_PATHS`: Set to `C:\tools\opencv\build\include`
+
 `OPENCV_LINK_LIBS`: Set to `+opencv_world4110`
+
 `OPENCV_LINK_PATHS`: Set to `+C:\tools\opencv\build\x64\vc16\lib`
 
 then add `C:\tools\opencv\build\x64\vc16\bin` to your `PATH`.
 
 ## Development
 
-run `yarn tauri dev`. this will build the binary, and start the frontend server. after a bit you should be greeted with the application open.
+run `yarn tauri dev`. this will build the binary, and start the frontend server.
+after a bit you should be greeted with the application open.
 
 ## Building
 
