@@ -175,6 +175,18 @@ const answerProgressBar = ref<undefined | ProgressBarProps>(undefined);
 
 const elapsed = ref<TimeElapsed>("notCounting");
 
+const mongoDbUri = ref("");
+const mongoDbName = ref("");
+
+async function enterDatabaseInfo() {
+  try {
+    await invoke("enter_database_information", { uri: mongoDbUri.value, name: mongoDbName.value });
+    console.log("Database information sent:", mongoDbUri.value, mongoDbName.value);
+  } catch (err) {
+    console.error("Failed to send database info:", err);
+  }
+}
+
 async function ensureModels(progressBar: Ref<undefined | ProgressBarProps>, status: Ref<string>) {
   progressBar.value = { type: "indeterminate" };
   status.value = "Verifying OCR Models...";
@@ -257,17 +269,17 @@ async function exportCsv() {
     </div>
 
     <div class="mongo_db_information_field">
-      <div class="form_group">
-         <div class="form_wrapper">
-            <label for="mongo_db_uri">MongoDB URI:  </label>
-            <input type="text" id="mongo_db_uri" placeholder="URI...."/>
-        </div>
-       <div class="form_wrapper">
-         <label for="mongo_db_name">MongoDB Name: </label>
-         <input type="text" id="mongo_db_name" placeholder="Name...."/>
-        </div>
+    <div class="form_group">
+      <div class="form_wrapper">
+        <label for="mongo_db_uri">MongoDB URI: </label>
+        <input type="text" id="mongo_db_uri" v-model="mongoDbUri" placeholder="URI...."/>
       </div>
-     <button class="mongo_db_enter">Enter</button>
+      <div class="form_wrapper">
+        <label for="mongo_db_name">MongoDB Name: </label>
+        <input type="text" id="mongo_db_name" v-model="mongoDbName" placeholder="Name...."/>
+      </div>
+    </div>
+    <button class="mongo_db_enter" @click="enterDatabaseInfo">Enter</button>
   </div>
 
 
