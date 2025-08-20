@@ -116,7 +116,7 @@ pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     }
     wtr.flush()?;
     info!("Finished exporting to CSV! Written {len} rows.");
-    let student_totals = map_to_db_scores(results);
+    let student_totals = map_to_db_scores(question_rows);
     if let Err(e) = store_scores_in_db(app, student_totals) {
         err_log!(&e);
     }
@@ -197,63 +197,36 @@ fn map_to_csv(
         .collect()
 }
 
-pub fn map_to_db_scores(
-    map: HashMap<String, (Mat, AnswerSheet, AnswerSheetResult)>,
-) -> Vec<StudentTotalScore> {
-    use crate::scoring::CheckedAnswer;
+pub fn map_to_db_scores(question_score_rows: Vec<QuestionScoreRow>) -> Vec<StudentTotalScore> {
+    question_score_rows
+        .into_iter()
+        .map(|row| {
+            let mut total: f32 = 0.0;
 
-    #[inline(always)]
-    fn score_for(ans: CheckedAnswer) -> f32 {
-        match ans {
-            CheckedAnswer::Correct(Some(score)) => score.into(),
-            CheckedAnswer::Correct(None) => 1.0,
-            CheckedAnswer::Incorrect => 0.0,
-            CheckedAnswer::Missing => 0.0,
-            CheckedAnswer::NotCounted => 0.0,
-        }
-    }
+            // collect all q1..q36 into an array of &String
+            let answers = [
+                &row.q1, &row.q2, &row.q3, &row.q4, &row.q5, &row.q6,
+                &row.q7, &row.q8, &row.q9, &row.q10, &row.q11, &row.q12,
+                &row.q13, &row.q14, &row.q15, &row.q16, &row.q17, &row.q18,
+                &row.q19, &row.q20, &row.q21, &row.q22, &row.q23, &row.q24,
+                &row.q25, &row.q26, &row.q27, &row.q28, &row.q29, &row.q30,
+                &row.q31, &row.q32, &row.q33, &row.q34, &row.q35, &row.q36,
+            ];
 
-    map.into_iter()
-        .map(
-            |(
-                student_id,
-                (
-                    _,
-                    AnswerSheet {
-                        subject_id,
-                        subject_name,
-                        student_name,
-                        exam_room,
-                        exam_seat,
-                        ..
-                    },
-                    AnswerSheetResult {
-                        graded_questions, ..
-                    },
-                ),
-            )| {
-                let total: f32 = graded_questions
-                    .into_iter()
-                    .map(|c| {
-                        score_for(c.A)
-                            + score_for(c.B)
-                            + score_for(c.C)
-                            + score_for(c.D)
-                            + score_for(c.E)
-                    })
-                    .sum();
+            for ans in answers {
+                total += ans.parse::<f32>().unwrap_or(0.0);
+            }
 
-                StudentTotalScore {
-                    subject_id,
-                    student_id,
-                    subject_name: subject_name.unwrap_or_default(),
-                    student_name: student_name.unwrap_or_default(),
-                    exam_room: exam_room.unwrap_or_default(),
-                    exam_seat: exam_seat.unwrap_or_default(),
-                    total_score: total,
-                }
-            },
-        )
+            StudentTotalScore {
+                subject_id: row.subject_id,
+                student_id: row.student_id,
+                subject_name: row.subject_name,
+                student_name: row.student_name,
+                exam_room: row.exam_room,
+                exam_seat: row.exam_seat,
+                total_score: total,
+            }
+        })
         .collect()
 }
 
