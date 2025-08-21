@@ -1,4 +1,6 @@
 use crate::err_log;
+use crate::errors::DatabaseError;
+use crate::state::{MongoDB, Options};
 use crate::{
     errors::CsvError,
     scoring::AnswerSheetResult,
@@ -7,13 +9,15 @@ use crate::{
 };
 use log::info;
 use opencv::prelude::Mat;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs::File};
 use tauri::{ipc::Channel, Emitter, Manager, Runtime};
 use tauri_plugin_fs::FilePath;
 
+use mongodb::{options::ClientOptions, Client};
+
 #[allow(non_snake_case)]
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct QuestionScoreRow {
     pub subject_id: String,
     pub student_id: String,
@@ -59,6 +63,17 @@ pub struct QuestionScoreRow {
     q36: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct StudentTotalScore {
+    pub subject_id: String,
+    pub student_id: String,
+    pub subject_name: String,
+    pub student_name: String,
+    pub exam_room: String,
+    pub exam_seat: String,
+    pub total_score: f32,
+}
+
 pub fn export_to_csv_wrapper<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
     path: Option<FilePath>,
@@ -81,25 +96,31 @@ pub fn export_to_csv_wrapper<R: Runtime, A: Emitter<R> + Manager<R>>(
         }
     }
 }
+
 pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
     path: FilePath,
 ) -> Result<(), CsvError> {
     let path = path.into_path()?;
-    info!("Exporing scanned results to {}...", path.display());
+    info!("Exporting scanned results to {}...", path.display());
     let file = File::create(path)?;
     let mut wtr = csv::Writer::from_writer(file);
 
     let results = AppState::get_scored_answers(app).ok_or(CsvError::IncorrectState)?;
-    let rows = map_to_csv(results);
-    let len = rows.len();
 
-    for row in rows {
+    let question_rows = map_to_csv(results.clone());
+    let len = question_rows.len();
+
+    for row in &question_rows {
         wtr.serialize(row)?;
     }
-
     wtr.flush()?;
-    info!("Finished Exporting! Written {len} rows.");
+    info!("Finished exporting to CSV! Written {len} rows.");
+    let student_totals = map_to_db_scores(question_rows);
+    if let Err(e) = store_scores_in_db(app, student_totals) {
+        err_log!(&e);
+    }
+
     Ok(())
 }
 
@@ -173,8 +194,62 @@ fn map_to_csv(
                 }
             },
         )
-        .fold(vec![], |mut acc, v| {
-            acc.push(v);
-            acc
+        .collect()
+}
+
+pub fn map_to_db_scores(question_score_rows: Vec<QuestionScoreRow>) -> Vec<StudentTotalScore> {
+    question_score_rows
+        .into_iter()
+        .map(|row| {
+            let mut total: f32 = 0.0;
+
+            // collect all q1..q36 into an array of &String
+            let answers = [
+                &row.q1, &row.q2, &row.q3, &row.q4, &row.q5, &row.q6,
+                &row.q7, &row.q8, &row.q9, &row.q10, &row.q11, &row.q12,
+                &row.q13, &row.q14, &row.q15, &row.q16, &row.q17, &row.q18,
+                &row.q19, &row.q20, &row.q21, &row.q22, &row.q23, &row.q24,
+                &row.q25, &row.q26, &row.q27, &row.q28, &row.q29, &row.q30,
+                &row.q31, &row.q32, &row.q33, &row.q34, &row.q35, &row.q36,
+            ];
+
+            for ans in answers {
+                total += ans.parse::<f32>().unwrap_or(0.0);
+            }
+
+            StudentTotalScore {
+                subject_id: row.subject_id,
+                student_id: row.student_id,
+                subject_name: row.subject_name,
+                student_name: row.student_name,
+                exam_room: row.exam_room,
+                exam_seat: row.exam_seat,
+                total_score: total,
+            }
         })
+        .collect()
+}
+
+
+fn store_scores_in_db<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A, rows: Vec<StudentTotalScore>) -> Result<(), DatabaseError> {
+    if let Options { mongo: MongoDB::Enable { mongo_db_uri, mongo_db_name }, .. } = AppState::get_options(app) {
+    //println!("MONGODB_URI = {:?}", std::env::var("MONGODB_URI"));
+    //println!("MY_DATABASE = {:?}", std::env::var("MY_DATABASE"));
+
+    tauri::async_runtime::block_on(async {
+        let options = ClientOptions::parse(&mongo_db_uri).await?;
+        let client = Client::with_options(options)?;
+
+        let collection = client
+            .database(&mongo_db_name)
+            .collection::<StudentTotalScore>("student_total_scores");
+
+        collection.insert_many(rows).await?;
+        info!("Inserted total scores into MongoDB Atlas successfully");
+        Ok(())
+    })
+    } else {
+        println!("You choose to not user MongoDB");
+        Ok(())
+    }
 }

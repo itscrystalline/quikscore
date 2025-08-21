@@ -66,13 +66,23 @@ pub struct AppState {
     options: Options,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
+pub enum MongoDB {
+    Disable,
+    Enable {
+        mongo_db_uri: String,
+        mongo_db_name: String,
+    }
+}
+
+#[derive(Clone)]
 pub struct Options {
     pub ocr: bool,
+    pub mongo: MongoDB,
 }
 impl Default for Options {
     fn default() -> Self {
-        Self { ocr: true }
+        Self { ocr: true, mongo: MongoDB::Disable, }
     }
 }
 
@@ -476,7 +486,13 @@ impl AppState {
     pub fn get_options<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A) -> Options {
         let mutex = app.state::<StateMutex>();
         let state = mutex.lock().expect("poisoned");
-        state.options
+        state.options.clone()
+    }
+    pub fn set_mongodb<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A, mongo_db_uri: String, mongo_db_name: String) {
+        let mutex = app.state::<StateMutex>();
+        let mut state = mutex.lock().expect("poisoned");
+        let mongo_enum = MongoDB::Enable { mongo_db_uri, mongo_db_name };
+        state.options.mongo = mongo_enum;
     }
 }
 
@@ -647,6 +663,7 @@ mod unit_tests {
             state,
             options: Options {
                 ocr: cfg!(feature = "ocr-tests"),
+                mongo: MongoDB::Disable,
             },
         }));
         app
