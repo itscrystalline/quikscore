@@ -1,8 +1,7 @@
 use crate::err_log;
-use crate::errors::DatabaseError;
 use crate::state::{MongoDB, Options};
 use crate::{
-    errors::CsvError,
+    errors::ExportError,
     scoring::AnswerSheetResult,
     signal,
     state::{AnswerSheet, AppState, CsvExport},
@@ -121,13 +120,13 @@ pub fn export_to_csv_wrapper<R: Runtime, A: Emitter<R> + Manager<R>>(
 pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
     path: FilePath,
-) -> Result<(), CsvError> {
+) -> Result<(), ExportError> {
     let path = path.into_path()?;
     info!("Exporting scanned results to {}...", path.display());
     let file = File::create(path)?;
     let mut wtr = csv::Writer::from_writer(file);
 
-    let results = AppState::get_scored_answers(app).ok_or(CsvError::IncorrectState)?;
+    let results = AppState::get_scored_answers(app).ok_or(ExportError::IncorrectState)?;
 
     let question_rows = map_to_csv(results.clone());
     let len = question_rows.len();
@@ -216,7 +215,7 @@ pub fn map_to_db_scores(question_score_rows: Vec<QuestionScoreRow>) -> Vec<Stude
 fn store_scores_in_db<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
     rows: Vec<StudentTotalScore>,
-) -> Result<(), DatabaseError> {
+) -> Result<(), ExportError> {
     if let Options {
         mongo: MongoDB::Enable {
             mongo_db_uri,
