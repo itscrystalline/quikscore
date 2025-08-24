@@ -505,38 +505,4 @@ subject_code,q1,q2,q3,q4,q5,q6,q7,q8,q9,q10,q11,q12,q13,q14,q15,q16,q17,q18,q19,
         assert_eq!(question_weights.next(), Some(2));
         assert_eq!(question_weights.next(), Some(3));
     }
-    // #[test]
-    // fn test_export_csv() {
-    //     let correct_group = QuestionGroup {
-    //         A: answer(1),
-    //         B: answer(2),
-    //         C: answer(3),
-    //         D: answer(4),
-    //         E: none_answer(),
-    //     };
-    //     let student_group = QuestionGroup {
-    //         A: answer(1),
-    //         B: answer(9),
-    //         C: answer(3),
-    //         D: none_answer(),
-    //         E: answer(1),
-    //     };
-    //
-    //     let answer_sheet = AnswerSheet {
-    //         subject_id: "1001".to_string(),
-    //         student_id: "123456".to_string(),
-    //         answers: std::array::from_fn(|_| student_group.clone()),
-    //         subject_name: None,
-    //         student_name: None,
-    //         exam_room: None,
-    //         exam_seat: None,
-    //     };
-    //     let key_sheet = AnswerKeySheet {
-    //         subject_code: "1001".to_string(),
-    //         answers: std::array::from_fn(|_| correct_group.clone()),
-    //     };
-    //
-    //     grade_and_export_csv(&answer_sheet, &key_sheet, "test_scores.csv")?;
-    //     Ok(())
-    // }
 }

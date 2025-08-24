@@ -72,7 +72,7 @@ pub enum MongoDB {
     Enable {
         mongo_db_uri: String,
         mongo_db_name: String,
-    }
+    },
 }
 
 #[derive(Clone)]
@@ -82,7 +82,10 @@ pub struct Options {
 }
 impl Default for Options {
     fn default() -> Self {
-        Self { ocr: true, mongo: MongoDB::Disable, }
+        Self {
+            ocr: true,
+            mongo: MongoDB::Disable,
+        }
     }
 }
 
@@ -488,10 +491,17 @@ impl AppState {
         let state = mutex.lock().expect("poisoned");
         state.options.clone()
     }
-    pub fn set_mongodb<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A, mongo_db_uri: String, mongo_db_name: String) {
+    pub fn set_mongodb<R: Runtime, A: Emitter<R> + Manager<R>>(
+        app: &A,
+        mongo_db_uri: String,
+        mongo_db_name: String,
+    ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        let mongo_enum = MongoDB::Enable { mongo_db_uri, mongo_db_name };
+        let mongo_enum = MongoDB::Enable {
+            mongo_db_uri,
+            mongo_db_name,
+        };
         state.options.mongo = mongo_enum;
     }
 }
@@ -640,7 +650,7 @@ pub enum AnswerScoreResult {
 }
 
 #[cfg(test)]
-mod unit_tests {
+pub mod unit_tests {
     use crate::image::upload_key_image_impl;
     use crate::image::upload_sheet_images_impl;
     use crate::scoring::upload_weights_impl;
@@ -657,7 +667,7 @@ mod unit_tests {
     use tauri::{test::MockRuntime, App, Manager};
     use tauri_plugin_fs::FilePath;
 
-    fn mock_app_with_state(state: AppStatePipeline) -> App<MockRuntime> {
+    pub fn mock_app_with_state(state: AppStatePipeline) -> App<MockRuntime> {
         let app = tauri::test::mock_app();
         app.manage(Mutex::new(AppState {
             state,

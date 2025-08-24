@@ -110,7 +110,7 @@ pub fn export_to_csv_wrapper<R: Runtime, A: Emitter<R> + Manager<R>>(
             signal!(
                 channel,
                 CsvExport::Error {
-                    error: format!("error exporting to CSV: {e}")
+                    error: format!("Error whilst trying to export: {e}")
                 }
             )
         }
@@ -128,7 +128,7 @@ pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
 
     let results = AppState::get_scored_answers(app).ok_or(ExportError::IncorrectState)?;
 
-    let question_rows = map_to_csv(results.clone());
+    let question_rows = map_to_csv(results);
     let len = question_rows.len();
 
     for row in &question_rows {
@@ -138,9 +138,7 @@ pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     info!("Finished exporting to CSV! Written {len} rows.");
     let student_totals = map_to_db_scores(question_rows);
 
-    if let Err(e) = store_scores_in_db(app, student_totals) {
-        err_log!(&e);
-    }
+    store_scores_in_db(app, student_totals)?;
 
     Ok(())
 }
@@ -163,7 +161,9 @@ fn map_to_csv(
                         ..
                     },
                     AnswerSheetResult {
-                        graded_questions, ..
+                        score,
+                        graded_questions,
+                        ..
                     },
                 ),
             )| {
@@ -171,7 +171,6 @@ fn map_to_csv(
                     .iter()
                     .map(|(_, w)| w.to_string())
                     .collect::<Vec<_>>();
-                let total = graded_questions.iter().map(|(_, w)| *w as u32).sum::<u32>();
 
                 QuestionScoreRow {
                     subject_id: subject_id.clone(),
@@ -181,7 +180,7 @@ fn map_to_csv(
                     exam_room: exam_room.clone().unwrap_or_default(),
                     exam_seat: exam_seat.clone().unwrap_or_default(),
                     questions: graded,
-                    total_score: total.to_string(),
+                    total_score: score.to_string(),
                 }
             },
         )
@@ -240,7 +239,144 @@ fn store_scores_in_db<R: Runtime, A: Emitter<R> + Manager<R>>(
             Ok(())
         })
     } else {
-        println!("You choose to not user MongoDB");
+        info!("You choose to not use MongoDB");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use std::array;
+
+    use crate::{
+        scoring::{CheckedAnswer, CheckedQuestionGroup, ScoreWeights},
+        state::{self, AnswerKeySheet, AppStatePipeline, QuestionGroup},
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_question_score_row_serializer() {
+        let scores = QuestionScoreRow {
+            subject_id: "10".to_string(),
+            student_id: "65010003".to_string(),
+            subject_name: "Mathematics".to_string(),
+            student_name: "Marcia Cole".to_string(),
+            exam_room: "608".to_string(),
+            exam_seat: "A03".to_string(),
+            questions: (0..36).map(|_| "1".to_string()).collect(),
+            total_score: "36".to_string(),
+        };
+        let mut writer = csv::Writer::from_writer(vec![]);
+        writer.serialize(scores).unwrap();
+
+        let result = String::from_utf8(writer.into_inner().unwrap()).unwrap();
+        assert_eq!(
+            result,
+            r#"subject_id,student_id,subject_name,student_name,exam_room,exam_seat,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,total_score
+10,65010003,Mathematics,Marcia Cole,608,A03,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,36
+"#
+        )
+    }
+
+    #[test]
+    fn test_map_to_csv_vec() {
+        let mut map = HashMap::new();
+        map.insert(
+            "65010003".into(),
+            (
+                Mat::default(),
+                AnswerSheet {
+                    subject_id: "10".to_string(),
+                    student_id: "65010003".to_string(),
+                    subject_name: Some("Mathematics".to_string()),
+                    student_name: Some("Marcia Cole".to_string()),
+                    exam_room: Some("608".to_string()),
+                    exam_seat: Some("A03".to_string()),
+                    answers: array::from_fn(|_| QuestionGroup::default()),
+                },
+                AnswerSheetResult {
+                    correct: 36,
+                    incorrect: 0,
+                    score: 36,
+                    graded_questions: array::from_fn(|_| {
+                        (
+                            CheckedQuestionGroup {
+                                A: CheckedAnswer::Correct,
+                                B: CheckedAnswer::Correct,
+                                C: CheckedAnswer::Correct,
+                                D: CheckedAnswer::Correct,
+                                E: CheckedAnswer::Correct,
+                            },
+                            1,
+                        )
+                    }),
+                },
+            ),
+        );
+
+        let rows = map_to_csv(map);
+        assert_eq!(rows.len(), 1);
+
+        let row = &rows[0];
+        assert_eq!(row.subject_id, "10");
+        assert_eq!(row.student_id, "65010003");
+        assert_eq!(row.subject_name, "Mathematics");
+        assert_eq!(row.student_name, "Marcia Cole");
+        assert_eq!(row.exam_room, "608");
+        assert_eq!(row.exam_seat, "A03");
+        assert_eq!(row.questions.len(), 36);
+        assert!(row.questions.iter().all(|q| q == "1"));
+        assert_eq!(row.total_score, "36");
+    }
+
+    #[test]
+    fn test_export_csv() {
+        let mut answers = HashMap::new();
+        answers.insert(
+            "65010003".into(),
+            (
+                Mat::default(),
+                AnswerSheet {
+                    subject_id: "10".to_string(),
+                    student_id: "65010003".to_string(),
+                    subject_name: Some("Mathematics".to_string()),
+                    student_name: Some("Marcia Cole".to_string()),
+                    exam_room: Some("608".to_string()),
+                    exam_seat: Some("A03".to_string()),
+                    answers: array::from_fn(|_| QuestionGroup::default()),
+                },
+                AnswerSheetResult {
+                    correct: 36,
+                    incorrect: 0,
+                    score: 36,
+                    graded_questions: array::from_fn(|_| {
+                        (
+                            CheckedQuestionGroup {
+                                A: CheckedAnswer::Correct,
+                                B: CheckedAnswer::Correct,
+                                C: CheckedAnswer::Correct,
+                                D: CheckedAnswer::Correct,
+                                E: CheckedAnswer::Correct,
+                            },
+                            1,
+                        )
+                    }),
+                },
+            ),
+        );
+        let state = state::unit_tests::mock_app_with_state(AppStatePipeline::Scored {
+            key_image: Mat::default(),
+            key: AnswerKeySheet {
+                subject_id: "10".to_string(),
+                answers: array::from_fn(|_| QuestionGroup::default()),
+            },
+            weights: ScoreWeights {
+                weights: HashMap::new(),
+            },
+            answer_sheets: answers,
+        });
+
+        todo!()
     }
 }
