@@ -4,8 +4,10 @@ use ocrs::OcrEngine;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{
+    array,
     collections::HashMap,
     fmt::Display,
+    mem,
     path::PathBuf,
     sync::{Mutex, OnceLock},
 };
@@ -64,13 +66,23 @@ pub struct AppState {
     options: Options,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
+pub enum MongoDB {
+    Disable,
+    Enable {
+        mongo_db_uri: String,
+        mongo_db_name: String,
+    }
+}
+
+#[derive(Clone)]
 pub struct Options {
     pub ocr: bool,
+    pub mongo: MongoDB,
 }
 impl Default for Options {
     fn default() -> Self {
-        Self { ocr: true }
+        Self { ocr: true, mongo: MongoDB::Disable, }
     }
 }
 
@@ -132,7 +144,7 @@ impl AppState {
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        match &state.state {
+        match &mut state.state {
             AppStatePipeline::Init | AppStatePipeline::WithKey { .. } => {
                 state.state = AppStatePipeline::WithKey {
                     key_image: image,
@@ -150,7 +162,7 @@ impl AppState {
                     state.state = AppStatePipeline::WithKeyAndWeights {
                         key_image: image,
                         key,
-                        weights: weights.clone(),
+                        weights: mem::take(weights),
                     };
                 } else {
                     state.state = AppStatePipeline::WithKey {
@@ -185,14 +197,14 @@ impl AppState {
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        match &state.state {
+        match &mut state.state {
             AppStatePipeline::WithKey { key_image, key }
             | AppStatePipeline::WithKeyAndWeights { key_image, key, .. }
                 if weights.weights.contains_key(&key.subject_id) =>
             {
                 state.state = AppStatePipeline::WithKeyAndWeights {
-                    key_image: key_image.clone(),
-                    key: key.clone(),
+                    key_image: mem::take(key_image),
+                    key: mem::take(key),
                     weights,
                 };
                 signal!(channel, KeyUpload::UploadedWeights);
@@ -245,10 +257,10 @@ impl AppState {
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        if let AppStatePipeline::WithKeyAndWeights { key_image, key, .. } = &state.state {
+        if let AppStatePipeline::WithKeyAndWeights { key_image, key, .. } = &mut state.state {
             state.state = AppStatePipeline::WithKey {
-                key_image: key_image.clone(),
-                key: key.clone(),
+                key_image: mem::take(key_image),
+                key: mem::take(key),
             };
             signal!(channel, KeyUpload::ClearWeights);
         }
@@ -264,7 +276,7 @@ impl AppState {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
 
-        match &state.state {
+        match &mut state.state {
             AppStatePipeline::WithKeyAndWeights {
                 key_image,
                 key,
@@ -277,9 +289,9 @@ impl AppState {
                 ..
             } => {
                 state.state = AppStatePipeline::Scoring {
-                    key_image: key_image.clone(),
-                    key: key.clone(),
-                    weights: weights.clone(),
+                    key_image: mem::take(key_image),
+                    key: mem::take(key),
+                    weights: mem::take(weights),
                     processing_channel,
                 };
                 signal!(
@@ -309,7 +321,7 @@ impl AppState {
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        match &state.state {
+        match &mut state.state {
             AppStatePipeline::Scoring {
                 key_image,
                 key,
@@ -320,9 +332,9 @@ impl AppState {
                     .blocking_send(ProcessingState::Cancel)
                     .expect("called in async context (impossible)");
                 state.state = AppStatePipeline::WithKeyAndWeights {
-                    key_image: key_image.clone(),
-                    key: key.clone(),
-                    weights: weights.clone(),
+                    key_image: mem::take(key_image),
+                    key: mem::take(key),
+                    weights: mem::take(weights),
                 };
                 signal!(channel, AnswerUpload::Cancelled);
             }
@@ -346,7 +358,7 @@ impl AppState {
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        match &state.state {
+        match &mut state.state {
             AppStatePipeline::Scoring {
                 key_image,
                 key,
@@ -382,7 +394,6 @@ impl AppState {
                             AnswerSheetResult {
                                 correct,
                                 incorrect,
-                                not_answered,
                                 score,
                                 ..
                             },
@@ -398,7 +409,6 @@ impl AppState {
                                     max_score: *max_score - weights.max_score_deduction(key),
                                     correct: *correct,
                                     incorrect: *incorrect,
-                                    not_answered: *not_answered,
                                 },
                                 Err(e) => {
                                     err_log!(&e);
@@ -427,9 +437,9 @@ impl AppState {
                     })
                     .collect();
                 state.state = AppStatePipeline::Scored {
-                    key_image: key_image.clone(),
-                    key: key.clone(),
-                    weights: weights.clone(),
+                    key_image: mem::take(key_image),
+                    key: mem::take(key),
+                    weights: mem::take(weights),
                     answer_sheets,
                 };
                 signal!(channel, AnswerUpload::Done { uploaded: to_send });
@@ -457,12 +467,12 @@ impl AppState {
             key_image,
             weights,
             ..
-        } = &state.state
+        } = &mut state.state
         {
             state.state = AppStatePipeline::WithKeyAndWeights {
-                key_image: key_image.clone(),
-                key: key.clone(),
-                weights: weights.clone(),
+                key_image: mem::take(key_image),
+                key: mem::take(key),
+                weights: mem::take(weights),
             };
             signal!(channel, AnswerUpload::Clear);
         }
@@ -476,7 +486,13 @@ impl AppState {
     pub fn get_options<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A) -> Options {
         let mutex = app.state::<StateMutex>();
         let state = mutex.lock().expect("poisoned");
-        state.options
+        state.options.clone()
+    }
+    pub fn set_mongodb<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A, mongo_db_uri: String, mongo_db_name: String) {
+        let mutex = app.state::<StateMutex>();
+        let mut state = mutex.lock().expect("poisoned");
+        let mongo_enum = MongoDB::Enable { mongo_db_uri, mongo_db_name };
+        state.options.mongo = mongo_enum;
     }
 }
 
@@ -504,9 +520,17 @@ impl From<AnswerSheet> for AnswerKeySheet {
         }
     }
 }
+impl Default for AnswerKeySheet {
+    fn default() -> Self {
+        Self {
+            subject_id: String::default(),
+            answers: array::from_fn(|_| QuestionGroup::default()),
+        }
+    }
+}
 
 #[allow(non_snake_case)]
-#[derive(Debug, Clone)]
+#[derive(Default, Debug, Clone)]
 pub struct QuestionGroup {
     pub A: Option<Answer>,
     pub B: Option<Answer>,
@@ -609,7 +633,6 @@ pub enum AnswerScoreResult {
         max_score: u32,
         correct: u32,
         incorrect: u32,
-        not_answered: u32,
     },
     Error {
         error: String,
@@ -640,6 +663,7 @@ mod unit_tests {
             state,
             options: Options {
                 ocr: cfg!(feature = "ocr-tests"),
+                mongo: MongoDB::Disable,
             },
         }));
         app

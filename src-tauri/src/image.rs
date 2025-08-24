@@ -50,7 +50,7 @@ pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         signal!(channel, KeyUpload::Cancelled);
         return;
     };
-    let Options { ocr } = AppState::get_options(app);
+    let Options { ocr, mongo: _ } = AppState::get_options(app);
     match handle_upload(
         file_path,
         ocr.then(state::init_thread_ocr).flatten().as_ref(),
@@ -87,7 +87,7 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     };
 
     let images_count = paths.len();
-    let Options { ocr } = AppState::get_options(app);
+    let Options { ocr , mongo: _} = AppState::get_options(app);
 
     let (tx, mut rx) = tauri::async_runtime::channel::<ProcessingState>(images_count);
     let stop_flag = Arc::new(RwLock::new(false));
@@ -480,9 +480,34 @@ impl AnswerSheetResult {
                     width: ANSWER_WIDTH,
                     height: ANSWER_HEIGHT,
                 };
+                let verdict = self.graded_questions[(x_idx * 9 + y_idx) as usize]
+                    .0
+                    .verdict();
+                let question_color: Option<opencv::core::Scalar> = match verdict {
+                    CheckedAnswer::Correct => Some((43, 160, 64).into()),
+                    CheckedAnswer::Incorrect => Some((57, 15, 210).into()),
+                    CheckedAnswer::Missing => Some((29, 142, 223).into()),
+                    CheckedAnswer::NotCounted => None,
+                };
+                if let Some(question_color) = question_color {
+                    imgproc::rectangle(
+                        &mut sheet_transparent,
+                        Rect_ {
+                            x,
+                            y,
+                            width: 24,
+                            height: ANSWER_HEIGHT,
+                        },
+                        question_color,
+                        FILLED,
+                        LINE_8,
+                        0,
+                    )?;
+                }
                 for row_idx in 0..5usize {
-                    let result_here =
-                        self.graded_questions[(x_idx * 9 + y_idx) as usize].at(row_idx);
+                    let result_here = self.graded_questions[(x_idx * 9 + y_idx) as usize]
+                        .0
+                        .at(row_idx);
                     let row_y = y
                         + ((ANSWER_HEIGHT / 5) * row_idx as i32)
                             .clamp(0, rect.height - ANSWER_HEIGHT / 5);
@@ -493,7 +518,7 @@ impl AnswerSheetResult {
                         height: ANSWER_HEIGHT / 5,
                     };
                     let color: Option<opencv::core::Scalar> = result_here.and_then(|c| match c {
-                        CheckedAnswer::Correct(_) => Some((43, 160, 64).into()),
+                        CheckedAnswer::Correct => Some((43, 160, 64).into()),
                         CheckedAnswer::Incorrect => Some((57, 15, 210).into()),
                         CheckedAnswer::Missing => Some((29, 142, 223).into()),
                         CheckedAnswer::NotCounted => None,
