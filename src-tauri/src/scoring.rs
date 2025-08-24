@@ -1,5 +1,5 @@
 use crate::err_log;
-use std::{collections::HashMap, fs::File, io::BufReader, mem};
+use std::{collections::HashMap, fmt, fs::File, io::BufReader, mem};
 
 use csv::DeserializeRecordsIntoIter;
 use itertools::{multizip, Itertools};
@@ -164,45 +164,10 @@ impl AnswerSheet {
 }
 
 #[allow(non_snake_case)]
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug)]
 struct RawScoreWeights {
     subject_code: String,
-    q1: String,
-    q2: String,
-    q3: String,
-    q4: String,
-    q5: String,
-    q6: String,
-    q7: String,
-    q8: String,
-    q9: String,
-    q10: String,
-    q11: String,
-    q12: String,
-    q13: String,
-    q14: String,
-    q15: String,
-    q16: String,
-    q17: String,
-    q18: String,
-    q19: String,
-    q20: String,
-    q21: String,
-    q22: String,
-    q23: String,
-    q24: String,
-    q25: String,
-    q26: String,
-    q27: String,
-    q28: String,
-    q29: String,
-    q30: String,
-    q31: String,
-    q32: String,
-    q33: String,
-    q34: String,
-    q35: String,
-    q36: String,
+    questions: Vec<String>,
 }
 impl RawScoreWeights {
     fn weights_into_vec(self) -> Vec<u8> {
@@ -214,44 +179,46 @@ impl RawScoreWeights {
                 })
             };
         }
-        vec![
-            conv!(self.q1),
-            conv!(self.q2),
-            conv!(self.q3),
-            conv!(self.q4),
-            conv!(self.q5),
-            conv!(self.q6),
-            conv!(self.q7),
-            conv!(self.q8),
-            conv!(self.q9),
-            conv!(self.q10),
-            conv!(self.q11),
-            conv!(self.q12),
-            conv!(self.q13),
-            conv!(self.q14),
-            conv!(self.q15),
-            conv!(self.q16),
-            conv!(self.q17),
-            conv!(self.q18),
-            conv!(self.q19),
-            conv!(self.q20),
-            conv!(self.q21),
-            conv!(self.q22),
-            conv!(self.q23),
-            conv!(self.q24),
-            conv!(self.q25),
-            conv!(self.q26),
-            conv!(self.q27),
-            conv!(self.q28),
-            conv!(self.q29),
-            conv!(self.q30),
-            conv!(self.q31),
-            conv!(self.q32),
-            conv!(self.q33),
-            conv!(self.q34),
-            conv!(self.q35),
-            conv!(self.q36),
-        ]
+        self.questions.iter().map(|w| conv!(w)).collect()
+    }
+}
+impl<'de> serde::Deserialize<'de> for RawScoreWeights {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct RowVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for RowVisitor {
+            type Value = RawScoreWeights;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                formatter.write_str("a CSV row with subject_code and question weights")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                // first field → subject_code
+                let subject_code: String = seq
+                    .next_element()?
+                    .ok_or_else(|| serde::de::Error::invalid_length(0, &self))?;
+
+                // rest → questions
+                let mut questions = Vec::new();
+                while let Some(q) = seq.next_element::<String>()? {
+                    questions.push(q);
+                }
+
+                Ok(RawScoreWeights {
+                    subject_code,
+                    questions,
+                })
+            }
+        }
+
+        deserializer.deserialize_seq(RowVisitor)
     }
 }
 
