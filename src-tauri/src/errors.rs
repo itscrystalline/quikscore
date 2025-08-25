@@ -74,7 +74,7 @@ macro_rules! err_log {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub enum CsvError {
+pub enum ExportError {
     #[error("Invalid path: {0}")]
     InvalidPath(#[from] tauri_plugin_fs::Error),
     #[error("Cannot open/write file: {0}")]
@@ -83,13 +83,6 @@ pub enum CsvError {
     IncorrectState,
     #[error("Failed to serialize CSV: {0}")]
     Csv(#[from] csv::Error),
-}
-#[derive(thiserror::Error, Debug)]
-pub enum DatabaseError {
-    //#[error("Environment variable MONGO_URI cannot be found. (reason: {0}) Please declare it before starting the program or provide it via an .env file.")]
-    //MissingMongoUri(#[source] std::env::VarError),
-    //#[error("Environment variable MY_DATABASE cannot be found. (reason: {0}) Please declare it before starting the program or provide it via an .env file.")]
-    //MissingDbName(#[source] std::env::VarError),
     #[error("MongoDB error: {0}")]
     MongoDb(#[from] mongodb::error::Error),
 }
