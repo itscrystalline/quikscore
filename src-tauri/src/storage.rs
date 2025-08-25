@@ -14,7 +14,7 @@ use std::{collections::HashMap, fs::File};
 use tauri::{ipc::Channel, Emitter, Manager, Runtime};
 use tauri_plugin_fs::FilePath;
 
-use mongodb::{options::ClientOptions, Client};
+use mongodb::{options::ClientOptions, Client, bson::doc};
 
 #[allow(non_snake_case)]
 #[derive(Debug, Clone)]
@@ -233,11 +233,19 @@ fn store_scores_in_db<R: Runtime, A: Emitter<R> + Manager<R>>(
             let collection = client
                 .database(&mongo_db_name)
                 .collection::<StudentTotalScore>("student_total_scores");
+          
+            for row in rows {
+                let filter = doc! {
+                    "student_id": &row.student_id,
+                    "subject_id": &row.subject_id
+                };
+                collection.delete_one(filter.clone()).await?;
+                collection.insert_one(row).await?;
+            }
 
-            collection.insert_many(rows).await?;
-            info!("Inserted total scores into MongoDB Atlas successfully");
+            info!("Replaced total scores in MongoDB Atlas successfully");
             Ok(())
-        })
+
     } else {
         info!("You choose to not use MongoDB");
         Ok(())
