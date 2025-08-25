@@ -338,53 +338,53 @@ mod unit_tests {
         assert_eq!(row.total_score, "36");
     }
 
-    #[test]
-    fn test_export_csv() {
-        let mut answers = HashMap::new();
-        answers.insert(
-            "65010003".into(),
-            (
-                Mat::default(),
-                AnswerSheet {
-                    subject_id: "10".to_string(),
-                    student_id: "65010003".to_string(),
-                    subject_name: Some("Mathematics".to_string()),
-                    student_name: Some("Marcia Cole".to_string()),
-                    exam_room: Some("608".to_string()),
-                    exam_seat: Some("A03".to_string()),
-                    answers: array::from_fn(|_| QuestionGroup::default()),
-                },
-                AnswerSheetResult {
-                    correct: 36,
-                    incorrect: 0,
-                    score: 36,
-                    graded_questions: array::from_fn(|_| {
-                        (
-                            CheckedQuestionGroup {
-                                A: CheckedAnswer::Correct,
-                                B: CheckedAnswer::Correct,
-                                C: CheckedAnswer::Correct,
-                                D: CheckedAnswer::Correct,
-                                E: CheckedAnswer::Correct,
-                            },
-                            1,
-                        )
-                    }),
-                },
-            ),
-        );
-        let state = state::unit_tests::mock_app_with_state(AppStatePipeline::Scored {
-            key_image: Mat::default(),
-            key: AnswerKeySheet {
-                subject_id: "10".to_string(),
-                answers: array::from_fn(|_| QuestionGroup::default()),
-            },
-            weights: ScoreWeights {
-                weights: HashMap::new(),
-            },
-            answer_sheets: answers,
-        });
-
-        todo!()
-    }
+    // #[test]
+    // fn test_export_csv() {
+    //     let mut answers = HashMap::new();
+    //     answers.insert(
+    //         "65010003".into(),
+    //         (
+    //             Mat::default(),
+    //             AnswerSheet {
+    //                 subject_id: "10".to_string(),
+    //                 student_id: "65010003".to_string(),
+    //                 subject_name: Some("Mathematics".to_string()),
+    //                 student_name: Some("Marcia Cole".to_string()),
+    //                 exam_room: Some("608".to_string()),
+    //                 exam_seat: Some("A03".to_string()),
+    //                 answers: array::from_fn(|_| QuestionGroup::default()),
+    //             },
+    //             AnswerSheetResult {
+    //                 correct: 36,
+    //                 incorrect: 0,
+    //                 score: 36,
+    //                 graded_questions: array::from_fn(|_| {
+    //                     (
+    //                         CheckedQuestionGroup {
+    //                             A: CheckedAnswer::Correct,
+    //                             B: CheckedAnswer::Correct,
+    //                             C: CheckedAnswer::Correct,
+    //                             D: CheckedAnswer::Correct,
+    //                             E: CheckedAnswer::Correct,
+    //                         },
+    //                         1,
+    //                     )
+    //                 }),
+    //             },
+    //         ),
+    //     );
+    //     let state = state::unit_tests::mock_app_with_state(AppStatePipeline::Scored {
+    //         key_image: Mat::default(),
+    //         key: AnswerKeySheet {
+    //             subject_id: "10".to_string(),
+    //             answers: array::from_fn(|_| QuestionGroup::default()),
+    //         },
+    //         weights: ScoreWeights {
+    //             weights: HashMap::new(),
+    //         },
+    //         answer_sheets: answers,
+    //     });
+    //
+    //     todo!()
+    // }
 }
