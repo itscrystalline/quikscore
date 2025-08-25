@@ -17,6 +17,7 @@ in {
   env.LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
   env.RUST_LOG_STYLE = "always";
   env.RUST_LOG = "debug";
+  env.LD_LIBRARY_PATH = "${pkgs.stdenv.cc.cc.lib}/lib";
   #
   # # https://devenv.sh/packages/
   packages = with pkgs;
@@ -52,6 +53,7 @@ in {
       libsoup_3
       pango
       webkitgtk_4_1
+      stdenv.cc.cc.lib
     ];
   #
   # # https://devenv.sh/languages/
@@ -67,6 +69,15 @@ in {
   languages.javascript = {
     enable = true;
     corepack.enable = true;
+  };
+  languages.python = {
+    enable = true;
+    package = pkgs.python3.withPackages (_: [
+      (pkgs.opencv4.override {
+        enableGtk3 = true;
+        enablePython = true;
+      })
+    ]);
   };
 
   #
