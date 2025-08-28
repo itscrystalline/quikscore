@@ -1,8 +1,8 @@
 use crate::err_log;
 use log::{debug, warn};
 use ocrs::{ImageSource, OcrEngine};
-use std::array;
 use std::sync::{Arc, RwLock};
+use std::{array, mem};
 use tauri::ipc::Channel;
 
 use crate::errors::{SheetError, UploadError};
@@ -40,6 +40,20 @@ const ANSWER_WIDTH_GAP: i32 = 9;
 const ANSWER_HEIGHT: i32 = 73;
 const ANSWER_HEIGHT_GAP: i32 = 10;
 const MARKER_TRANSPARENCY: f64 = 0.3;
+
+struct SplittedSheet {
+    original: Mat,
+
+    student_name: Mat,
+    subject_name: Mat,
+    exam_room: Mat,
+    exam_seat: Mat,
+
+    subject_id: Mat,
+    student_id: Mat,
+
+    questions: Vec<Mat>,
+}
 
 pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
@@ -87,7 +101,7 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     };
 
     let images_count = paths.len();
-    let Options { ocr , mongo: _} = AppState::get_options(app);
+    let Options { ocr, mongo: _ } = AppState::get_options(app);
 
     let (tx, mut rx) = tauri::async_runtime::channel::<ProcessingState>(images_count);
     let stop_flag = Arc::new(RwLock::new(false));
@@ -176,15 +190,12 @@ fn handle_upload(
     ocr: Option<&OcrEngine>,
 ) -> Result<(String, Mat, AnswerSheet), UploadError> {
     let mat = read_from_path(path)?;
-    let resized = resize_relative_img(&mat, 0.3333).map_err(UploadError::from)?;
-    let resized_for_fix = resized.clone();
-    let (aligned_for_display, subject_id, student_id, answer_sheet) =
-        fix_answer_sheet(resized_for_fix)?;
+    let mut splitted = prepare_answer_sheet(mat)?;
 
-    let base64 = mat_to_base64_png(&aligned_for_display).map_err(UploadError::from)?;
-    let answer_sheet =
-        AnswerSheet::try_convert(mat, resized, subject_id, student_id, answer_sheet, ocr)?;
-    Ok((base64, aligned_for_display, answer_sheet))
+    let original = mem::take(&mut splitted.original);
+    let base64 = mat_to_base64_png(&original).map_err(UploadError::from)?;
+    let answer_sheet = AnswerSheet::try_convert(splitted, ocr)?;
+    Ok((base64, original, answer_sheet))
 }
 
 pub fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
@@ -208,37 +219,48 @@ fn read_from_path(path: FilePath) -> Result<Mat, UploadError> {
         })
 }
 
-fn preprocess_sheet(mat: Mat) -> Result<Mat, SheetError> {
-    // blur
-    // let mut mat_blur = new_mat_copy!(mat);
-    // imgproc::gaussian_blur_def(&mat, &mut mat_blur, (5, 5).into(), 0.0)?;
-    // thresholding
-    let mut mat_thresh = new_mat_copy!(mat);
-    imgproc::threshold(&mat, &mut mat_thresh, 230.0, 255.0, THRESH_BINARY)?;
-    Ok(mat_thresh)
-}
-
 fn crop_to_markers(mat: Mat) -> Result<Mat, SheetError> {
-    Ok(mat
-        .roi(Rect_ {
-            x: 38,
-            y: 30,
-            width: 1095,
-            height: 765,
-        })?
-        .clone_pointee())
+    let grayscaled = {
+        let mut gray = new_mat_copy!(mat);
+        imgproc::cvt_color_def(&mat, &mut gray, imgproc::COLOR_BGR2GRAY)?;
+        gray
+    };
+    let blurred = {
+        let mut blur = new_mat_copy!(grayscaled);
+        imgproc::gaussian_blur_def(&grayscaled, &mut blur, (5, 5).into(), 0)?;
+        blur
+    };
+    let thresholded = {
+        let mut thresh = new_mat_copy!(blurred);
+        imgproc::adaptive_threshold(
+            &blurred,
+            &mut thresh,
+            255.0,
+            imgproc::ADAPTIVE_THRESH_GAUSSIAN_C,
+            imgproc::THRESH_BINARY_INV,
+            11,
+            2.0,
+        )?;
+        thresh
+    };
+
+    let mut contours: Vec<Vector<opencv::core::Point>> = vec![];
+    imgproc::find_contours_def(
+        &thresholded,
+        &mut contours,
+        imgproc::RETR_EXTERNAL,
+        imgproc::CHAIN_APPROX_SIMPLE,
+    )?;
+    todo!()
 }
 
-fn fix_answer_sheet(mat: Mat) -> Result<(Mat, Mat, Mat, Mat), SheetError> {
+fn prepare_answer_sheet(mat: Mat) -> Result<SplittedSheet, SheetError> {
     let cropped = crop_to_markers(mat)?;
-    let preprocessed = preprocess_sheet(cropped.clone())?;
-
-    let (subject_id, student_id, ans_sheet) = split_into_areas(preprocessed)?;
-
-    Ok((cropped, subject_id, student_id, ans_sheet))
+    let splitted = split_into_areas(cropped)?;
+    Ok(splitted)
 }
 
-fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
+fn split_into_areas(sheet: Mat) -> Result<SplittedSheet, SheetError> {
     let subject_area = sheet
         .roi(Rect_ {
             x: 2,
@@ -420,14 +442,7 @@ fn extract_digits_for_sub_stu(
 }
 
 impl AnswerSheet {
-    fn try_convert(
-        original: Mat,
-        original_small: Mat,
-        subject_code_mat: Mat,
-        student_id_mat: Mat,
-        answers_mat: Mat,
-        ocr: Option<&OcrEngine>,
-    ) -> Result<Self, SheetError> {
+    fn try_convert(src: SplittedSheet, ocr: Option<&OcrEngine>) -> Result<Self, SheetError> {
         let subject_id = extract_digits_for_sub_stu(&subject_code_mat, 2, false)?;
         let student_id = extract_digits_for_sub_stu(&student_id_mat, 9, true)?;
         let answers = extract_answers(&answers_mat)?;
@@ -847,18 +862,6 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_preprocess_sheet_thresholding() {
-        // Make a light gray image (above threshold)
-        let mat = Mat::new_rows_cols_with_default(10, 10, core::CV_8UC1, core::Scalar::all(240.0))
-            .unwrap();
-        let thresh = preprocess_sheet(mat);
-        assert!(thresh.is_ok());
-
-        let result = thresh.unwrap();
-        assert_eq!(result.at_2d::<u8>(0, 0).unwrap(), &255);
-    }
-
-    #[test]
     fn test_crop_to_markers_size() {
         let mat =
             Mat::new_rows_cols_with_default(900, 1200, core::CV_8UC1, core::Scalar::all(100.0))
@@ -894,7 +897,7 @@ mod unit_tests {
         let mat = read_from_path(path).expect("Failed to read image");
         let resized = resize_relative_img(&mat, 0.3333).expect("Resize failed");
         let (_cropped, subject_id_mat, student_id_mat, _answers) =
-            fix_answer_sheet(resized).expect("Fixing sheet failed");
+            prepare_answer_sheet(resized).expect("Fixing sheet failed");
 
         let subject_id = extract_digits_for_sub_stu(&subject_id_mat, 2, false)
             .expect("Extracting subject ID failed");
