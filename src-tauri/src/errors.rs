@@ -28,8 +28,8 @@ pub enum SheetError {
     TooLittleAnswers,
     #[error("Anyhow error")]
     OcrError(#[from] anyhow::Error),
-    // #[error("Tesseract Error: {0}")]
-    // TesseractError(#[from] tesseract_rs::TesseractError),
+    #[error("Incomplete markers on page")]
+    MissingMarkers,
 }
 
 #[derive(thiserror::Error, Debug)]

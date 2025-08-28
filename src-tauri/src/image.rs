@@ -10,7 +10,7 @@ use crate::scoring::{AnswerSheetResult, CheckedAnswer};
 use crate::{signal, state};
 use base64::Engine;
 use itertools::Itertools;
-use opencv::core::{Mat, Rect_, Size, Vector};
+use opencv::core::{Mat, Moments, Point, Rect_, Size, Vector};
 use opencv::imgproc::{COLOR_GRAY2RGBA, FILLED, LINE_8, THRESH_BINARY};
 use opencv::{core::MatTraitConstManual, imgcodecs, imgproc, prelude::*};
 use rayon::prelude::*;
@@ -227,7 +227,7 @@ fn crop_to_markers(mat: Mat) -> Result<Mat, SheetError> {
     };
     let blurred = {
         let mut blur = new_mat_copy!(grayscaled);
-        imgproc::gaussian_blur_def(&grayscaled, &mut blur, (5, 5).into(), 0)?;
+        imgproc::gaussian_blur_def(&grayscaled, &mut blur, (5, 5).into(), 0.0)?;
         blur
     };
     let thresholded = {
@@ -244,14 +244,54 @@ fn crop_to_markers(mat: Mat) -> Result<Mat, SheetError> {
         thresh
     };
 
-    let mut contours: Vec<Vector<opencv::core::Point>> = vec![];
-    imgproc::find_contours_def(
-        &thresholded,
-        &mut contours,
-        imgproc::RETR_EXTERNAL,
-        imgproc::CHAIN_APPROX_SIMPLE,
-    )?;
-    todo!()
+    let contours = {
+        let mut vec: Vector<Vector<Point>> = vec![].into();
+        imgproc::find_contours_def(
+            &thresholded,
+            &mut vec,
+            imgproc::RETR_EXTERNAL,
+            imgproc::CHAIN_APPROX_SIMPLE,
+        )?;
+        vec
+    };
+
+    let mut corners: (Option<Point>, (Option<i32>, Option<i32>)) = (None, (None, None));
+    for contour in contours {
+        let length_approx = imgproc::arc_length(&contour, true)?;
+        let epsilon = 0.04 * length_approx;
+
+        let mut approx: Vector<Point> = vec![].into();
+        imgproc::approx_poly_dp(&contour, &mut approx, epsilon, true)?;
+
+        // Check if it's a triangle
+        if length_approx > 90.0 && approx.len() == 3 {
+            let Moments { m00, m01, m10, .. } = imgproc::moments_def(&contour)?;
+            let cx = (m10 / m00) as i32;
+            let cy = (m01 / m00) as i32;
+
+            if cx + cy < 300 {
+                _ = corners.0.replace((cx, cy).into());
+            }
+            if cx > 1000 {
+                _ = corners.1 .0.replace(cx);
+            } else if cy > 1000 {
+                _ = corners.1 .1.replace(cy);
+            }
+        }
+    }
+
+    let (Some(Point { x, y }), (Some(x2), Some(y2))) = corners else {
+        return Err(SheetError::MissingMarkers);
+    };
+
+    Ok(mat
+        .roi(Rect_ {
+            x,
+            y,
+            width: x2 - x,
+            height: y2 - y,
+        })?
+        .clone_pointee())
 }
 
 fn prepare_answer_sheet(mat: Mat) -> Result<SplittedSheet, SheetError> {
