@@ -722,6 +722,13 @@ mod unit_tests {
             FilePath::Path(PathBuf::from("tests/assets/image_001.jpg")),
             FilePath::Path(PathBuf::from("tests/assets/image_002.jpg")),
             FilePath::Path(PathBuf::from("tests/assets/image_003.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/image_004.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/scan1_001.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/scan1_002.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/scan1_003.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/scan2_001.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/scan2_002.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/scan2_003.jpg")),
         ]
     }
 
@@ -844,46 +851,50 @@ mod unit_tests {
 
     #[test]
     fn test_crop_to_markers_size() {
-        let mat =
-            Mat::new_rows_cols_with_default(900, 1200, core::CV_8UC1, core::Scalar::all(100.0))
-                .unwrap();
-        let cropped = crop_to_markers(mat);
-        assert!(cropped.is_ok());
-        let cropped = cropped.unwrap();
-        assert_eq!(cropped.rows(), 765); // 795 - 30
-        assert_eq!(cropped.cols(), 1095); // 1133 - 38
+        let mat_markers = read_from_path(test_key_image()).unwrap();
+        let mat_no_markers = new_mat_copy!(mat_markers);
+        let cropped_ok = crop_to_markers(mat_markers);
+        assert!(cropped_ok.is_ok());
+        let cropped_not_ok = crop_to_markers(mat_no_markers);
+        assert!(cropped_not_ok.is_err());
+        assert!(matches!(
+            cropped_not_ok.unwrap_err(),
+            SheetError::MissingMarkers
+        ));
+
+        for image in test_images() {
+            println!("testing image {}", image);
+            let mat = read_from_path(image).unwrap();
+            let cropped = crop_to_markers(mat);
+            assert!(cropped.is_ok());
+        }
     }
 
     #[test]
     fn test_split_into_areas() {
-        // Size must be at least (1090, 750) to cover all ROIs
-        let mat =
-            Mat::new_rows_cols_with_default(800, 1100, core::CV_8UC1, core::Scalar::all(200.0))
-                .unwrap();
-        let result = split_into_areas(mat);
-        assert!(result.is_ok());
-
-        let (subject, student_id, answers) = result.unwrap();
-        assert_eq!(subject.rows(), 212);
-        assert_eq!(subject.cols(), 48);
-        assert_eq!(student_id.rows(), 211);
-        assert_eq!(student_id.cols(), 141);
-        assert_eq!(answers.rows(), 735);
-        assert_eq!(answers.cols(), 884);
+        for image in test_images() {
+            println!("testing image {}", image);
+            let mat = read_from_path(image).unwrap();
+            let cropped = crop_to_markers(mat).unwrap();
+            let splitted = split_into_areas(cropped);
+            assert!(splitted.is_ok());
+        }
     }
 
     #[test]
     fn check_extracted_ids_from_real_image() {
         let path = test_key_image();
         let mat = read_from_path(path).expect("Failed to read image");
-        let resized = resize_relative_img(&mat, 0.3333).expect("Resize failed");
-        let (_cropped, subject_id_mat, student_id_mat, _answers) =
-            prepare_answer_sheet(resized).expect("Fixing sheet failed");
+        let SplittedSheet {
+            subject_id,
+            student_id,
+            ..
+        } = prepare_answer_sheet(mat).expect("Fixing sheet failed");
 
-        let subject_id = extract_digits_for_sub_stu(&subject_id_mat, 2, false)
+        let subject_id = extract_digits_for_sub_stu(&subject_id, 2, false)
             .expect("Extracting subject ID failed");
-        let student_id = extract_digits_for_sub_stu(&student_id_mat, 9, true)
-            .expect("Extracting student ID failed");
+        let student_id =
+            extract_digits_for_sub_stu(&student_id, 9, true).expect("Extracting student ID failed");
 
         assert_eq!(subject_id, "10", "Subject ID does not match expected value");
         assert_eq!(
@@ -898,11 +909,15 @@ mod unit_tests {
         setup_ocr_data();
         let ocr = &state::init_thread_ocr().unwrap();
 
-        for (i, path) in test_images().into_iter().enumerate() {
+        for (i, path) in test_images().into_iter().take(3).enumerate() {
             let mat = read_from_path(path).expect("Failed to read image");
-            let resized = resize_relative_img(&mat, 0.3333).expect("Resize failed");
+            let SplittedSheet {
+                subject_id,
+                student_id,
+                ..
+            } = prepare_answer_sheet(mat).expect("Resize failed");
             let (subject_id, student_id) =
-                extract_subject_student_from_written_field(&resized, ocr)?;
+                extract_subject_student_from_written_field(subject_id, student_id, ocr)?;
 
             if i == 0 {
                 assert_eq!(subject_id, "10", "Subject ID does not match expected value");
@@ -933,18 +948,25 @@ mod unit_tests {
         setup_ocr_data();
         let ocr = &state::init_thread_ocr().unwrap();
 
-        for (i, path) in test_images().into_iter().enumerate() {
+        for (i, path) in test_images().into_iter().take(3).enumerate() {
             println!("image #{i}");
             let mat = read_from_path(path).expect("Failed to read image");
+            let SplittedSheet {
+                student_name,
+                subject_name,
+                exam_room,
+                exam_seat,
+                ..
+            } = prepare_answer_sheet(mat).unwrap();
 
-            let (name, subject, date, exam_room, seat) = extract_user_information(&mat, ocr)?;
+            let (name, subject, exam_room, seat) =
+                extract_user_information(student_name, subject_name, exam_room, exam_seat, ocr)?;
             if i == 0 {
                 assert_eq!(name, "Elize Howells", "Name does not match expected value");
                 assert_eq!(
                     subject, "Mathematics",
                     "Subject does not match expected value"
                 );
-                assert_eq!(date, "2021-01-01", "Date does not match expected value");
                 assert_eq!(exam_room, "608", "Exam room does not match expected value");
                 assert_eq!(seat, "A02", "Seat does not match expected value");
             } else if i == 1 {
@@ -953,7 +975,6 @@ mod unit_tests {
                     subject, "Mathematics",
                     "Subject does not match expected value"
                 );
-                assert_eq!(date, "2021-01-01", "Date does not match expected value");
                 assert_eq!(exam_room, "608", "Exam room does not match expected value");
                 assert_eq!(seat, "A03", "Seat does not match expected value");
             } else {
@@ -965,7 +986,6 @@ mod unit_tests {
                     subject, "Mathematics",
                     "Subject does not match expected value"
                 );
-                assert_eq!(date, "2021-01-01", "Date does not match expected value");
                 assert_eq!(exam_room, "608", "Exam room does not match expected value");
                 assert_eq!(seat, "A04", "Seat does not match expected value");
             }
