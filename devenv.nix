@@ -8,6 +8,7 @@
   libs = with pkgs; [
     opencv
     libclang.lib
+    zlib
   ];
   lib-path = lib.makeLibraryPath libs;
 in {
@@ -17,7 +18,6 @@ in {
   env.LIBCLANG_PATH = "${pkgs.libclang.lib}/lib/";
   env.RUST_LOG_STYLE = "always";
   env.RUST_LOG = "debug";
-  env.LD_LIBRARY_PATH = "${pkgs.stdenv.cc.cc.lib}/lib";
   #
   # # https://devenv.sh/packages/
   packages = with pkgs;
@@ -39,6 +39,13 @@ in {
 
       # yarn hash
       yarn-berry_4.yarn-berry-fetcher
+
+      # python
+      (python313Packages.opencv4.override {
+        enableGtk3 = true;
+        enablePython = true;
+      })
+      python313Packages.numpy
     ]
     ++ lib.optionals pkgs.stdenv.isLinux [
       gobject-introspection
@@ -72,12 +79,7 @@ in {
   };
   languages.python = {
     enable = true;
-    package = pkgs.python3.withPackages (_: [
-      (pkgs.opencv4.override {
-        enableGtk3 = true;
-        enablePython = true;
-      })
-    ]);
+    package = pkgs.python313;
   };
 
   #

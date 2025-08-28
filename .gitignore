@@ -53,3 +53,5 @@ target*
 result*
 
 src-tauri/opencv_world4110.dll
+
+.venv*
