@@ -11,10 +11,9 @@ use crate::{signal, state};
 use base64::Engine;
 use itertools::Itertools;
 use opencv::core::{Mat, Moments, Point, Rect_, Size, Vector};
-use opencv::imgproc::{COLOR_GRAY2RGBA, FILLED, LINE_8, THRESH_BINARY};
+use opencv::imgproc::{COLOR_GRAY2RGBA, FILLED, LINE_8};
 use opencv::{core::MatTraitConstManual, imgcodecs, imgproc, prelude::*};
 use rayon::prelude::*;
-use std::fs;
 use std::path::Path;
 use tauri_plugin_dialog::FilePath;
 
@@ -284,14 +283,16 @@ fn crop_to_markers(mat: Mat) -> Result<Mat, SheetError> {
         return Err(SheetError::MissingMarkers);
     };
 
-    Ok(mat
+    let cropped = mat
         .roi(Rect_ {
             x,
             y,
             width: x2 - x,
             height: y2 - y,
         })?
-        .clone_pointee())
+        .clone_pointee();
+
+    Ok(resize_relative_img(&cropped, 0.3333)?)
 }
 
 fn prepare_answer_sheet(mat: Mat) -> Result<SplittedSheet, SheetError> {
@@ -301,35 +302,11 @@ fn prepare_answer_sheet(mat: Mat) -> Result<SplittedSheet, SheetError> {
 }
 
 fn split_into_areas(sheet: Mat) -> Result<SplittedSheet, SheetError> {
-    let subject_area = sheet
-        .roi(Rect_ {
-            x: 2,
-            y: 189,
-            width: 48,
-            height: 212,
-        })?
-        .clone_pointee();
-    let student_id_area = sheet
-        .roi(Rect_ {
-            x: 57,
-            y: 188,
-            width: 141,
-            height: 211,
-        })?
-        .clone_pointee();
-    let answers_area = sheet
-        .roi(Rect_ {
-            x: 206,
-            y: 14,
-            width: 884,
-            height: 735,
-        })?
-        .clone_pointee();
-
-    Ok((subject_area, student_id_area, answers_area))
+    todo!();
 }
 
-fn extract_answers(answer_mat: &Mat) -> Result<[QuestionGroup; 36], SheetError> {
+fn extract_answers(answer_mats: Vec<Mat>) -> Result<[QuestionGroup; 36], SheetError> {
+    todo!();
     // let mat_debug_cloned = answer_mat.try_clone()?;
     // let mut mat_debug = new_mat_copy!(answer_mat);
     // imgproc::cvt_color_def(&mat_debug_cloned, &mut mat_debug, COLOR_GRAY2RGB)?;
@@ -341,8 +318,8 @@ fn extract_answers(answer_mat: &Mat) -> Result<[QuestionGroup; 36], SheetError> 
                 (ANSWER_HEIGHT + ANSWER_HEIGHT_GAP) * y_idx,
             );
             let (x, y) = (
-                x.clamp(0, answer_mat.cols() - ANSWER_WIDTH),
-                y.clamp(0, answer_mat.rows() - ANSWER_HEIGHT),
+                x.clamp(0, answer_mats.cols() - ANSWER_WIDTH),
+                y.clamp(0, answer_mats.rows() - ANSWER_HEIGHT),
             );
             let rect = Rect_ {
                 x,
@@ -372,7 +349,7 @@ fn extract_answers(answer_mat: &Mat) -> Result<[QuestionGroup; 36], SheetError> 
                                 width: row_rect.width / 13,
                                 height: ANSWER_HEIGHT / 5,
                             };
-                            let bubble_filled: u16 = answer_mat
+                            let bubble_filled: u16 = answer_mats
                                 .roi(bubble_rect)?
                                 .clone_pointee()
                                 .data_bytes()?
@@ -483,19 +460,35 @@ fn extract_digits_for_sub_stu(
 
 impl AnswerSheet {
     fn try_convert(src: SplittedSheet, ocr: Option<&OcrEngine>) -> Result<Self, SheetError> {
-        let subject_id = extract_digits_for_sub_stu(&subject_code_mat, 2, false)?;
+        let SplittedSheet {
+            student_name: student_name_mat,
+            subject_name: subject_name_mat,
+            exam_room: exam_room_mat,
+            exam_seat: exam_seat_mat,
+            subject_id: subject_id_mat,
+            student_id: student_id_mat,
+            questions,
+            ..
+        } = src;
+        let subject_id = extract_digits_for_sub_stu(&subject_id_mat, 2, false)?;
         let student_id = extract_digits_for_sub_stu(&student_id_mat, 9, true)?;
-        let answers = extract_answers(&answers_mat)?;
+        let answers = extract_answers(questions)?;
 
         let (mut student_name, mut subject_name, mut exam_room, mut exam_seat) =
             (None, None, None, None);
         if let Some(ocr) = ocr {
             let (written_subject_id, written_student_id) =
-                extract_subject_student_from_written_field(&original_small, ocr)?;
+                extract_subject_student_from_written_field(subject_id_mat, student_id_mat, ocr)?;
             if subject_id != written_subject_id || student_id != written_student_id {
                 warn!("User Fon and Enter differently");
             }
-            let (name, subject, _, room, seat) = extract_user_information(&original, ocr)?;
+            let (name, subject, room, seat) = extract_user_information(
+                student_name_mat,
+                subject_name_mat,
+                exam_room_mat,
+                exam_seat_mat,
+                ocr,
+            )?;
             _ = student_name.insert(name);
             _ = subject_name.insert(subject);
             _ = exam_room.insert(room);
@@ -605,51 +598,6 @@ impl AnswerSheetResult {
     }
 }
 
-fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
-    let name = mat
-        .roi(Rect_ {
-            x: 237,
-            y: 351,
-            width: 495,
-            height: 62,
-        })?
-        .clone_pointee();
-    let subject = mat
-        .roi(Rect_ {
-            x: 174,
-            y: 434,
-            width: 538,
-            height: 50,
-        })?
-        .clone_pointee();
-    let date = mat
-        .roi(Rect_ {
-            x: 392,
-            y: 500,
-            width: 314,
-            height: 60,
-        })?
-        .clone_pointee();
-    let exam_room = mat
-        .roi(Rect_ {
-            x: 234,
-            y: 575,
-            width: 175,
-            height: 57,
-        })?
-        .clone_pointee();
-    let seat = mat
-        .roi(Rect_ {
-            x: 568,
-            y: 575,
-            width: 139,
-            height: 57,
-        })?
-        .clone_pointee();
-
-    Ok((name, subject, date, exam_room, seat))
-}
-
 fn image_to_string(mat: &Mat, ocr: &OcrEngine) -> Result<String, SheetError> {
     let bytes = mat.data_bytes()?;
     let img_src = ImageSource::from_bytes(bytes, (mat.cols() as u32, mat.rows() as u32))
@@ -662,37 +610,30 @@ fn image_to_string(mat: &Mat, ocr: &OcrEngine) -> Result<String, SheetError> {
 }
 
 fn extract_user_information(
-    mat: &Mat,
+    name: Mat,
+    subject_name: Mat,
+    exam_room: Mat,
+    exam_seat: Mat,
     ocr: &OcrEngine,
-) -> Result<(String, String, String, String, String), SheetError> {
-    let temp_dir = "temp";
-    _ = fs::create_dir_all(temp_dir);
+) -> Result<(String, String, String, String), SheetError> {
+    #[cfg(debug_assertions)]
+    {
+        let temp_dir = "temp";
+        _ = std::fs::create_dir_all(temp_dir);
 
-    debug!("Working directory: {:?}", std::env::current_dir());
-
-    let (name, subject, date, exam_room, seat) = crop_each_part(mat)?;
-
-    //if cfg!(debug_assertions) {
-    //    safe_imwrite("temp/debug_name.png", &name)?;
-    //    safe_imwrite("temp/debug_subject.png", &subject)?;
-    //    safe_imwrite("temp/debug_date.png", &date)?;
-    //    safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
-    //    safe_imwrite("temp/debug_seat.png", &seat)?;
-    //}
+        debug!("Working directory: {:?}", std::env::current_dir());
+        safe_imwrite("temp/debug_name.png", &name)?;
+        safe_imwrite("temp/debug_subject.png", &subject_name)?;
+        safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
+        safe_imwrite("temp/debug_seat.png", &exam_seat)?;
+    }
 
     let name_string = image_to_string(&name, ocr)?;
-    let subject_string = image_to_string(&subject, ocr)?;
-    let date_string = image_to_string(&date, ocr)?;
+    let subject_string = image_to_string(&subject_name, ocr)?;
     let exam_room_string = image_to_string(&exam_room, ocr)?;
-    let seat_string = image_to_string(&seat, ocr)?;
+    let seat_string = image_to_string(&exam_seat, ocr)?;
 
-    Ok((
-        name_string,
-        subject_string,
-        date_string,
-        exam_room_string,
-        seat_string,
-    ))
+    Ok((name_string, subject_string, exam_room_string, seat_string))
 }
 
 fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Error> {
@@ -732,18 +673,18 @@ fn crop_subject_stuent(mat: &Mat) -> Result<(Mat, Mat), SheetError> {
 }
 
 fn extract_subject_student_from_written_field(
-    mat: &Mat,
+    subject_id_mat: Mat,
+    student_id_mat: Mat,
     ocr: &OcrEngine,
 ) -> Result<(String, String), SheetError> {
-    let (subject_f, student_f) = crop_subject_stuent(mat)?;
-    let rsub = image_to_string(&subject_f, ocr)?;
-    let rstu = image_to_string(&student_f, ocr)?;
+    let rsub = image_to_string(&subject_id_mat, ocr)?;
+    let rstu = image_to_string(&student_id_mat, ocr)?;
 
     let subject = clean_text(&rsub);
     let student = clean_text(&rstu);
 
-    safe_imwrite("temp/debug_subject_f.png", &subject_f)?;
-    safe_imwrite("temp/debug_student_f.png", &student_f)?;
+    safe_imwrite("temp/debug_subject_f.png", &subject_id_mat)?;
+    safe_imwrite("temp/debug_student_f.png", &student_id_mat)?;
 
     Ok((subject, student))
 }
