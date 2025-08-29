@@ -1,23 +1,23 @@
 use crate::err_log;
-use crate::errors::DatabaseError;
 use crate::state::{MongoDB, Options};
 use crate::{
-    errors::CsvError,
+    errors::ExportError,
     scoring::AnswerSheetResult,
     signal,
     state::{AnswerSheet, AppState, CsvExport},
 };
 use log::info;
 use opencv::prelude::Mat;
-use serde::{Deserialize, Serialize};
+use serde::ser::SerializeStruct;
+use serde::Serialize;
 use std::{collections::HashMap, fs::File};
 use tauri::{ipc::Channel, Emitter, Manager, Runtime};
 use tauri_plugin_fs::FilePath;
 
-use mongodb::{options::ClientOptions, Client, bson::doc};
+use mongodb::{bson::doc, options::ClientOptions, Client};
 
 #[allow(non_snake_case)]
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct QuestionScoreRow {
     pub subject_id: String,
     pub student_id: String,
@@ -25,42 +25,62 @@ pub struct QuestionScoreRow {
     pub student_name: String,
     pub exam_room: String,
     pub exam_seat: String,
-    q1: String,
-    q2: String,
-    q3: String,
-    q4: String,
-    q5: String,
-    q6: String,
-    q7: String,
-    q8: String,
-    q9: String,
-    q10: String,
-    q11: String,
-    q12: String,
-    q13: String,
-    q14: String,
-    q15: String,
-    q16: String,
-    q17: String,
-    q18: String,
-    q19: String,
-    q20: String,
-    q21: String,
-    q22: String,
-    q23: String,
-    q24: String,
-    q25: String,
-    q26: String,
-    q27: String,
-    q28: String,
-    q29: String,
-    q30: String,
-    q31: String,
-    q32: String,
-    q33: String,
-    q34: String,
-    q35: String,
-    q36: String,
+    questions: Vec<String>,
+    total_score: String,
+}
+
+impl serde::Serialize for QuestionScoreRow {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut state = serializer.serialize_struct("QuestionScoreRow", 36 + 6)?;
+        state.serialize_field("subject_id", &self.subject_id)?;
+        state.serialize_field("student_id", &self.student_id)?;
+        state.serialize_field("subject_name", &self.subject_name)?;
+        state.serialize_field("student_name", &self.student_name)?;
+        state.serialize_field("exam_room", &self.exam_room)?;
+        state.serialize_field("exam_seat", &self.exam_seat)?;
+
+        state.serialize_field("01", &self.questions[0])?;
+        state.serialize_field("02", &self.questions[1])?;
+        state.serialize_field("03", &self.questions[2])?;
+        state.serialize_field("04", &self.questions[3])?;
+        state.serialize_field("05", &self.questions[4])?;
+        state.serialize_field("06", &self.questions[5])?;
+        state.serialize_field("07", &self.questions[6])?;
+        state.serialize_field("08", &self.questions[7])?;
+        state.serialize_field("09", &self.questions[8])?;
+        state.serialize_field("10", &self.questions[9])?;
+        state.serialize_field("11", &self.questions[10])?;
+        state.serialize_field("12", &self.questions[11])?;
+        state.serialize_field("13", &self.questions[12])?;
+        state.serialize_field("14", &self.questions[13])?;
+        state.serialize_field("15", &self.questions[14])?;
+        state.serialize_field("16", &self.questions[15])?;
+        state.serialize_field("17", &self.questions[16])?;
+        state.serialize_field("18", &self.questions[17])?;
+        state.serialize_field("19", &self.questions[18])?;
+        state.serialize_field("20", &self.questions[19])?;
+        state.serialize_field("21", &self.questions[20])?;
+        state.serialize_field("22", &self.questions[21])?;
+        state.serialize_field("23", &self.questions[22])?;
+        state.serialize_field("24", &self.questions[23])?;
+        state.serialize_field("25", &self.questions[24])?;
+        state.serialize_field("26", &self.questions[25])?;
+        state.serialize_field("27", &self.questions[26])?;
+        state.serialize_field("28", &self.questions[27])?;
+        state.serialize_field("29", &self.questions[28])?;
+        state.serialize_field("30", &self.questions[29])?;
+        state.serialize_field("31", &self.questions[30])?;
+        state.serialize_field("32", &self.questions[31])?;
+        state.serialize_field("33", &self.questions[32])?;
+        state.serialize_field("34", &self.questions[33])?;
+        state.serialize_field("35", &self.questions[34])?;
+        state.serialize_field("36", &self.questions[35])?;
+        state.serialize_field("total_score", &self.total_score)?;
+        state.end()
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -90,7 +110,7 @@ pub fn export_to_csv_wrapper<R: Runtime, A: Emitter<R> + Manager<R>>(
             signal!(
                 channel,
                 CsvExport::Error {
-                    error: format!("error exporting to CSV: {e}")
+                    error: format!("Error whilst trying to export: {e}")
                 }
             )
         }
@@ -100,15 +120,15 @@ pub fn export_to_csv_wrapper<R: Runtime, A: Emitter<R> + Manager<R>>(
 pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
     path: FilePath,
-) -> Result<(), CsvError> {
+) -> Result<(), ExportError> {
     let path = path.into_path()?;
     info!("Exporting scanned results to {}...", path.display());
     let file = File::create(path)?;
     let mut wtr = csv::Writer::from_writer(file);
 
-    let results = AppState::get_scored_answers(app).ok_or(CsvError::IncorrectState)?;
+    let results = AppState::get_scored_answers(app).ok_or(ExportError::IncorrectState)?;
 
-    let question_rows = map_to_csv(results.clone());
+    let question_rows = map_to_csv(results);
     let len = question_rows.len();
 
     for row in &question_rows {
@@ -117,9 +137,8 @@ pub fn export_to_csv_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     wtr.flush()?;
     info!("Finished exporting to CSV! Written {len} rows.");
     let student_totals = map_to_db_scores(question_rows);
-    if let Err(e) = store_scores_in_db(app, student_totals) {
-        err_log!(&e);
-    }
+
+    store_scores_in_db(app, student_totals)?;
 
     Ok(())
 }
@@ -142,11 +161,16 @@ fn map_to_csv(
                         ..
                     },
                     AnswerSheetResult {
-                        graded_questions, ..
+                        score,
+                        graded_questions,
+                        ..
                     },
                 ),
             )| {
-                let mut graded = graded_questions.into_iter().map(|(_, w)| w);
+                let graded = graded_questions
+                    .iter()
+                    .map(|(_, w)| w.to_string())
+                    .collect::<Vec<_>>();
 
                 QuestionScoreRow {
                     subject_id: subject_id.clone(),
@@ -155,42 +179,8 @@ fn map_to_csv(
                     student_name: student_name.clone().unwrap_or_default(),
                     exam_room: exam_room.clone().unwrap_or_default(),
                     exam_seat: exam_seat.clone().unwrap_or_default(),
-                    q1: graded.next().unwrap_or_default().to_string(),
-                    q2: graded.next().unwrap_or_default().to_string(),
-                    q3: graded.next().unwrap_or_default().to_string(),
-                    q4: graded.next().unwrap_or_default().to_string(),
-                    q5: graded.next().unwrap_or_default().to_string(),
-                    q6: graded.next().unwrap_or_default().to_string(),
-                    q7: graded.next().unwrap_or_default().to_string(),
-                    q8: graded.next().unwrap_or_default().to_string(),
-                    q9: graded.next().unwrap_or_default().to_string(),
-                    q10: graded.next().unwrap_or_default().to_string(),
-                    q11: graded.next().unwrap_or_default().to_string(),
-                    q12: graded.next().unwrap_or_default().to_string(),
-                    q13: graded.next().unwrap_or_default().to_string(),
-                    q14: graded.next().unwrap_or_default().to_string(),
-                    q15: graded.next().unwrap_or_default().to_string(),
-                    q16: graded.next().unwrap_or_default().to_string(),
-                    q17: graded.next().unwrap_or_default().to_string(),
-                    q18: graded.next().unwrap_or_default().to_string(),
-                    q19: graded.next().unwrap_or_default().to_string(),
-                    q20: graded.next().unwrap_or_default().to_string(),
-                    q21: graded.next().unwrap_or_default().to_string(),
-                    q22: graded.next().unwrap_or_default().to_string(),
-                    q23: graded.next().unwrap_or_default().to_string(),
-                    q24: graded.next().unwrap_or_default().to_string(),
-                    q25: graded.next().unwrap_or_default().to_string(),
-                    q26: graded.next().unwrap_or_default().to_string(),
-                    q27: graded.next().unwrap_or_default().to_string(),
-                    q28: graded.next().unwrap_or_default().to_string(),
-                    q29: graded.next().unwrap_or_default().to_string(),
-                    q30: graded.next().unwrap_or_default().to_string(),
-                    q31: graded.next().unwrap_or_default().to_string(),
-                    q32: graded.next().unwrap_or_default().to_string(),
-                    q33: graded.next().unwrap_or_default().to_string(),
-                    q34: graded.next().unwrap_or_default().to_string(),
-                    q35: graded.next().unwrap_or_default().to_string(),
-                    q36: graded.next().unwrap_or_default().to_string(),
+                    questions: graded,
+                    total_score: score.to_string(),
                 }
             },
         )
@@ -204,16 +194,7 @@ pub fn map_to_db_scores(question_score_rows: Vec<QuestionScoreRow>) -> Vec<Stude
             let mut total: f32 = 0.0;
 
             // collect all q1..q36 into an array of &String
-            let answers = [
-                &row.q1, &row.q2, &row.q3, &row.q4, &row.q5, &row.q6,
-                &row.q7, &row.q8, &row.q9, &row.q10, &row.q11, &row.q12,
-                &row.q13, &row.q14, &row.q15, &row.q16, &row.q17, &row.q18,
-                &row.q19, &row.q20, &row.q21, &row.q22, &row.q23, &row.q24,
-                &row.q25, &row.q26, &row.q27, &row.q28, &row.q29, &row.q30,
-                &row.q31, &row.q32, &row.q33, &row.q34, &row.q35, &row.q36,
-            ];
-
-            for ans in answers {
+            for ans in row.questions {
                 total += ans.parse::<f32>().unwrap_or(0.0);
             }
 
@@ -230,19 +211,28 @@ pub fn map_to_db_scores(question_score_rows: Vec<QuestionScoreRow>) -> Vec<Stude
         .collect()
 }
 
+fn store_scores_in_db<R: Runtime, A: Emitter<R> + Manager<R>>(
+    app: &A,
+    rows: Vec<StudentTotalScore>,
+) -> Result<(), ExportError> {
+    if let Options {
+        mongo: MongoDB::Enable {
+            mongo_db_uri,
+            mongo_db_name,
+        },
+        ..
+    } = AppState::get_options(app)
+    {
+        //println!("MONGODB_URI = {:?}", std::env::var("MONGODB_URI"));
+        //println!("MY_DATABASE = {:?}", std::env::var("MY_DATABASE"));
 
-fn store_scores_in_db<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A, rows: Vec<StudentTotalScore>) -> Result<(), DatabaseError> {
-    if let Options { mongo: MongoDB::Enable { mongo_db_uri, mongo_db_name }, .. } = AppState::get_options(app) {
-    //println!("MONGODB_URI = {:?}", std::env::var("MONGODB_URI"));
-    //println!("MY_DATABASE = {:?}", std::env::var("MY_DATABASE"));
+        tauri::async_runtime::block_on(async {
+            let options = ClientOptions::parse(&mongo_db_uri).await?;
+            let client = Client::with_options(options)?;
 
-    tauri::async_runtime::block_on(async {
-        let options = ClientOptions::parse(&mongo_db_uri).await?;
-        let client = Client::with_options(options)?;
-
-        let collection = client
-            .database(&mongo_db_name)
-            .collection::<StudentTotalScore>("student_total_scores");
+            let collection = client
+                .database(&mongo_db_name)
+                .collection::<StudentTotalScore>("student_total_scores");
 
             for row in rows {
                 let filter = doc! {
@@ -255,10 +245,146 @@ fn store_scores_in_db<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A, rows: Vec
 
             info!("Replaced total scores in MongoDB Atlas successfully");
             Ok(())
-
-    })
+        })
     } else {
-        println!("You choose to not user MongoDB");
+        info!("You choose to not use MongoDB");
         Ok(())
     }
+}
+
+#[cfg(test)]
+mod unit_tests {
+    use std::array;
+
+    use crate::{
+        scoring::{CheckedAnswer, CheckedQuestionGroup, ScoreWeights},
+        state::{self, AnswerKeySheet, AppStatePipeline, QuestionGroup},
+    };
+
+    use super::*;
+
+    #[test]
+    fn test_question_score_row_serializer() {
+        let scores = QuestionScoreRow {
+            subject_id: "10".to_string(),
+            student_id: "65010003".to_string(),
+            subject_name: "Mathematics".to_string(),
+            student_name: "Marcia Cole".to_string(),
+            exam_room: "608".to_string(),
+            exam_seat: "A03".to_string(),
+            questions: (0..36).map(|_| "1".to_string()).collect(),
+            total_score: "36".to_string(),
+        };
+        let mut writer = csv::Writer::from_writer(vec![]);
+        writer.serialize(scores).unwrap();
+
+        let result = String::from_utf8(writer.into_inner().unwrap()).unwrap();
+        assert_eq!(
+            result,
+            r#"subject_id,student_id,subject_name,student_name,exam_room,exam_seat,01,02,03,04,05,06,07,08,09,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,total_score
+10,65010003,Mathematics,Marcia Cole,608,A03,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,36
+"#
+        )
+    }
+
+    #[test]
+    fn test_map_to_csv_vec() {
+        let mut map = HashMap::new();
+        map.insert(
+            "65010003".into(),
+            (
+                Mat::default(),
+                AnswerSheet {
+                    subject_id: "10".to_string(),
+                    student_id: "65010003".to_string(),
+                    subject_name: Some("Mathematics".to_string()),
+                    student_name: Some("Marcia Cole".to_string()),
+                    exam_room: Some("608".to_string()),
+                    exam_seat: Some("A03".to_string()),
+                    answers: array::from_fn(|_| QuestionGroup::default()),
+                },
+                AnswerSheetResult {
+                    correct: 36,
+                    incorrect: 0,
+                    score: 36,
+                    graded_questions: array::from_fn(|_| {
+                        (
+                            CheckedQuestionGroup {
+                                A: CheckedAnswer::Correct,
+                                B: CheckedAnswer::Correct,
+                                C: CheckedAnswer::Correct,
+                                D: CheckedAnswer::Correct,
+                                E: CheckedAnswer::Correct,
+                            },
+                            1,
+                        )
+                    }),
+                },
+            ),
+        );
+
+        let rows = map_to_csv(map);
+        assert_eq!(rows.len(), 1);
+
+        let row = &rows[0];
+        assert_eq!(row.subject_id, "10");
+        assert_eq!(row.student_id, "65010003");
+        assert_eq!(row.subject_name, "Mathematics");
+        assert_eq!(row.student_name, "Marcia Cole");
+        assert_eq!(row.exam_room, "608");
+        assert_eq!(row.exam_seat, "A03");
+        assert_eq!(row.questions.len(), 36);
+        assert!(row.questions.iter().all(|q| q == "1"));
+        assert_eq!(row.total_score, "36");
+    }
+
+    // #[test]
+    // fn test_export_csv() {
+    //     let mut answers = HashMap::new();
+    //     answers.insert(
+    //         "65010003".into(),
+    //         (
+    //             Mat::default(),
+    //             AnswerSheet {
+    //                 subject_id: "10".to_string(),
+    //                 student_id: "65010003".to_string(),
+    //                 subject_name: Some("Mathematics".to_string()),
+    //                 student_name: Some("Marcia Cole".to_string()),
+    //                 exam_room: Some("608".to_string()),
+    //                 exam_seat: Some("A03".to_string()),
+    //                 answers: array::from_fn(|_| QuestionGroup::default()),
+    //             },
+    //             AnswerSheetResult {
+    //                 correct: 36,
+    //                 incorrect: 0,
+    //                 score: 36,
+    //                 graded_questions: array::from_fn(|_| {
+    //                     (
+    //                         CheckedQuestionGroup {
+    //                             A: CheckedAnswer::Correct,
+    //                             B: CheckedAnswer::Correct,
+    //                             C: CheckedAnswer::Correct,
+    //                             D: CheckedAnswer::Correct,
+    //                             E: CheckedAnswer::Correct,
+    //                         },
+    //                         1,
+    //                     )
+    //                 }),
+    //             },
+    //         ),
+    //     );
+    //     let state = state::unit_tests::mock_app_with_state(AppStatePipeline::Scored {
+    //         key_image: Mat::default(),
+    //         key: AnswerKeySheet {
+    //             subject_id: "10".to_string(),
+    //             answers: array::from_fn(|_| QuestionGroup::default()),
+    //         },
+    //         weights: ScoreWeights {
+    //             weights: HashMap::new(),
+    //         },
+    //         answer_sheets: answers,
+    //     });
+    //
+    //     todo!()
+    // }
 }
