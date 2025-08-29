@@ -1,6 +1,7 @@
 use crate::err_log;
 use log::{debug, warn};
 use ocrs::{ImageSource, OcrEngine};
+use std::ops::RangeInclusive;
 use std::sync::{Arc, RwLock};
 use std::{array, mem};
 use tauri::ipc::Channel;
@@ -302,7 +303,61 @@ fn prepare_answer_sheet(mat: Mat) -> Result<SplittedSheet, SheetError> {
 }
 
 fn split_into_areas(sheet: Mat) -> Result<SplittedSheet, SheetError> {
-    todo!();
+    fn roi_range_frac(
+        mat: &Mat,
+        x: RangeInclusive<f64>,
+        y: RangeInclusive<f64>,
+    ) -> opencv::Result<Mat> {
+        let (range_x, range_y) = (x.end() - x.start(), y.end() - y.start());
+        let (width, height) = (mat.cols(), mat.rows());
+        let (start_x, start_y) = (width as f64 * x.start(), height as f64 * y.start());
+        let (range_width, range_height) = (width as f64 * range_x, height as f64 * range_y);
+        Ok(mat
+            .roi(Rect_ {
+                x: start_x as i32,
+                y: start_y as i32,
+                width: range_width as i32,
+                height: range_height as i32,
+            })?
+            .clone_pointee())
+    }
+
+    const START_PERCENT_X: f64 = 0.18525022;
+    const START_PERCENT_Y: f64 = 0.010113780;
+    const WIDTH_PERCENT: f64 = 0.19841967;
+    const HEIGHT_PERCENT: f64 = 0.094816688;
+    const GAP_X_PERCENT: f64 = 0.0079016681;
+    const GAP_Y_PERCENT: f64 = 0.015170670;
+
+    let subject_name = roi_range_frac(&sheet, 0.01317..=0.1765, 0.1479..=0.1656)?;
+    let student_name = roi_range_frac(&sheet, 0.0342..=0.1773, 0.1113..=0.1340)?;
+    let exam_room = roi_range_frac(&sheet, 0.032484636..=0.088674276, 0.206068268..=0.230088496)?;
+    let exam_seat = roi_range_frac(&sheet, 0.134328358..=0.175592625, 0.206068268..=0.230088496)?;
+    let subject_id = roi_range_frac(&sheet, 0.0..=0.040386304, 0.271807838..=0.517067004)?;
+    let student_id = roi_range_frac(&sheet, 0.049165935..=0.177348551, 0.273072061..=0.515802781)?;
+    let questions = {
+        let ranges = (0..4).flat_map(|x| (0..9).map(move |y| (x, y)));
+        ranges
+            .map(|(x, y)| {
+                let min_x = START_PERCENT_X + x as f64 * (GAP_X_PERCENT + WIDTH_PERCENT);
+                let max_x = f64::min(min_x + WIDTH_PERCENT, 1.0);
+                let min_y = START_PERCENT_Y + y as f64 * (GAP_Y_PERCENT + HEIGHT_PERCENT);
+                let max_y = f64::min(min_y + HEIGHT_PERCENT, 1.0);
+                Ok(roi_range_frac(&sheet, min_x..=max_x, min_y..=max_y)?)
+            })
+            .collect::<opencv::Result<Vec<Mat>>>()?
+    };
+
+    Ok(SplittedSheet {
+        original: sheet,
+        student_name,
+        subject_name,
+        exam_room,
+        exam_seat,
+        subject_id,
+        student_id,
+        questions,
+    })
 }
 
 fn extract_answers(answer_mats: Vec<Mat>) -> Result<[QuestionGroup; 36], SheetError> {

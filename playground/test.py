@@ -1,5 +1,3 @@
-from turtle import width
-from typing import Union
 import cv2
 from cv2.typing import MatLike
 
@@ -43,6 +41,14 @@ def triangle_crop(img: MatLike) -> MatLike:
     return img
 
 
+START_PERCENT_X = 0.18525022
+START_PERCENT_Y = 0.010113780
+WIDTH_PERCENT = 0.19841967
+HEIGHT_PERCENT = 0.094816688
+GAP_X_PERCENT = 0.0079016681
+GAP_Y_PERCENT = 0.015170670
+
+
 def split_into_areas(img: MatLike) -> list[MatLike]:
     splitted: list[MatLike] = []
 
@@ -50,28 +56,56 @@ def split_into_areas(img: MatLike) -> list[MatLike]:
         mat: MatLike, px: tuple[float, float], py: tuple[float, float]
     ) -> MatLike:
         shape: tuple[int, int, int] = mat.shape
-        width, height, _ = shape
-        start_x: int = width * px.index(0)
-        start_y: int = height * py.index(0)
-        end_x: int = width * px.index(1)
-        end_y: int = height * py.index(1)
-        return mat[start_x:end_x, start_y:end_y]
+        height, width, _ = shape
+        print(f"width {width}, height {height}")
+        start_x: int = int(width * px[0])
+        start_y: int = int(height * py[0])
+        end_x: int = int(width * px[1])
+        end_y: int = int(height * py[1])
+        mat = cv2.rectangle(mat, (start_x, start_y), (end_x, end_y), (0, 0, 255))
+        mat2 = mat.copy()
+        print(f"{start_y}:{end_y}, {start_x}:{end_x}")
+        return mat2[start_y:end_y, start_x:end_x]
 
     # width = 1139 height = 791
     # subject name box
     splitted.append(split_percent(img, (0.01317, 0.1765), (0.1479, 0.1656)))
     # subject id box
-    splitted.append(split_percent(img, (0, 0.0421), (0.2414, 0.5233)))
+    splitted.append(split_percent(img, (0, 0.040386304), (0.271807838, 0.517067004)))
     # student name box
     splitted.append(split_percent(img, (0.0342, 0.1773), (0.1113, 0.1340)))
     # student id box
-    splitted.append(split_percent(img, (0.04741, 0.2579), (0.1668, 0.5221)))
+    splitted.append(
+        split_percent(img, (0.049165935, 0.177348551), (0.273072061, 0.515802781))
+    )
+    # exam room
+    splitted.append(
+        split_percent(img, (0.032484636, 0.088674276), (0.206068268, 0.230088496))
+    )
+    # exam seat
+    splitted.append(
+        split_percent(img, (0.134328358, 0.175592625), (0.206068268, 0.230088496))
+    )
+
+    for x in range(0, 4):
+        for y in range(0, 9):
+            min_x = START_PERCENT_X + x * (GAP_X_PERCENT + WIDTH_PERCENT)
+            max_x = min(min_x + WIDTH_PERCENT, 1.0)
+            min_y = START_PERCENT_Y + y * (GAP_Y_PERCENT + HEIGHT_PERCENT)
+            max_y = min(min_y + HEIGHT_PERCENT, 1.0)
+            splitted.append(
+                split_percent(
+                    img,
+                    (min_x, max_x),
+                    (min_y, max_y),
+                )
+            )
 
     return splitted
 
 
-test_img = cv2.imread("../answer sheet/scan1/scan1_001.jpg")
+test_img = cv2.imread("../answer sheet/scan1/scan1_012.jpg")
 grabbed = triangle_crop(test_img)
 _ = cv2.imwrite("grabbed.png", grabbed)
 for idx, img in enumerate(split_into_areas(grabbed)):
-    _ = cv2.imwrite(f"area{idx}.png", grabbed)
+    _ = cv2.imwrite(f"area{idx}.png", img)
