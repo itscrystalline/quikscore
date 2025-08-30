@@ -362,6 +362,27 @@ fn split_into_areas(sheet: Mat) -> Result<SplittedSheet, SheetError> {
     })
 }
 
+fn sorted_bubbles_by_filled<Src: Iterator<Item = Mat>>(
+    src: Src,
+) -> impl Iterator<Item = (usize, f32)> {
+    src.enumerate()
+        .map(|(idx, bubble)| {
+            let max_white = u8::MAX as u32 * (bubble.cols() * bubble.rows()) as u32;
+            let bubble_sum: u32 = bubble
+                .data_bytes()
+                .ok()
+                .expect("Owned Mat is not continuous")
+                .iter()
+                .copied()
+                .map(|p| p as u32)
+                .sum();
+
+            (idx, 1.0 - (bubble_sum as f32 / max_white as f32))
+        })
+        .sorted_by(|a, b| PartialOrd::partial_cmp(&b.1, &a.1).expect("not NaN"))
+        .into_iter()
+}
+
 fn extract_answers(answer_mats: Vec<Mat>) -> Result<[QuestionGroup; 36], SheetError> {
     let mut out = answer_mats
         .into_iter()
@@ -372,24 +393,17 @@ fn extract_answers(answer_mats: Vec<Mat>) -> Result<[QuestionGroup; 36], SheetEr
                     0.11946903..=1.0,
                     (row_idx as f64 / 5.0)..=(row_idx as f64 + 1.0) / 5.0,
                 )?;
-                Result::<_, opencv::Error>::Ok((0..13u8).filter_map(move |bubble_idx| {
-                    let bubble = roi_range_frac(
-                        &row,
-                        bubble_idx as f64 / 13.0..=(bubble_idx as f64 + 1.0) / 13.0,
-                        0.0..=1.0,
-                    )
-                    .ok()?;
-                    let max_white = u8::MAX as u32 * (bubble.cols() * bubble.rows()) as u32;
-                    let bubble_sum: u32 = bubble
-                        .data_bytes()
-                        .ok()?
-                        .iter()
-                        .copied()
-                        .map(|p| p as u32)
-                        .sum();
-
-                    ((bubble_sum as f32 / max_white as f32) < 0.5).then_some(bubble_idx)
-                }))
+                Result::<_, opencv::Error>::Ok(
+                    sorted_bubbles_by_filled((0..13u8).filter_map(move |bubble_idx| {
+                        roi_range_frac(
+                            &row,
+                            bubble_idx as f64 / 13.0..=(bubble_idx as f64 + 1.0) / 13.0,
+                            0.0..=1.0,
+                        )
+                        .ok()
+                    }))
+                    .filter_map(|(idx, filled)| (filled > 0.5).then_some(idx as u8)),
+                )
             });
             Ok(QuestionGroup {
                 A: Answer::from_bubbles_iter(iter.next().expect("5 rows")?),
