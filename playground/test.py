@@ -129,16 +129,23 @@ def split_into_areas(img: MatLike) -> list[MatLike]:
                 ans = mark_percent(
                     ans, (0.11946903, 1), (i / 5, (i + 1) / 5), (0, 255, 0)
                 )
+                left = 1 - 0.11946903
                 for j in range(13):
                     ans = mark_percent(
-                        ans, (j / 13, (j + 1) / 13), (i / 5, (i + 1) / 5), (255, 0, 0)
+                        ans,
+                        (
+                            0.11946903 + (j / 13) * left,
+                            (0.11946903 + (j + 1) / 13) * left,
+                        ),
+                        (i / 5, (i + 1) / 5),
+                        (255, 0, 0),
                     )
             splitted.append(ans)
 
     return splitted
 
 
-test_img = cv2.imread("../answer sheet/scan1/scan1_012.jpg")
+test_img = cv2.imread("../src-tauri/tests/assets/sample_valid_image.jpg")
 grabbed = triangle_crop(test_img)
 _ = cv2.imwrite("grabbed.png", grabbed)
 for idx, img in enumerate(split_into_areas(grabbed)):

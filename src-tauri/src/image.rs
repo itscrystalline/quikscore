@@ -849,7 +849,12 @@ mod unit_tests {
     #[test]
     fn test_crop_to_markers_size() {
         let mat_markers = read_from_path(test_key_image()).unwrap();
-        let mat_no_markers = new_mat_copy!(mat_markers);
+        let mat_no_markers = {
+            let (cols, rows) = (mat_markers.rows() as usize, mat_markers.cols() as usize);
+            let white = vec![255u8; cols * rows];
+            let mat = Mat::from_bytes::<u8>(&white);
+            mat.unwrap().clone_pointee()
+        };
         let cropped_ok = crop_to_markers(mat_markers);
         assert!(cropped_ok.is_ok());
         let cropped_not_ok = crop_to_markers(mat_no_markers);
