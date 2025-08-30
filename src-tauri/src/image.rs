@@ -217,14 +217,14 @@ fn read_from_path(path: FilePath) -> Result<Mat, UploadError> {
 }
 
 fn crop_to_markers(mat: Mat) -> Result<Mat, SheetError> {
-    let grayscaled = {
-        let mut gray = new_mat_copy!(mat);
-        imgproc::cvt_color_def(&mat, &mut gray, imgproc::COLOR_BGR2GRAY)?;
-        gray
-    };
+    // let grayscaled = {
+    //     let mut gray = new_mat_copy!(mat);
+    //     imgproc::cvt_color_def(&mat, &mut gray, imgproc::COLOR_BGR2GRAY)?;
+    //     gray
+    // };
     let blurred = {
-        let mut blur = new_mat_copy!(grayscaled);
-        imgproc::gaussian_blur_def(&grayscaled, &mut blur, (5, 5).into(), 0.0)?;
+        let mut blur = new_mat_copy!(mat);
+        imgproc::gaussian_blur_def(&mat, &mut blur, (5, 5).into(), 0.0)?;
         blur
     };
     let thresholded = {
