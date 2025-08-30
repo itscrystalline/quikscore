@@ -1,6 +1,7 @@
 use crate::err_log;
 use log::{debug, warn};
 use ocrs::{ImageSource, OcrEngine};
+use opencv::boxed_ref::BoxedRef;
 use std::ops::RangeInclusive;
 use std::sync::{Arc, RwLock};
 use std::{array, mem};
@@ -35,10 +36,6 @@ macro_rules! new_mat_copy {
     }};
 }
 
-const ANSWER_WIDTH: i32 = 215;
-const ANSWER_WIDTH_GAP: i32 = 9;
-const ANSWER_HEIGHT: i32 = 73;
-const ANSWER_HEIGHT_GAP: i32 = 10;
 const MARKER_TRANSPARENCY: f64 = 0.3;
 
 struct SplittedSheet {
@@ -302,26 +299,31 @@ fn prepare_answer_sheet(mat: Mat) -> Result<SplittedSheet, SheetError> {
     Ok(splitted)
 }
 
-fn split_into_areas(sheet: Mat) -> Result<SplittedSheet, SheetError> {
-    fn roi_range_frac(
-        mat: &Mat,
-        x: RangeInclusive<f64>,
-        y: RangeInclusive<f64>,
-    ) -> opencv::Result<Mat> {
-        let (range_x, range_y) = (x.end() - x.start(), y.end() - y.start());
-        let (width, height) = (mat.cols(), mat.rows());
-        let (start_x, start_y) = (width as f64 * x.start(), height as f64 * y.start());
-        let (range_width, range_height) = (width as f64 * range_x, height as f64 * range_y);
-        Ok(mat
-            .roi(Rect_ {
-                x: start_x as i32,
-                y: start_y as i32,
-                width: range_width as i32,
-                height: range_height as i32,
-            })?
-            .clone_pointee())
-    }
+fn roi_range_frac_borrowed(
+    mat: &impl MatTraitConst,
+    x: RangeInclusive<f64>,
+    y: RangeInclusive<f64>,
+) -> opencv::Result<BoxedRef<'_, Mat>> {
+    let (range_x, range_y) = (x.end() - x.start(), y.end() - y.start());
+    let (width, height) = (mat.cols(), mat.rows());
+    let (start_x, start_y) = (width as f64 * x.start(), height as f64 * y.start());
+    let (range_width, range_height) = (width as f64 * range_x, height as f64 * range_y);
+    Ok(mat.roi(Rect_ {
+        x: start_x as i32,
+        y: start_y as i32,
+        width: range_width as i32,
+        height: range_height as i32,
+    })?)
+}
+fn roi_range_frac(
+    mat: &impl MatTraitConst,
+    x: RangeInclusive<f64>,
+    y: RangeInclusive<f64>,
+) -> opencv::Result<Mat> {
+    roi_range_frac_borrowed(mat, x, y).map(|ok| ok.clone_pointee())
+}
 
+fn split_into_areas(sheet: Mat) -> Result<SplittedSheet, SheetError> {
     const START_PERCENT_X: f64 = 0.18525022;
     const START_PERCENT_Y: f64 = 0.010113780;
     const WIDTH_PERCENT: f64 = 0.19841967;
@@ -361,82 +363,44 @@ fn split_into_areas(sheet: Mat) -> Result<SplittedSheet, SheetError> {
 }
 
 fn extract_answers(answer_mats: Vec<Mat>) -> Result<[QuestionGroup; 36], SheetError> {
-    todo!();
-    // let mat_debug_cloned = answer_mat.try_clone()?;
-    // let mut mat_debug = new_mat_copy!(answer_mat);
-    // imgproc::cvt_color_def(&mat_debug_cloned, &mut mat_debug, COLOR_GRAY2RGB)?;
-    let mut out = Vec::with_capacity(36);
-    for x_idx in 0..4 {
-        for y_idx in 0..9 {
-            let (x, y) = (
-                (ANSWER_WIDTH + ANSWER_WIDTH_GAP) * x_idx,
-                (ANSWER_HEIGHT + ANSWER_HEIGHT_GAP) * y_idx,
-            );
-            let (x, y) = (
-                x.clamp(0, answer_mats.cols() - ANSWER_WIDTH),
-                y.clamp(0, answer_mats.rows() - ANSWER_HEIGHT),
-            );
-            let rect = Rect_ {
-                x,
-                y,
-                width: ANSWER_WIDTH,
-                height: ANSWER_HEIGHT,
-            };
-            let answers: Result<Vec<Option<Answer>>, SheetError> = (0..5)
-                .map(|row_idx| {
-                    let row_y = y
-                        + ((ANSWER_HEIGHT / 5) * row_idx).clamp(0, rect.height - ANSWER_HEIGHT / 5);
-                    let row_rect = Rect_ {
-                        x: x + 24,
-                        y: row_y,
-                        width: ANSWER_WIDTH - 24,
-                        height: ANSWER_HEIGHT / 5,
-                    };
-                    // imgproc::rectangle_def(&mut mat_debug, row_rect, (0, 0, 255).into())?;
-                    let bubbles: Result<Vec<(u8, f32)>, SheetError> = (0u8..13u8)
-                        .map(|bubble_idx| {
-                            let bubble_x = (x + 24)
-                                + ((row_rect.width / 12) * bubble_idx as i32)
-                                    .clamp(0, row_rect.width - (row_rect.width / 13));
-                            let bubble_rect = Rect_ {
-                                x: bubble_x,
-                                y: row_y,
-                                width: row_rect.width / 13,
-                                height: ANSWER_HEIGHT / 5,
-                            };
-                            let bubble_filled: u16 = answer_mats
-                                .roi(bubble_rect)?
-                                .clone_pointee()
-                                .data_bytes()?
-                                .iter()
-                                .map(|n| *n as u16)
-                                .sum();
-                            let frac = bubble_filled as f32 / u16::MAX as f32;
-                            // if frac < 0.45 {
-                            //     imgproc::rectangle_def(
-                            //         &mut mat_debug,
-                            //         bubble_rect,
-                            //         (255, 0, 255).into(),
-                            //     )?;
-                            // }
-                            Ok((bubble_idx, frac))
-                        })
-                        .collect();
-                    let bubbles = bubbles?;
-                    let circled_in: Vec<u8> = bubbles
-                        .into_iter()
-                        .sorted_by(|&(_, a), &(_, b)| a.total_cmp(&b))
-                        .filter_map(|(idx, f)| if f < 0.39 { Some(idx) } else { None })
-                        .collect();
-                    Ok(Answer::from_bubbles_vec(circled_in))
-                })
-                .collect();
-            let answers: QuestionGroup = answers?.try_into()?;
-            out.push(answers);
-        }
-        // imgcodecs::imwrite_def("debug-images/answer_borders.png", &mat_debug)?;
-    }
-    let mut out = out.into_iter();
+    let mut out = answer_mats
+        .into_iter()
+        .map(|mat| {
+            let mut iter = (0..5).map(|row_idx| {
+                let row = roi_range_frac_borrowed(
+                    &mat,
+                    0.11946903..=1.0,
+                    (row_idx as f64 / 5.0)..=(row_idx as f64 + 1.0) / 5.0,
+                )?;
+                Result::<_, opencv::Error>::Ok((0..13u8).filter_map(move |bubble_idx| {
+                    let bubble = roi_range_frac(
+                        &row,
+                        bubble_idx as f64 / 13.0..=(bubble_idx as f64 + 1.0) / 13.0,
+                        0.0..=1.0,
+                    )
+                    .ok()?;
+                    let max_white = u8::MAX as u32 * (bubble.cols() * bubble.rows()) as u32;
+                    let bubble_sum: u32 = bubble
+                        .data_bytes()
+                        .ok()?
+                        .iter()
+                        .copied()
+                        .map(|p| p as u32)
+                        .sum();
+
+                    ((bubble_sum as f32 / max_white as f32) < 0.5).then_some(bubble_idx)
+                }))
+            });
+            Ok(QuestionGroup {
+                A: Answer::from_bubbles_iter(iter.next().expect("5 rows")?),
+                B: Answer::from_bubbles_iter(iter.next().expect("5 rows")?),
+                C: Answer::from_bubbles_iter(iter.next().expect("5 rows")?),
+                D: Answer::from_bubbles_iter(iter.next().expect("5 rows")?),
+                E: Answer::from_bubbles_iter(iter.next().expect("5 rows")?),
+            })
+        })
+        .collect::<Result<Vec<_>, opencv::Error>>()?
+        .into_iter();
 
     Ok(array::from_fn(|_| {
         out.next().expect("should have exactly 36 groups")

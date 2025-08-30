@@ -80,11 +80,11 @@ impl Answer {
             (Some(_), None) | (None, None) => CheckedAnswer::NotCounted,
         }
     }
-    pub fn from_bubbles_vec(vec: Vec<u8>) -> Option<Answer> {
+    pub fn from_bubbles_iter<I: IntoIterator<Item = u8>>(iter: I) -> Option<Answer> {
         let mut num_type: Option<NumberType> = None;
         let mut num: Option<u8> = None;
 
-        for idx in vec {
+        for idx in iter {
             if idx < 3 {
                 if num_type.is_none() {
                     num_type = Some(match idx {
@@ -460,7 +460,7 @@ mod unit_tests {
     #[test]
     fn test_bubble_definite() {
         let bubbles = vec![3u8];
-        let ans = Answer::from_bubbles_vec(bubbles).unwrap();
+        let ans = Answer::from_bubbles_iter(bubbles).unwrap();
 
         assert!(matches!(
             ans,
@@ -473,22 +473,22 @@ mod unit_tests {
     #[test]
     fn test_bubble_unclear() {
         let bubbles = vec![5u8, 8u8];
-        let ans = Answer::from_bubbles_vec(bubbles);
+        let ans = Answer::from_bubbles_iter(bubbles);
         assert!(ans.is_none());
     }
     #[test]
     fn test_bubble_none() {
         let bubbles = vec![0u8];
-        assert!(Answer::from_bubbles_vec(bubbles).is_none());
+        assert!(Answer::from_bubbles_iter(bubbles).is_none());
     }
     #[test]
     fn test_bubble_plus_minus() {
         let bubbles_plus = vec![0u8, 5u8];
         let bubbles_minus = vec![1u8, 5u8];
         let bubbles_both = vec![2u8, 5u8];
-        let ans_plus = Answer::from_bubbles_vec(bubbles_plus).unwrap();
-        let ans_minus = Answer::from_bubbles_vec(bubbles_minus).unwrap();
-        let ans_both = Answer::from_bubbles_vec(bubbles_both).unwrap();
+        let ans_plus = Answer::from_bubbles_iter(bubbles_plus).unwrap();
+        let ans_minus = Answer::from_bubbles_iter(bubbles_minus).unwrap();
+        let ans_both = Answer::from_bubbles_iter(bubbles_both).unwrap();
 
         assert!(matches!(
             ans_plus,

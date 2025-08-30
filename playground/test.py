@@ -1,5 +1,5 @@
 import cv2
-from cv2.typing import MatLike
+from cv2.typing import MatLike, Scalar
 
 
 def triangle_crop(img: MatLike) -> MatLike:
@@ -62,22 +62,49 @@ def split_into_areas(img: MatLike) -> list[MatLike]:
         start_y: int = int(height * py[0])
         end_x: int = int(width * px[1])
         end_y: int = int(height * py[1])
-        mat = cv2.rectangle(mat, (start_x, start_y), (end_x, end_y), (0, 0, 255))
-        mat2 = mat.copy()
         print(f"{start_y}:{end_y}, {start_x}:{end_x}")
-        return mat2[start_y:end_y, start_x:end_x]
+        return mat[start_y:end_y, start_x:end_x]
+
+    def mark_percent(
+        mat: MatLike, px: tuple[float, float], py: tuple[float, float], color: Scalar
+    ) -> MatLike:
+        shape: tuple[int, int, int] = mat.shape
+        height, width, _ = shape
+        start_x: int = int(width * px[0])
+        start_y: int = int(height * py[0])
+        end_x: int = int(width * px[1])
+        end_y: int = int(height * py[1])
+        return cv2.rectangle(mat, (start_x, start_y), (end_x, end_y), color)
 
     # width = 1139 height = 791
     # subject name box
     splitted.append(split_percent(img, (0.01317, 0.1765), (0.1479, 0.1656)))
     # subject id box
-    splitted.append(split_percent(img, (0, 0.040386304), (0.271807838, 0.517067004)))
+    subject_id = split_percent(img, (0, 0.040386304), (0.271807838, 0.517067004))
+    for i in range(3):
+        subject_id = mark_percent(
+            subject_id, (i / 3, (i + 1) / 3), (0.128205, 1), (0, 255, 0)
+        )
+        for j in range(10):
+            subject_id = mark_percent(
+                subject_id, (0, 1), (j / 9, (j + 1) / 9), (255, 0, 0)
+            )
+    splitted.append(subject_id)
     # student name box
     splitted.append(split_percent(img, (0.0342, 0.1773), (0.1113, 0.1340)))
     # student id box
-    splitted.append(
-        split_percent(img, (0.049165935, 0.177348551), (0.273072061, 0.515802781))
+    student_id = split_percent(
+        img, (0.049165935, 0.177348551), (0.273072061, 0.515802781)
     )
+    for i in range(9):
+        student_id = mark_percent(
+            student_id, (i / 9, (i + 1) / 9), (0.12565445, 1), (0, 255, 0)
+        )
+        for j in range(10):
+            student_id = mark_percent(
+                student_id, (0, 1), (j / 9, (j + 1) / 9), (255, 0, 0)
+            )
+    splitted.append(student_id)
     # exam room
     splitted.append(
         split_percent(img, (0.032484636, 0.088674276), (0.206068268, 0.230088496))
@@ -93,13 +120,20 @@ def split_into_areas(img: MatLike) -> list[MatLike]:
             max_x = min(min_x + WIDTH_PERCENT, 1.0)
             min_y = START_PERCENT_Y + y * (GAP_Y_PERCENT + HEIGHT_PERCENT)
             max_y = min(min_y + HEIGHT_PERCENT, 1.0)
-            splitted.append(
-                split_percent(
-                    img,
-                    (min_x, max_x),
-                    (min_y, max_y),
-                )
+            ans = split_percent(
+                img,
+                (min_x, max_x),
+                (min_y, max_y),
             )
+            for i in range(5):
+                ans = mark_percent(
+                    ans, (0.11946903, 1), (i / 5, (i + 1) / 5), (0, 255, 0)
+                )
+                for j in range(13):
+                    ans = mark_percent(
+                        ans, (j / 13, (j + 1) / 13), (i / 5, (i + 1) / 5), (255, 0, 0)
+                    )
+            splitted.append(ans)
 
     return splitted
 
