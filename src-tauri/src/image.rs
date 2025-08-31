@@ -688,6 +688,7 @@ mod unit_tests {
 
     use super::*;
     use base64::prelude::*;
+    use itertools::izip;
     use opencv::core;
 
     fn test_key_image() -> FilePath {
@@ -863,9 +864,7 @@ mod unit_tests {
         }
     }
 
-    #[test]
-    fn check_extracted_ids_from_real_image() {
-        let path = test_key_image();
+    fn extract_check_id(path: FilePath, subject_id_expected: &str, student_id_expected: &str) {
         let mat = read_from_path(path).expect("Failed to read image");
         let SplittedSheet {
             subject_id,
@@ -880,14 +879,55 @@ mod unit_tests {
 
         let subject_id = extract_digits_for_sub_stu(&subject_id_bubbles, 3)
             .expect("Extracting subject ID failed");
-        assert_eq!(subject_id, "10", "Subject ID does not match expected value");
+        assert_eq!(
+            subject_id, subject_id_expected,
+            "Subject ID does not match expected value"
+        );
 
         let student_id = extract_digits_for_sub_stu(&student_id_bubbles, 9)
             .expect("Extracting student ID failed");
         assert_eq!(
-            student_id, "65010001",
+            student_id, student_id_expected,
             "Student ID does not match expected value"
         );
+    }
+    #[test]
+    fn check_extracted_ids_from_real_image() {
+        extract_check_id(test_key_image(), "10", "65010001");
+    }
+    #[test]
+    fn check_all_extracted_ids_from_images() {
+        let images = test_images();
+        let subject_ids = ["10"; 9];
+        let student_ids = [
+            "65010002", "65010003", "65010004", "68010000", "68010001", "68010002", "68010000",
+            "68010001", "68010002",
+        ];
+        for (image, subject_id, student_id) in izip!(images, subject_ids, student_ids) {
+            println!(
+                "checking for subject '{subject_id}' and student '{student_id}' in sheet '{image}'"
+            );
+            extract_check_id(image, subject_id, student_id);
+        }
+    }
+
+    #[test]
+    fn check_all_bubbles_non_empty() {
+        for image in test_images() {
+            println!("checking sheet '{image}' if all questions are answered");
+            let mat = read_from_path(image).expect("Failed to read image");
+            let SplittedSheet { questions, .. } =
+                prepare_answer_sheet(mat).expect("Fixing sheet failed");
+            let questions = extract_answers(questions).expect("reading questions failed");
+            for group in questions {
+                let a = matches!(group.A, Some(Answer { .. }));
+                let b = matches!(group.B, Some(Answer { .. }));
+                let c = matches!(group.C, Some(Answer { .. }));
+                let d = matches!(group.D, Some(Answer { .. }));
+                let e = matches!(group.E, Some(Answer { .. }));
+                assert!(a || b || c || d || e);
+            }
+        }
     }
 
     #[test]
