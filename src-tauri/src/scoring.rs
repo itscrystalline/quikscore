@@ -17,6 +17,7 @@ pub struct AnswerSheetResult {
     pub correct: u32,
     pub incorrect: u32,
     pub score: u32,
+    /// Checked question, score achieved (weight if all correct/not counted, 0 for everything else)
     pub graded_questions: [(CheckedQuestionGroup, u8); 36],
 }
 

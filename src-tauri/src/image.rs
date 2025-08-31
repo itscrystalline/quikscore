@@ -12,8 +12,7 @@ use crate::scoring::{AnswerSheetResult, CheckedAnswer};
 use crate::{signal, state};
 use base64::Engine;
 use itertools::Itertools;
-use opencv::core::{Mat, Moments, Point, Rect_, Size, Vector};
-use opencv::imgproc::{COLOR_GRAY2RGBA, FILLED, LINE_8};
+use opencv::core::{Mat, Moments, Point, Rect2i, Rect_, Size, Vector};
 use opencv::{core::MatTraitConstManual, imgcodecs, imgproc, prelude::*};
 use rayon::prelude::*;
 use std::path::Path;
@@ -35,8 +34,6 @@ macro_rules! new_mat_copy {
         mat
     }};
 }
-
-const MARKER_TRANSPARENCY: f64 = 0.3;
 
 struct SplittedSheet {
     original: Mat,
@@ -299,21 +296,25 @@ fn prepare_answer_sheet(mat: Mat) -> Result<SplittedSheet, SheetError> {
     Ok(splitted)
 }
 
+fn rect_range_frac(mat: &Rect2i, x: RangeInclusive<f64>, y: RangeInclusive<f64>) -> Rect_<i32> {
+    let (range_x, range_y) = (x.end() - x.start(), y.end() - y.start());
+    let (width, height) = (mat.width, mat.height);
+    let (start_x, start_y) = (width as f64 * x.start(), height as f64 * y.start());
+    let (range_width, range_height) = (width as f64 * range_x, height as f64 * range_y);
+    Rect_ {
+        x: start_x as i32,
+        y: start_y as i32,
+        width: range_width as i32,
+        height: range_height as i32,
+    }
+}
 fn roi_range_frac_ref(
     mat: &impl MatTraitConst,
     x: RangeInclusive<f64>,
     y: RangeInclusive<f64>,
 ) -> opencv::Result<BoxedRef<'_, Mat>> {
-    let (range_x, range_y) = (x.end() - x.start(), y.end() - y.start());
-    let (width, height) = (mat.cols(), mat.rows());
-    let (start_x, start_y) = (width as f64 * x.start(), height as f64 * y.start());
-    let (range_width, range_height) = (width as f64 * range_x, height as f64 * range_y);
-    mat.roi(Rect_ {
-        x: start_x as i32,
-        y: start_y as i32,
-        width: range_width as i32,
-        height: range_height as i32,
-    })
+    let rect = Rect_::from_point_size((0, 0).into(), mat.size()?);
+    mat.roi(rect_range_frac(&rect, x, y))
 }
 fn roi_range_frac(
     mat: &impl MatTraitConst,
@@ -323,14 +324,13 @@ fn roi_range_frac(
     roi_range_frac_ref(mat, x, y).map(|ok| ok.clone_pointee())
 }
 
+const START_PERCENT_X: f64 = 0.18525022;
+const START_PERCENT_Y: f64 = 0.010113780;
+const WIDTH_PERCENT: f64 = 0.19841967;
+const HEIGHT_PERCENT: f64 = 0.094816688;
+const GAP_X_PERCENT: f64 = 0.0079016681;
+const GAP_Y_PERCENT: f64 = 0.015170670;
 fn split_into_areas(sheet: Mat) -> Result<SplittedSheet, SheetError> {
-    const START_PERCENT_X: f64 = 0.18525022;
-    const START_PERCENT_Y: f64 = 0.010113780;
-    const WIDTH_PERCENT: f64 = 0.19841967;
-    const HEIGHT_PERCENT: f64 = 0.094816688;
-    const GAP_X_PERCENT: f64 = 0.0079016681;
-    const GAP_Y_PERCENT: f64 = 0.015170670;
-
     let subject_name = roi_range_frac(&sheet, 0.01317..=0.1765, 0.1479..=0.1656)?;
     let student_name = roi_range_frac(&sheet, 0.0342..=0.1773, 0.1113..=0.1340)?;
     let exam_room = roi_range_frac(&sheet, 0.032484636..=0.088674276, 0.206068268..=0.230088496)?;
@@ -398,6 +398,7 @@ fn extract_answers(answer_mats: Vec<Mat>) -> Result<[QuestionGroup; 36], SheetEr
                             bubble_idx as f64 / 13.0..=(bubble_idx as f64 + 1.0) / 13.0,
                             0.0..=1.0,
                         )
+                        .inspect_err(|e| err_log!(e))
                         .ok()
                     }))
                     .filter_map(|(idx, filled)| (filled > 0.4).then_some(idx as u8)),
@@ -505,93 +506,92 @@ impl AnswerSheet {
 
 impl AnswerSheetResult {
     pub fn write_score_marks(&self, sheet: &mut Mat) -> Result<(), SheetError> {
-        todo!()
-        // let mut sheet_transparent = new_mat_copy!(sheet);
-        // imgproc::cvt_color_def(sheet, &mut sheet_transparent, COLOR_GRAY2RGBA)?;
-        // *sheet = sheet_transparent.clone();
-        // for x_idx in 0..4 {
-        //     for y_idx in 0..9 {
-        //         let (x, y) = (
-        //             206 + (ANSWER_WIDTH + ANSWER_WIDTH_GAP) * x_idx,
-        //             14 + (ANSWER_HEIGHT + ANSWER_HEIGHT_GAP) * y_idx,
-        //         );
-        //         let (x, y) = (
-        //             x.clamp(0, sheet.cols() - ANSWER_WIDTH),
-        //             y.clamp(0, sheet.rows() - ANSWER_HEIGHT),
-        //         );
-        //         let rect = Rect_ {
-        //             x,
-        //             y,
-        //             width: ANSWER_WIDTH,
-        //             height: ANSWER_HEIGHT,
-        //         };
-        //         let verdict = self.graded_questions[(x_idx * 9 + y_idx) as usize]
-        //             .0
-        //             .verdict();
-        //         let question_color: Option<opencv::core::Scalar> = match verdict {
-        //             CheckedAnswer::Correct => Some((43, 160, 64).into()),
-        //             CheckedAnswer::Incorrect => Some((57, 15, 210).into()),
-        //             CheckedAnswer::Missing => Some((29, 142, 223).into()),
-        //             CheckedAnswer::NotCounted => None,
-        //         };
-        //         if let Some(question_color) = question_color {
-        //             imgproc::rectangle(
-        //                 &mut sheet_transparent,
-        //                 Rect_ {
-        //                     x,
-        //                     y,
-        //                     width: 24,
-        //                     height: ANSWER_HEIGHT,
-        //                 },
-        //                 question_color,
-        //                 FILLED,
-        //                 LINE_8,
-        //                 0,
-        //             )?;
-        //         }
-        //         for row_idx in 0..5usize {
-        //             let result_here = self.graded_questions[(x_idx * 9 + y_idx) as usize]
-        //                 .0
-        //                 .at(row_idx);
-        //             let row_y = y
-        //                 + ((ANSWER_HEIGHT / 5) * row_idx as i32)
-        //                     .clamp(0, rect.height - ANSWER_HEIGHT / 5);
-        //             let row_rect = Rect_ {
-        //                 x: x + 24,
-        //                 y: row_y,
-        //                 width: ANSWER_WIDTH - 24,
-        //                 height: ANSWER_HEIGHT / 5,
-        //             };
-        //             let color: Option<opencv::core::Scalar> = result_here.and_then(|c| match c {
-        //                 CheckedAnswer::Correct => Some((43, 160, 64).into()),
-        //                 CheckedAnswer::Incorrect => Some((57, 15, 210).into()),
-        //                 CheckedAnswer::Missing => Some((29, 142, 223).into()),
-        //                 CheckedAnswer::NotCounted => None,
-        //             });
-        //             if let Some(color) = color {
-        //                 imgproc::rectangle(
-        //                     &mut sheet_transparent,
-        //                     row_rect,
-        //                     color,
-        //                     FILLED,
-        //                     LINE_8,
-        //                     0,
-        //                 )?;
-        //             }
-        //         }
-        //     }
-        // }
-        // let mut res = new_mat_copy!(sheet);
-        // opencv::core::add_weighted_def(
-        //     &sheet_transparent,
-        //     MARKER_TRANSPARENCY,
-        //     sheet,
-        //     1.0 - MARKER_TRANSPARENCY,
-        //     0.0,
-        //     &mut res,
-        // )?;
-        // *sheet = res;
-        // Ok(())
+        let mut color_overlay = new_mat_copy!(sheet);
+        imgproc::cvt_color_def(sheet, &mut color_overlay, imgproc::COLOR_GRAY2RGBA)?;
+        sheet.clone_from(&color_overlay);
+
+        const MARKER_TRANSPARENCY: f64 = 0.3;
+
+        let question_mats = {
+            let ranges = (0..4).flat_map(|x| (0..9).map(move |y| (x, y)));
+            ranges
+                .map(|(x, y)| {
+                    let min_x = START_PERCENT_X + x as f64 * (GAP_X_PERCENT + WIDTH_PERCENT);
+                    let max_x = f64::min(min_x + WIDTH_PERCENT, 1.0);
+                    let min_y = START_PERCENT_Y + y as f64 * (GAP_Y_PERCENT + HEIGHT_PERCENT);
+                    let max_y = f64::min(min_y + HEIGHT_PERCENT, 1.0);
+                    let rect = Rect_::from_point_size((0, 0).into(), color_overlay.size()?);
+                    Ok(rect_range_frac(&rect, min_x..=max_x, min_y..=max_y))
+                })
+                .collect::<opencv::Result<Vec<Rect2i>>>()?
+        };
+        let mut mats_and_checked = question_mats.into_iter().zip(self.graded_questions);
+        mats_and_checked.try_for_each(|(question_rect, (checked, _))| {
+            let question_numbers = rect_range_frac(&question_rect, 0.0..=0.11946903, 0.0..=1.0);
+            let verdict = checked.verdict();
+            let question_color: Option<opencv::core::Scalar> = match verdict {
+                CheckedAnswer::Correct => Some((43, 160, 64).into()),
+                CheckedAnswer::Incorrect => Some((57, 15, 210).into()),
+                CheckedAnswer::Missing => Some((29, 142, 223).into()),
+                CheckedAnswer::NotCounted => None,
+            };
+            if let Some(question_color) = question_color {
+                imgproc::rectangle(
+                    &mut color_overlay,
+                    question_numbers,
+                    question_color,
+                    imgproc::FILLED,
+                    imgproc::LINE_8,
+                    0,
+                )?;
+            }
+
+            let mut rows = (0..5).map(|row| {
+                (
+                    row as usize,
+                    rect_range_frac(
+                        &question_rect,
+                        0.0..=0.11946903,
+                        (row as f64 / 5.0)..=((row as f64 + 1.0) / 5.0),
+                    ),
+                )
+            });
+            rows.try_for_each(|(idx, rect)| {
+                let verdict = checked.at(idx).expect("checked answer < 5");
+                let question_color: Option<opencv::core::Scalar> = match verdict {
+                    CheckedAnswer::Correct => Some((43, 160, 64).into()),
+                    CheckedAnswer::Incorrect => Some((57, 15, 210).into()),
+                    CheckedAnswer::Missing => Some((29, 142, 223).into()),
+                    CheckedAnswer::NotCounted => None,
+                };
+                if let Some(question_color) = question_color {
+                    imgproc::rectangle(
+                        &mut color_overlay,
+                        rect,
+                        question_color,
+                        imgproc::FILLED,
+                        imgproc::LINE_8,
+                        0,
+                    )?;
+                }
+                Result::<(), SheetError>::Ok(())
+            })?;
+
+            Result::<(), SheetError>::Ok(())
+        })?;
+
+        let mut res = new_mat_copy!(sheet);
+        opencv::core::add_weighted_def(
+            &color_overlay,
+            MARKER_TRANSPARENCY,
+            sheet,
+            1.0 - MARKER_TRANSPARENCY,
+            0.0,
+            &mut res,
+        )?;
+        *sheet = res;
+
+        Ok(())
     }
 }
 
@@ -647,26 +647,6 @@ fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Erro
         mat,
         &opencv::core::Vector::new(),
     )
-}
-
-fn crop_subject_stuent(mat: &Mat) -> Result<(Mat, Mat), SheetError> {
-    let subject = mat
-        .roi(Rect_ {
-            x: 40,
-            y: 245,
-            width: 43,
-            height: 19,
-        })?
-        .clone_pointee();
-    let student = mat
-        .roi(Rect_ {
-            x: 112,
-            y: 245,
-            width: 120,
-            height: 18,
-        })?
-        .clone_pointee();
-    Ok((subject, student))
 }
 
 fn extract_subject_student_from_written_field(
@@ -865,7 +845,7 @@ mod unit_tests {
         ));
 
         for image in test_images() {
-            println!("testing image {}", image);
+            println!("testing image {image}");
             let mat = read_from_path(image).unwrap();
             let cropped = crop_to_markers(mat);
             assert!(cropped.is_ok());
@@ -875,7 +855,7 @@ mod unit_tests {
     #[test]
     fn test_split_into_areas() {
         for image in test_images() {
-            println!("testing image {}", image);
+            println!("testing image {image}");
             let mat = read_from_path(image).unwrap();
             let cropped = crop_to_markers(mat).unwrap();
             let splitted = split_into_areas(cropped);
