@@ -400,7 +400,7 @@ fn extract_answers(answer_mats: Vec<Mat>) -> Result<[QuestionGroup; 36], SheetEr
                         )
                         .ok()
                     }))
-                    .filter_map(|(idx, filled)| (filled > 0.5).then_some(idx as u8)),
+                    .filter_map(|(idx, filled)| (filled > 0.4).then_some(idx as u8)),
                 )
             });
             Ok(QuestionGroup {
@@ -435,7 +435,7 @@ fn extract_digits_for_sub_stu(
             let next_frac = (row_idx as f64 + 1.0) / 10.0;
             roi_range_frac(&column, 0.0..=1.0, frac..=next_frac).ok()
         }))
-        .next()
+        .find(|(_, filled)| *filled > 0.4)
         .map(|(idx, _)| idx);
         if let Some(circled) = circled {
             digits.push_str(&circled.to_string());
@@ -457,10 +457,10 @@ impl AnswerSheet {
             ..
         } = src;
 
-        let subject_id_written = roi_range_frac(&subject_id_mat, 0.0..=0.128205, 0.0..=1.0)?;
-        let subject_id_bubbles = roi_range_frac_ref(&subject_id_mat, 0.128205..=1.0, 0.0..=1.0)?;
-        let student_id_written = roi_range_frac(&student_id_mat, 0.0..=0.12565445, 0.0..=1.0)?;
-        let student_id_bubbles = roi_range_frac_ref(&student_id_mat, 0.12565445..=1.0, 0.0..=1.0)?;
+        let subject_id_written = roi_range_frac(&subject_id_mat, 0.0..=1.0, 0.0..=0.128205)?;
+        let subject_id_bubbles = roi_range_frac_ref(&subject_id_mat, 0.0..=1.0, 0.128205..=1.0)?;
+        let student_id_written = roi_range_frac(&student_id_mat, 0.0..=1.0, 0.0..=0.12565445)?;
+        let student_id_bubbles = roi_range_frac_ref(&student_id_mat, 0.0..=1.0, 0.12565445..=1.0)?;
 
         let subject_id = extract_digits_for_sub_stu(&subject_id_bubbles, 3)?;
         let student_id = extract_digits_for_sub_stu(&student_id_bubbles, 9)?;
@@ -893,12 +893,17 @@ mod unit_tests {
             ..
         } = prepare_answer_sheet(mat).expect("Fixing sheet failed");
 
-        let subject_id =
-            extract_digits_for_sub_stu(&subject_id, 3).expect("Extracting subject ID failed");
-        let student_id =
-            extract_digits_for_sub_stu(&student_id, 9).expect("Extracting student ID failed");
+        let subject_id_bubbles =
+            roi_range_frac_ref(&subject_id, 0.0..=1.0, 0.128205..=1.0).unwrap();
+        let student_id_bubbles =
+            roi_range_frac_ref(&student_id, 0.0..=1.0, 0.12565445..=1.0).unwrap();
 
+        let subject_id = extract_digits_for_sub_stu(&subject_id_bubbles, 3)
+            .expect("Extracting subject ID failed");
         assert_eq!(subject_id, "10", "Subject ID does not match expected value");
+
+        let student_id = extract_digits_for_sub_stu(&student_id_bubbles, 9)
+            .expect("Extracting student ID failed");
         assert_eq!(
             student_id, "65010001",
             "Student ID does not match expected value"
@@ -918,8 +923,15 @@ mod unit_tests {
                 student_id,
                 ..
             } = prepare_answer_sheet(mat).expect("Resize failed");
-            let (subject_id, student_id) =
-                extract_subject_student_from_written_field(&subject_id, &student_id, ocr)?;
+            let subject_id_written =
+                roi_range_frac(&subject_id, 0.0..=1.0, 0.0..=0.128205).unwrap();
+            let student_id_written =
+                roi_range_frac(&student_id, 0.0..=1.0, 0.0..=0.12565445).unwrap();
+            let (subject_id, student_id) = extract_subject_student_from_written_field(
+                &subject_id_written,
+                &student_id_written,
+                ocr,
+            )?;
 
             if i == 0 {
                 assert_eq!(subject_id, "10", "Subject ID does not match expected value");
