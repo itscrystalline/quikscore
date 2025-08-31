@@ -3,6 +3,7 @@ from cv2.typing import MatLike, Scalar
 
 
 def triangle_crop(img: MatLike) -> MatLike:
+    img = split_percent(img, (0.00570288, 0.99714856), (0.008064516, 0.995967742))
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
     thresh = cv2.adaptiveThreshold(
@@ -11,6 +12,7 @@ def triangle_crop(img: MatLike) -> MatLike:
 
     # Find contours
     (contours, _) = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    _ = cv2.imwrite("contours.png", thresh)
     xy1 = [10, 10]
     xy2 = [10, 10]
 
@@ -36,6 +38,7 @@ def triangle_crop(img: MatLike) -> MatLike:
                     xy2[1] = cy
 
     # Display the result
+    print(f"{xy1[1]}:{xy2[1]}, {xy1[0]}:{xy2[0]}")
     img = img[xy1[1] : xy2[1], xy1[0] : xy2[0]]
     img = cv2.resize(img, None, fx=0.3333, fy=0.3333)
     return img
@@ -49,21 +52,22 @@ GAP_X_PERCENT = 0.0079016681
 GAP_Y_PERCENT = 0.015170670
 
 
+def split_percent(
+    mat: MatLike, px: tuple[float, float], py: tuple[float, float]
+) -> MatLike:
+    shape: tuple[int, int, int] = mat.shape
+    height, width, _ = shape
+    print(f"width {width}, height {height}")
+    start_x: int = int(width * px[0])
+    start_y: int = int(height * py[0])
+    end_x: int = int(width * px[1])
+    end_y: int = int(height * py[1])
+    print(f"{start_y}:{end_y}, {start_x}:{end_x}")
+    return mat[start_y:end_y, start_x:end_x].copy()
+
+
 def split_into_areas(img: MatLike) -> list[MatLike]:
     splitted: list[MatLike] = []
-
-    def split_percent(
-        mat: MatLike, px: tuple[float, float], py: tuple[float, float]
-    ) -> MatLike:
-        shape: tuple[int, int, int] = mat.shape
-        height, width, _ = shape
-        print(f"width {width}, height {height}")
-        start_x: int = int(width * px[0])
-        start_y: int = int(height * py[0])
-        end_x: int = int(width * px[1])
-        end_y: int = int(height * py[1])
-        print(f"{start_y}:{end_y}, {start_x}:{end_x}")
-        return mat[start_y:end_y, start_x:end_x]
 
     def mark_percent(
         mat: MatLike, px: tuple[float, float], py: tuple[float, float], color: Scalar
@@ -145,7 +149,16 @@ def split_into_areas(img: MatLike) -> list[MatLike]:
     return splitted
 
 
-test_img = cv2.imread("../src-tauri/tests/assets/sample_valid_image.jpg")
+test_img = cv2.imread("../src-tauri/tests/assets/image_001.jpg")
+# test_img = cv2.imread("../src-tauri/tests/assets/image_002.jpg")
+# test_img = cv2.imread("../src-tauri/tests/assets/image_003.jpg")
+# test_img = cv2.imread("../src-tauri/tests/assets/scan1_001.jpg")
+# test_img = cv2.imread("../src-tauri/tests/assets/scan1_002.jpg")
+# test_img = cv2.imread("../src-tauri/tests/assets/scan1_003.jpg")
+# test_img = cv2.imread("../src-tauri/tests/assets/scan2_001.jpg")
+# test_img = cv2.imread("../src-tauri/tests/assets/scan2_002.jpg")
+# test_img = cv2.imread("../src-tauri/tests/assets/scan2_003.jpg")
+_ = cv2.imwrite("test.png", test_img)
 grabbed = triangle_crop(test_img)
 _ = cv2.imwrite("grabbed.png", grabbed)
 for idx, img in enumerate(split_into_areas(grabbed)):
