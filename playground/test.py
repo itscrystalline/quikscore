@@ -4,8 +4,8 @@ from cv2.typing import MatLike, Scalar
 
 def triangle_crop(img: MatLike) -> MatLike:
     img = split_percent(img, (0.00570288, 0.99714856), (0.008064516, 0.995967742))
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    blur = cv2.GaussianBlur(img, (5, 5), 0)
     thresh = cv2.adaptiveThreshold(
         blur, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2
     )
@@ -55,8 +55,8 @@ GAP_Y_PERCENT = 0.015170670
 def split_percent(
     mat: MatLike, px: tuple[float, float], py: tuple[float, float]
 ) -> MatLike:
-    shape: tuple[int, int, int] = mat.shape
-    height, width, _ = shape
+    shape: tuple[int, int] = mat.shape
+    height, width = shape[0], shape[1]
     print(f"width {width}, height {height}")
     start_x: int = int(width * px[0])
     start_y: int = int(height * py[0])
@@ -72,8 +72,8 @@ def split_into_areas(img: MatLike) -> list[MatLike]:
     def mark_percent(
         mat: MatLike, px: tuple[float, float], py: tuple[float, float], color: Scalar
     ) -> MatLike:
-        shape: tuple[int, int, int] = mat.shape
-        height, width, _ = shape
+        shape: tuple[int, int] = mat.shape
+        height, width = shape[0], shape[1]
         start_x: int = int(width * px[0])
         start_y: int = int(height * py[0])
         end_x: int = int(width * px[1])
@@ -149,11 +149,11 @@ def split_into_areas(img: MatLike) -> list[MatLike]:
     return splitted
 
 
-test_img = cv2.imread("../src-tauri/tests/assets/image_001.jpg")
+# test_img = cv2.imread("../src-tauri/tests/assets/image_001.jpg")
 # test_img = cv2.imread("../src-tauri/tests/assets/image_002.jpg")
 # test_img = cv2.imread("../src-tauri/tests/assets/image_003.jpg")
 # test_img = cv2.imread("../src-tauri/tests/assets/scan1_001.jpg")
-# test_img = cv2.imread("../src-tauri/tests/assets/scan1_002.jpg")
+test_img = cv2.imread("../src-tauri/tests/assets/scan1_002.jpg")
 # test_img = cv2.imread("../src-tauri/tests/assets/scan1_003.jpg")
 # test_img = cv2.imread("../src-tauri/tests/assets/scan2_001.jpg")
 # test_img = cv2.imread("../src-tauri/tests/assets/scan2_002.jpg")
@@ -161,5 +161,7 @@ test_img = cv2.imread("../src-tauri/tests/assets/image_001.jpg")
 _ = cv2.imwrite("test.png", test_img)
 grabbed = triangle_crop(test_img)
 _ = cv2.imwrite("grabbed.png", grabbed)
+_, grabbed = cv2.threshold(grabbed, 165, 255, cv2.THRESH_BINARY)
+_ = cv2.imwrite("grabbed_thresh.png", grabbed)
 for idx, img in enumerate(split_into_areas(grabbed)):
     _ = cv2.imwrite(f"area{idx}.png", img)

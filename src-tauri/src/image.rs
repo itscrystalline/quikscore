@@ -330,21 +330,24 @@ fn roi_range_frac(
     roi_range_frac_ref(mat, x, y).map(|ok| ok.clone_pointee())
 }
 
+fn thresh(mut mat: Mat) -> opencv::Result<Mat> {
+    // SAFETY: threshold can operate in place.
+    unsafe {
+        mat.modify_inplace(|mat, thresholded| {
+            imgproc::threshold(mat, thresholded, 165.0, 255.0, imgproc::THRESH_BINARY)
+        })?;
+    }
+    Ok(mat)
+}
 const START_PERCENT_X: f64 = 0.18525022;
 const START_PERCENT_Y: f64 = 0.010113780;
 const WIDTH_PERCENT: f64 = 0.19841967;
 const HEIGHT_PERCENT: f64 = 0.094816688;
 const GAP_X_PERCENT: f64 = 0.0079016681;
 const GAP_Y_PERCENT: f64 = 0.015170670;
-fn split_into_areas(mut sheet: Mat) -> Result<SplittedSheet, SheetError> {
+fn split_into_areas(sheet: Mat) -> Result<SplittedSheet, SheetError> {
     let original = sheet.clone();
 
-    // SAFETY: threshold can operate in place.
-    unsafe {
-        sheet.modify_inplace(|mat, thresholded| {
-            imgproc::threshold(mat, thresholded, 200.0, 255.0, imgproc::THRESH_BINARY)
-        })?;
-    }
     let subject_name = roi_range_frac(&sheet, 0.01317..=0.1765, 0.1479..=0.1656)?;
     let student_name = roi_range_frac(&sheet, 0.0342..=0.1773, 0.1113..=0.1340)?;
     let exam_room = roi_range_frac(&sheet, 0.032484636..=0.088674276, 0.206068268..=0.230088496)?;
@@ -359,7 +362,7 @@ fn split_into_areas(mut sheet: Mat) -> Result<SplittedSheet, SheetError> {
                 let max_x = f64::min(min_x + WIDTH_PERCENT, 1.0);
                 let min_y = START_PERCENT_Y + y as f64 * (GAP_Y_PERCENT + HEIGHT_PERCENT);
                 let max_y = f64::min(min_y + HEIGHT_PERCENT, 1.0);
-                roi_range_frac(&sheet, min_x..=max_x, min_y..=max_y)
+                thresh(roi_range_frac(&sheet, min_x..=max_x, min_y..=max_y)?)
             })
             .collect::<opencv::Result<Vec<Mat>>>()?
     };
@@ -448,8 +451,8 @@ fn extract_answers(answer_mats: Vec<Mat>) -> Result<[QuestionGroup; 36], SheetEr
 }
 
 /// Note: the mat passed into this function has to be just the bubble columns, nothing on top
-fn extract_digits_for_sub_stu(
-    mat: &(impl MatTraitConst + ToInputArray),
+fn extract_digits_for_sub_stu<M: MatTraitConst + ToInputArray>(
+    mat: &M,
     columns: u8,
 ) -> Result<String, opencv::Error> {
     let mut digits = String::new();
@@ -462,10 +465,11 @@ fn extract_digits_for_sub_stu(
         let circled = sorted_bubbles_by_filled((0..10).filter_map(|row_idx| {
             let frac = row_idx as f64 / 10.0;
             let next_frac = (row_idx as f64 + 1.0) / 10.0;
-            roi_range_frac(&column, 0.0..=1.0, frac..=next_frac).ok()
-            // .inspect(|mat| {
-            //     safe_imwrite(format!("temp/bubble_{column_idx}_{row_idx}.png"), mat).unwrap();
-            // })
+            roi_range_frac(&column, 0.0..=1.0, frac..=next_frac)
+                .inspect_err(|e| err_log!(e))
+                .ok()
+                .map(|mat| thresh(mat).inspect_err(|e| err_log!(e)).ok())
+                .flatten()
         }))
         .inspect(|(idx, filled)| {
             println!("bubble at column {column_idx} #{idx} filled: {filled}");
