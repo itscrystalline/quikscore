@@ -1,3 +1,5 @@
+#![feature(stmt_expr_attributes)]
+
 use crate::state::AppState;
 use std::sync::Mutex;
 use tauri::Manager;

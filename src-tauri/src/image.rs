@@ -214,30 +214,36 @@ fn read_from_path(path: FilePath) -> Result<Mat, UploadError> {
 }
 
 fn crop_to_markers(mat: Mat) -> Result<Mat, SheetError> {
-    let mat = roi_range_frac(&mat, 0.00570288..=0.99714856, 0.008064516..=0.995967742)?;
-    let blurred = {
+    // we force drop the original `mat` here by capturing it in the closure - lmk if you have a cleaner way
+    #[allow(clippy::redundant_closure_call)]
+    let mat = {
+        #[inline(always)]
+        move || roi_range_frac(&mat, 0.00570288..=0.99714856, 0.008064516..=0.995967742)
+    }()?;
+    let blurred_thresholded = {
         let mut blur = new_mat_copy!(mat);
         imgproc::gaussian_blur_def(&mat, &mut blur, (5, 5).into(), 0.0)?;
+        // SAFETY: adaptive_threshold can operate in place.
+        unsafe {
+            blur.modify_inplace(|blurred, thresholded| {
+                imgproc::adaptive_threshold(
+                    blurred,
+                    thresholded,
+                    255.0,
+                    imgproc::ADAPTIVE_THRESH_GAUSSIAN_C,
+                    imgproc::THRESH_BINARY_INV,
+                    11,
+                    2.0,
+                )
+            })?;
+        }
         blur
-    };
-    let thresholded = {
-        let mut thresh = new_mat_copy!(blurred);
-        imgproc::adaptive_threshold(
-            &blurred,
-            &mut thresh,
-            255.0,
-            imgproc::ADAPTIVE_THRESH_GAUSSIAN_C,
-            imgproc::THRESH_BINARY_INV,
-            11,
-            2.0,
-        )?;
-        thresh
     };
 
     let contours = {
         let mut vec: Vector<Vector<Point>> = vec![].into();
         imgproc::find_contours_def(
-            &thresholded,
+            &blurred_thresholded,
             &mut vec,
             imgproc::RETR_EXTERNAL,
             imgproc::CHAIN_APPROX_SIMPLE,
