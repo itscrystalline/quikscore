@@ -369,11 +369,11 @@ function avgMinMax(result: BlobbedAnswerScoreResult[]): { avg: number, min: numb
       <div class="form_group">
         <div class="form_wrapper">
           <label for="mongo_db_uri">MongoDB URI: </label>
-          <input type="text" id="mongo_db_uri" v-model="mongoDbUri" placeholder="URI...." />
+          <input type="text" id="mongo_db_uri" class="text-box" v-model="mongoDbUri" placeholder="URI...." />
         </div>
         <div class="form_wrapper">
           <label for="mongo_db_name">MongoDB Name: </label>
-          <input type="text" id="mongo_db_name" v-model="mongoDbName" placeholder="Name...." />
+          <input type="text" id="mongo_db_name" class="text-box" v-model="mongoDbName" placeholder="Name...." />
         </div>
       </div>
       <button class="mongo_db_enter" @click="enterDatabaseInfo">Enter</button>
@@ -609,6 +609,34 @@ p.credits {
   gap: 0.5rem;
 }
 
+.text-box {
+  padding: 0.25rem;           
+  border-radius: 50px;        
+  border: 1px solid #1e293b;    
+  width: 300px;                         
+  background-color: #1e293b 
+}
+
+.mongo_db_enter {
+  border-radius: 25px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  padding: 1vh;
+  margin-right: 1vh;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  transition: border-color 0.25s;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 2px rgba(2, 59, 98, 0.2);
+  background-color: #5d98f6;
+  color: #ffffff;
+}
+
+.mongo_db_enter:hover {
+  background-color: #2563eb;
+  border-color: #45475a;
+}
 
 .result {
   display: flex;
