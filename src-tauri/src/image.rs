@@ -336,7 +336,15 @@ const WIDTH_PERCENT: f64 = 0.19841967;
 const HEIGHT_PERCENT: f64 = 0.094816688;
 const GAP_X_PERCENT: f64 = 0.0079016681;
 const GAP_Y_PERCENT: f64 = 0.015170670;
-fn split_into_areas(sheet: Mat) -> Result<SplittedSheet, SheetError> {
+fn split_into_areas(mut sheet: Mat) -> Result<SplittedSheet, SheetError> {
+    let original = sheet.clone();
+
+    // SAFETY: threshold can operate in place.
+    unsafe {
+        sheet.modify_inplace(|mat, thresholded| {
+            imgproc::threshold(mat, thresholded, 200.0, 255.0, imgproc::THRESH_BINARY)
+        })?;
+    }
     let subject_name = roi_range_frac(&sheet, 0.01317..=0.1765, 0.1479..=0.1656)?;
     let student_name = roi_range_frac(&sheet, 0.0342..=0.1773, 0.1113..=0.1340)?;
     let exam_room = roi_range_frac(&sheet, 0.032484636..=0.088674276, 0.206068268..=0.230088496)?;
@@ -357,7 +365,7 @@ fn split_into_areas(sheet: Mat) -> Result<SplittedSheet, SheetError> {
     };
 
     Ok(SplittedSheet {
-        original: sheet,
+        original,
         student_name,
         subject_name,
         exam_room,
@@ -397,6 +405,7 @@ fn extract_answers(answer_mats: Vec<Mat>) -> Result<[QuestionGroup; 36], SheetEr
                     0.11946903..=1.0,
                     (row_idx as f64 / 5.0)..=(row_idx as f64 + 1.0) / 5.0,
                 )?;
+                // safe_imwrite(format!("temp/bubble_{q_idx}_row_{row_idx}.png"), &row).unwrap();
                 Result::<_, opencv::Error>::Ok(
                     sorted_bubbles_by_filled((0..13u8).filter_map(move |bubble_idx| {
                         roi_range_frac(
@@ -405,9 +414,21 @@ fn extract_answers(answer_mats: Vec<Mat>) -> Result<[QuestionGroup; 36], SheetEr
                             0.0..=1.0,
                         )
                         .inspect_err(|e| err_log!(e))
+                        // .inspect(|mat| {
+                        //     safe_imwrite(
+                        //         format!("temp/bubble_{q_idx}_row_{row_idx}_idx_{bubble_idx}.png"),
+                        //         mat,
+                        //     )
+                        //     .unwrap();
+                        // })
                         .ok()
                     }))
-                    .filter_map(|(idx, filled)| (filled > 0.4).then_some(idx as u8)),
+                    .inspect(|(idx, filled)| {
+                        if *filled > 0.4 {
+                            println!("index {idx}, filled = {filled}");
+                        }
+                    })
+                    .filter_map(|(idx, filled)| (filled > 0.5).then_some(idx as u8)),
                 )
             });
             Ok(QuestionGroup {
@@ -432,7 +453,7 @@ fn extract_digits_for_sub_stu(
     columns: u8,
 ) -> Result<String, opencv::Error> {
     let mut digits = String::new();
-    safe_imwrite("temp/bubbles.png", mat).unwrap();
+    // safe_imwrite("temp/bubbles.png", mat).unwrap();
 
     for column_idx in 0..columns {
         let frac = column_idx as f64 / columns as f64;
@@ -441,16 +462,15 @@ fn extract_digits_for_sub_stu(
         let circled = sorted_bubbles_by_filled((0..10).filter_map(|row_idx| {
             let frac = row_idx as f64 / 10.0;
             let next_frac = (row_idx as f64 + 1.0) / 10.0;
-            roi_range_frac(&column, 0.0..=1.0, frac..=next_frac)
-                .ok()
-                .inspect(|mat| {
-                    safe_imwrite(format!("temp/bubble_{column_idx}_{row_idx}.png"), mat).unwrap();
-                })
+            roi_range_frac(&column, 0.0..=1.0, frac..=next_frac).ok()
+            // .inspect(|mat| {
+            //     safe_imwrite(format!("temp/bubble_{column_idx}_{row_idx}.png"), mat).unwrap();
+            // })
         }))
         .inspect(|(idx, filled)| {
             println!("bubble at column {column_idx} #{idx} filled: {filled}");
         })
-        .find(|(_, filled)| *filled > 0.325)
+        .find(|(_, filled)| *filled > 0.475)
         .map(|(idx, _)| idx);
         if let Some(circled) = circled {
             println!("adding number {circled}");
@@ -948,14 +968,18 @@ mod unit_tests {
             let SplittedSheet { questions, .. } =
                 prepare_answer_sheet(mat).expect("Fixing sheet failed");
             let questions = extract_answers(questions).expect("reading questions failed");
-            for group in questions {
-                let a = matches!(group.A, Some(Answer { .. }));
-                let b = matches!(group.B, Some(Answer { .. }));
-                let c = matches!(group.C, Some(Answer { .. }));
-                let d = matches!(group.D, Some(Answer { .. }));
-                let e = matches!(group.E, Some(Answer { .. }));
-                assert!(a || b || c || d || e);
-            }
+            let res = questions
+                .into_iter()
+                .map(|group| {
+                    let a = matches!(group.A, Some(Answer { .. }));
+                    let b = matches!(group.B, Some(Answer { .. }));
+                    let c = matches!(group.C, Some(Answer { .. }));
+                    let d = matches!(group.D, Some(Answer { .. }));
+                    let e = matches!(group.E, Some(Answer { .. }));
+                    a || b || c || d || e
+                })
+                .reduce(|acc, res| acc || res);
+            assert!(res.unwrap());
         }
     }
 
