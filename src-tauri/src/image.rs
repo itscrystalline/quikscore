@@ -302,14 +302,14 @@ fn prepare_answer_sheet(mat: Mat) -> Result<SplittedSheet, SheetError> {
     Ok(splitted)
 }
 
-fn rect_range_frac(mat: &Rect2i, x: RangeInclusive<f64>, y: RangeInclusive<f64>) -> Rect_<i32> {
+fn rect_range_frac(rect: &Rect2i, x: RangeInclusive<f64>, y: RangeInclusive<f64>) -> Rect2i {
     let (range_x, range_y) = (x.end() - x.start(), y.end() - y.start());
-    let (width, height) = (mat.width, mat.height);
+    let (width, height) = (rect.width, rect.height);
     let (start_x, start_y) = (width as f64 * x.start(), height as f64 * y.start());
     let (range_width, range_height) = (width as f64 * range_x, height as f64 * range_y);
     Rect_ {
-        x: start_x as i32,
-        y: start_y as i32,
+        x: rect.x + start_x as i32,
+        y: rect.y + start_y as i32,
         width: range_width as i32,
         height: range_height as i32,
     }
@@ -408,7 +408,6 @@ fn extract_answers(answer_mats: Vec<Mat>) -> Result<[QuestionGroup; 36], SheetEr
                     0.11946903..=1.0,
                     (row_idx as f64 / 5.0)..=(row_idx as f64 + 1.0) / 5.0,
                 )?;
-                // safe_imwrite(format!("temp/bubble_{q_idx}_row_{row_idx}.png"), &row).unwrap();
                 Result::<_, opencv::Error>::Ok(
                     sorted_bubbles_by_filled((0..13u8).filter_map(move |bubble_idx| {
                         roi_range_frac(
@@ -417,21 +416,9 @@ fn extract_answers(answer_mats: Vec<Mat>) -> Result<[QuestionGroup; 36], SheetEr
                             0.0..=1.0,
                         )
                         .inspect_err(|e| err_log!(e))
-                        // .inspect(|mat| {
-                        //     safe_imwrite(
-                        //         format!("temp/bubble_{q_idx}_row_{row_idx}_idx_{bubble_idx}.png"),
-                        //         mat,
-                        //     )
-                        //     .unwrap();
-                        // })
                         .ok()
                     }))
-                    .inspect(|(idx, filled)| {
-                        if *filled > 0.4 {
-                            println!("index {idx}, filled = {filled}");
-                        }
-                    })
-                    .filter_map(|(idx, filled)| (filled > 0.5).then_some(idx as u8)),
+                    .filter_map(|(idx, filled)| (filled > 0.4).then_some(idx as u8)),
                 )
             });
             Ok(QuestionGroup {
@@ -456,7 +443,6 @@ fn extract_digits_for_sub_stu<M: MatTraitConst + ToInputArray>(
     columns: u8,
 ) -> Result<String, opencv::Error> {
     let mut digits = String::new();
-    // safe_imwrite("temp/bubbles.png", mat).unwrap();
 
     for column_idx in 0..columns {
         let frac = column_idx as f64 / columns as f64;
@@ -471,13 +457,9 @@ fn extract_digits_for_sub_stu<M: MatTraitConst + ToInputArray>(
                 .map(|mat| thresh(mat).inspect_err(|e| err_log!(e)).ok())
                 .flatten()
         }))
-        .inspect(|(idx, filled)| {
-            println!("bubble at column {column_idx} #{idx} filled: {filled}");
-        })
         .find(|(_, filled)| *filled > 0.475)
         .map(|(idx, _)| idx);
         if let Some(circled) = circled {
-            println!("adding number {circled}");
             digits.push_str(&circled.to_string());
         }
     }
@@ -591,7 +573,7 @@ impl AnswerSheetResult {
                     row as usize,
                     rect_range_frac(
                         &question_rect,
-                        0.0..=0.11946903,
+                        0.11946903..=1.0,
                         (row as f64 / 5.0)..=((row as f64 + 1.0) / 5.0),
                     ),
                 )
@@ -653,17 +635,17 @@ fn extract_user_information(
     exam_seat: Mat,
     ocr: &OcrEngine,
 ) -> Result<(String, String, String, String), SheetError> {
-    #[cfg(debug_assertions)]
-    {
-        let temp_dir = "temp";
-        _ = std::fs::create_dir_all(temp_dir);
-
-        debug!("Working directory: {:?}", std::env::current_dir());
-        safe_imwrite("temp/debug_name.png", &name)?;
-        safe_imwrite("temp/debug_subject.png", &subject_name)?;
-        safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
-        safe_imwrite("temp/debug_seat.png", &exam_seat)?;
-    }
+    // #[cfg(debug_assertions)]
+    // {
+    //     let temp_dir = "temp";
+    //     _ = std::fs::create_dir_all(temp_dir);
+    //
+    //     debug!("Working directory: {:?}", std::env::current_dir());
+    //     safe_imwrite("temp/debug_name.png", &name)?;
+    //     safe_imwrite("temp/debug_subject.png", &subject_name)?;
+    //     safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
+    //     safe_imwrite("temp/debug_seat.png", &exam_seat)?;
+    // }
 
     let name_string = image_to_string(&name, ocr)?;
     let subject_string = image_to_string(&subject_name, ocr)?;
@@ -703,8 +685,8 @@ fn extract_subject_student_from_written_field(
     let subject = clean_text(&rsub);
     let student = clean_text(&rstu);
 
-    safe_imwrite("temp/debug_subject_f.png", subject_id_mat)?;
-    safe_imwrite("temp/debug_student_f.png", student_id_mat)?;
+    // safe_imwrite("temp/debug_subject_f.png", subject_id_mat)?;
+    // safe_imwrite("temp/debug_student_f.png", student_id_mat)?;
 
     Ok((subject, student))
 }
