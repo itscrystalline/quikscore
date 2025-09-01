@@ -495,7 +495,7 @@ impl AnswerSheet {
 
         let subject_id_written = roi_range_frac(&subject_id_mat, 0.0..=1.0, 0.0..=0.128205)?;
         let subject_id_bubbles = roi_range_frac_ref(&subject_id_mat, 0.0..=1.0, 0.128205..=1.0)?;
-        let student_id_written = roi_range_frac(&student_id_mat, 0.0..=1.0, 0.0..=0.12565445)?;
+        let student_id_written = roi_range_frac(&student_id_mat, 0.112..=1.0, 0.0..=0.12565445)?;
         let student_id_bubbles = roi_range_frac_ref(&student_id_mat, 0.0..=1.0, 0.12565445..=1.0)?;
 
         let subject_id = extract_digits_for_sub_stu(&subject_id_bubbles, 3)?;
@@ -512,6 +512,7 @@ impl AnswerSheet {
                     ocr,
                 )?;
             if subject_id != written_subject_id || student_id != written_student_id {
+                //warn!("{} != {} && {} != {}", written_student_id, student_id, written_subject_id, subject_id);
                 warn!("User Fon and Enter differently");
             }
             let (name, subject, room, seat) = extract_user_information(
