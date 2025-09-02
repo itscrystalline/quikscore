@@ -1,6 +1,6 @@
 use crate::err_log;
 use log::{debug, warn};
-use ocrs::{ImageSource, OcrEngine};
+use crate::ocr::OcrEngine;
 use opencv::boxed_ref::BoxedRef;
 use std::ops::RangeInclusive;
 use std::sync::{Arc, RwLock};
@@ -629,10 +629,9 @@ impl AnswerSheetResult {
 
 fn image_to_string(mat: &Mat, ocr: &OcrEngine) -> Result<String, SheetError> {
     let bytes = mat.data_bytes()?;
-    let img_src = ImageSource::from_bytes(bytes, (mat.cols() as u32, mat.rows() as u32))
-        .map_err(|e| anyhow::anyhow!(e))?;
-    let ocr_input = ocr.prepare_input(img_src)?;
-    let text = ocr.get_text(&ocr_input)?;
+    let img_src = crate::ocr::ImageSource::from_bytes(bytes, (mat.cols() as u32, mat.rows() as u32));
+        let ocr_input = ocr.prepare_input(img_src)?;
+    let text = ocr.get_text(ocr_input)?;
     let rem_nl = text.lines().next().unwrap_or("").trim().to_string();
 
     Ok(rem_nl)
