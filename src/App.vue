@@ -37,9 +37,9 @@ listen<AppState>("state", (event) => {
 const modelDownloadEventHandler = (progressBar: Ref<undefined | ProgressBarProps>, status: Ref<string>) => (msg: ModelDownload): void => {
   switch (msg.event) {
     case "progress":
-      const { total, progressDetection, progressRecognition } = msg.data
-      progressBar.value = { type: "progress", max: total, progressTop: progressDetection, progressBottom: progressDetection + progressRecognition };
-      status.value = "Downloading " + ((progressDetection + progressRecognition) * 100 / total).toFixed(2) + "%";
+      const { total, progress } = msg.data
+      progressBar.value = { type: "progress", max: total, progressTop: 0, progressBottom: progress };
+      status.value = "Downloading " + (progress * 100 / total).toFixed(2) + "%";
       return;
     case "success":
       progressBar.value = { type: "indeterminate" };
@@ -269,18 +269,18 @@ async function exportCsv() {
     </div>
 
     <div class="mongo_db_information_field">
-    <div class="form_group">
-      <div class="form_wrapper">
-        <label for="mongo_db_uri">MongoDB URI: </label>
-        <input type="text" id="mongo_db_uri" v-model="mongoDbUri" placeholder="URI...."/>
+      <div class="form_group">
+        <div class="form_wrapper">
+          <label for="mongo_db_uri">MongoDB URI: </label>
+          <input type="text" id="mongo_db_uri" v-model="mongoDbUri" placeholder="URI...." />
+        </div>
+        <div class="form_wrapper">
+          <label for="mongo_db_name">MongoDB Name: </label>
+          <input type="text" id="mongo_db_name" v-model="mongoDbName" placeholder="Name...." />
+        </div>
       </div>
-      <div class="form_wrapper">
-        <label for="mongo_db_name">MongoDB Name: </label>
-        <input type="text" id="mongo_db_name" v-model="mongoDbName" placeholder="Name...."/>
-      </div>
+      <button class="mongo_db_enter" @click="enterDatabaseInfo">Enter</button>
     </div>
-    <button class="mongo_db_enter" @click="enterDatabaseInfo">Enter</button>
-  </div>
 
 
     <div class="header">
@@ -468,14 +468,14 @@ p.credits {
 
 .mongo_db_information_field {
   display: flex;
-  align-items: center;   
-  justify-content: center;  
-  gap: 1rem;                
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
 }
 
 .form_wrapper {
   display: flex;
-  align-items: center;      
+  align-items: center;
   gap: 0.5rem;
 }
 
