@@ -64,7 +64,7 @@
           env = {
             RUSTFLAGS = "-Z threads=8";
             OPENCV_LINK_PATHS = "${pkgs.opencv}/lib";
-            OPENCV_LINK_LIBS = "opencv_core,opencv_imgproc,opencv_imgcodecs,png";
+            OPENCV_LINK_LIBS = "opencv_core,opencv_imgproc,opencv_imgcodecs,png,opencv_text";
             OPENCV_INCLUDE_PATHS = "+${pkgs.opencv}/include";
           };
 
@@ -88,6 +88,7 @@
               opencv
               libpng
               openssl
+              tesseract
             ]);
 
           postFixup =
@@ -122,7 +123,7 @@
             then ''
               echo "Bundling additional libraries (OpenCV, OpenBLAS, OpenEXR)"
               mkdir -p $out/lib
-              for lib in core imgproc imgcodecs ; do
+              for lib in core imgproc imgcodecs text ; do
                 cp "${pkgs.opencv}/lib/libopencv_$lib.so.411" "$out/lib/"
               done
               cp "${pkgs.openblas}/lib/libopenblas.so.0" "$out/lib/"
@@ -157,7 +158,7 @@
               mkdir -p "$frameworks"
 
               # 1. Copy required versioned dylibs unchanged
-              for lib in core imgproc imgcodecs; do
+              for lib in core imgproc imgcodecs text; do
                 cp "${pkgs.opencv}/lib/libopencv_''${lib}.411.dylib" "$frameworks/"
                 chmod +w "$frameworks/libopencv_''${lib}.411.dylib"
                 install_name_tool -id "@loader_path/../Frameworks/libopencv_''${lib}.411.dylib" "$frameworks/libopencv_''${lib}.411.dylib"
