@@ -1,6 +1,6 @@
 use crate::err_log;
+use crate::ocr::OcrEngine;
 use log::{error, info};
-use ocrs::OcrEngine;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -41,23 +41,12 @@ macro_rules! emit_state {
 
 pub fn init_thread_ocr() -> Option<OcrEngine> {
     let model_path = MODELS.get()?;
-    let detection_model = model_path.join("text-detection.rten");
-    let recognition_model = model_path.join("text-recognition.rten");
-    info!("Initializing thread OcrEngine");
+    let tessdata = model_path.join("text-detection.rten");
+    info!("Initializing thread OCR");
 
-    let detection = rten::Model::load_file(detection_model)
+    OcrEngine::new(tessdata.to_str()?)
         .inspect_err(|e| err_log!(e))
-        .ok()?;
-    let recognition = rten::Model::load_file(recognition_model)
-        .inspect_err(|e| err_log!(e))
-        .ok()?;
-
-    OcrEngine::new(ocrs::OcrEngineParams {
-        detection_model: Some(detection),
-        recognition_model: Some(recognition),
-        ..Default::default()
-    })
-    .ok()
+        .ok()
 }
 
 #[derive(Default)]
@@ -72,7 +61,7 @@ pub enum MongoDB {
     Enable {
         mongo_db_uri: String,
         mongo_db_name: String,
-    }
+    },
 }
 
 #[derive(Clone)]
@@ -82,7 +71,10 @@ pub struct Options {
 }
 impl Default for Options {
     fn default() -> Self {
-        Self { ocr: true, mongo: MongoDB::Disable, }
+        Self {
+            ocr: true,
+            mongo: MongoDB::Disable,
+        }
     }
 }
 
@@ -488,10 +480,17 @@ impl AppState {
         let state = mutex.lock().expect("poisoned");
         state.options.clone()
     }
-    pub fn set_mongodb<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A, mongo_db_uri: String, mongo_db_name: String) {
+    pub fn set_mongodb<R: Runtime, A: Emitter<R> + Manager<R>>(
+        app: &A,
+        mongo_db_uri: String,
+        mongo_db_name: String,
+    ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        let mongo_enum = MongoDB::Enable { mongo_db_uri, mongo_db_name };
+        let mongo_enum = MongoDB::Enable {
+            mongo_db_uri,
+            mongo_db_name,
+        };
         state.options.mongo = mongo_enum;
     }
 }
