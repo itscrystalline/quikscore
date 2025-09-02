@@ -41,10 +41,9 @@ macro_rules! emit_state {
 
 pub fn init_thread_ocr() -> Option<OcrEngine> {
     let model_path = MODELS.get()?;
-    let tessdata = model_path.join("text-detection.rten");
     info!("Initializing thread OCR");
 
-    OcrEngine::new(tessdata.to_str()?)
+    OcrEngine::new(model_path.to_str()?)
         .inspect_err(|e| err_log!(e))
         .ok()
 }
