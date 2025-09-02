@@ -26,6 +26,10 @@ use crate::state::{
     Answer, AnswerSheet, AnswerUpload, AppState, KeyUpload, Options, QuestionGroup,
 };
 
+/// Creates a new **uninitialized!!!!** `Mat` with the same dimensions as the argument.
+/// generally okay to pass into the out param field (usually called `dst`) in opencv functions.
+/// however, trying to access this `Mat` (usually with something like `copy_to()`) without initializing **WILL** segfault.
+/// if you want to initialize, use `Mat::new_rows_cols_with_default` and friends.
 macro_rules! new_mat_copy {
     ($orig: ident) => {{
         let mut mat = Mat::default();
@@ -169,7 +173,7 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
 }
 
 pub fn resize_relative_img(src: &Mat, relative: f64) -> opencv::Result<Mat> {
-    let mut dst = new_mat_copy!(src);
+    let mut dst = Mat::default();
     let new_size = Size::new(
         (src.cols() as f64 * relative).round() as i32,
         (src.rows() as f64 * relative).round() as i32,
@@ -289,7 +293,7 @@ fn crop_to_markers(mat: Mat) -> Result<Mat, SheetError> {
         })?
         .clone_pointee();
 
-    Ok(resize_relative_img(&cropped, 0.3333)?)
+    Ok(cropped)
 }
 
 fn prepare_answer_sheet(mat: Mat) -> Result<SplittedSheet, SheetError> {
@@ -346,12 +350,17 @@ const HEIGHT_PERCENT: f64 = 0.094816688;
 const GAP_X_PERCENT: f64 = 0.0079016681;
 const GAP_Y_PERCENT: f64 = 0.015170670;
 fn split_into_areas(sheet: Mat) -> Result<SplittedSheet, SheetError> {
-    let original = sheet.clone();
-
     let subject_name = roi_range_frac(&sheet, 0.01317..=0.1765, 0.1479..=0.1656)?;
     let student_name = roi_range_frac(&sheet, 0.0342..=0.1773, 0.1113..=0.1340)?;
     let exam_room = roi_range_frac(&sheet, 0.032484636..=0.088674276, 0.206068268..=0.230088496)?;
     let exam_seat = roi_range_frac(&sheet, 0.134328358..=0.175592625, 0.206068268..=0.230088496)?;
+
+    let sheet = {
+        #[inline(always)]
+        move || resize_relative_img(&sheet, 0.3333)
+    }()?;
+    let original = sheet.clone();
+
     let subject_id = roi_range_frac(&sheet, 0.0..=0.040386304, 0.271807838..=0.517067004)?;
     let student_id = roi_range_frac(&sheet, 0.049165935..=0.177348551, 0.273072061..=0.515802781)?;
     let questions = {
@@ -479,9 +488,7 @@ impl AnswerSheet {
             ..
         } = src;
 
-        let subject_id_written = roi_range_frac(&subject_id_mat, 0.0..=1.0, 0.0..=0.128205)?;
         let subject_id_bubbles = roi_range_frac_ref(&subject_id_mat, 0.0..=1.0, 0.128205..=1.0)?;
-        let student_id_written = roi_range_frac(&student_id_mat, 0.112..=1.0, 0.0..=0.12565445)?;
         let student_id_bubbles = roi_range_frac_ref(&student_id_mat, 0.0..=1.0, 0.12565445..=1.0)?;
 
         let subject_id = extract_digits_for_sub_stu(&subject_id_bubbles, 3)?;
@@ -491,10 +498,13 @@ impl AnswerSheet {
         let (mut student_name, mut subject_name, mut exam_room, mut exam_seat) =
             (None, None, None, None);
         if let Some(ocr) = ocr {
+            let subject_id_written = roi_range_frac(&subject_id_mat, 0.0..=1.0, 0.0..=0.128205)?;
+            let student_id_written =
+                roi_range_frac(&student_id_mat, 0.112..=1.0, 0.0..=0.12565445)?;
             let (written_subject_id, written_student_id) =
                 extract_subject_student_from_written_field(
-                    &subject_id_written,
-                    &student_id_written,
+                    subject_id_written,
+                    student_id_written,
                     ocr,
                 )?;
             if subject_id != written_subject_id || student_id != written_student_id {
@@ -623,7 +633,7 @@ fn image_to_string(mat: &Mat, ocr: &OcrEngine) -> Result<String, SheetError> {
         .map_err(|e| anyhow::anyhow!(e))?;
     let ocr_input = ocr.prepare_input(img_src)?;
     let text = ocr.get_text(&ocr_input)?;
-    let rem_nl = text.lines().next().unwrap_or("").to_string();
+    let rem_nl = text.lines().next().unwrap_or("").trim().to_string();
 
     Ok(rem_nl)
 }
@@ -635,17 +645,10 @@ fn extract_user_information(
     exam_seat: Mat,
     ocr: &OcrEngine,
 ) -> Result<(String, String, String, String), SheetError> {
-    // #[cfg(debug_assertions)]
-    // {
-    //     let temp_dir = "temp";
-    //     _ = std::fs::create_dir_all(temp_dir);
-    //
-    //     debug!("Working directory: {:?}", std::env::current_dir());
-    //     safe_imwrite("temp/debug_name.png", &name)?;
-    //     safe_imwrite("temp/debug_subject.png", &subject_name)?;
-    //     safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
-    //     safe_imwrite("temp/debug_seat.png", &exam_seat)?;
-    // }
+    safe_imwrite("temp/debug_name.png", &name)?;
+    safe_imwrite("temp/debug_subject_name.png", &subject_name)?;
+    safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
+    safe_imwrite("temp/debug_exam_seat.png", &exam_seat)?;
 
     let name_string = image_to_string(&name, ocr)?;
     let subject_string = image_to_string(&subject_name, ocr)?;
@@ -655,6 +658,7 @@ fn extract_user_information(
     Ok((name_string, subject_string, exam_room_string, seat_string))
 }
 
+#[cfg(any(test, debug_assertions))]
 fn safe_imwrite<P: AsRef<Path>, M: MatTraitConst + ToInputArray>(
     path: P,
     mat: &M,
@@ -675,18 +679,67 @@ fn safe_imwrite<P: AsRef<Path>, M: MatTraitConst + ToInputArray>(
 }
 
 fn extract_subject_student_from_written_field(
-    subject_id_mat: &Mat,
-    student_id_mat: &Mat,
+    subject_id_mat: Mat,
+    student_id_mat: Mat,
     ocr: &OcrEngine,
 ) -> Result<(String, String), SheetError> {
-    let rsub = image_to_string(subject_id_mat, ocr)?;
-    let rstu = image_to_string(student_id_mat, ocr)?;
+    fn remove_inbetween_bars(src: Mat, cells: u8) -> opencv::Result<Mat> {
+        let mut width = 0;
+        let height = src.rows();
+        let numbers = (0..cells)
+            .map(|idx| {
+                roi_range_frac_ref(
+                    &src,
+                    ((idx as f64 / cells as f64) + 0.014492754)
+                        ..=(((idx as f64 + 1.0) / cells as f64) - 0.014492754),
+                    0.0..=1.0,
+                )
+                .inspect(|mat| {
+                    width += mat.cols();
+                })
+            })
+            .collect::<opencv::Result<Vec<_>>>()?;
+
+        let mut stitched = Mat::new_rows_cols_with_default(
+            height,
+            width,
+            opencv::core::CV_8UC1,
+            opencv::core::Scalar::all(1.0),
+        )?;
+
+        let mut start = 0;
+        numbers
+            .into_iter()
+            .try_for_each(|cell| -> opencv::Result<()> {
+                let width = cell.cols();
+                let mut dst = stitched.roi_mut(Rect_ {
+                    x: start,
+                    y: 0,
+                    width,
+                    height,
+                })?;
+                cell.copy_to(&mut dst)?;
+                start += width;
+                opencv::Result::Ok(())
+            })?;
+
+        Ok(stitched)
+    }
+
+    safe_imwrite("temp/debug_subject_f.png", &subject_id_mat)?;
+    safe_imwrite("temp/debug_student_f.png", &student_id_mat)?;
+
+    let subject_id_mat = remove_inbetween_bars(subject_id_mat, 3)?;
+    let student_id_mat = remove_inbetween_bars(student_id_mat, 9)?;
+
+    safe_imwrite("temp/debug_subject_r.png", &subject_id_mat)?;
+    safe_imwrite("temp/debug_student_r.png", &student_id_mat)?;
+
+    let rsub = image_to_string(&subject_id_mat, ocr)?;
+    let rstu = image_to_string(&student_id_mat, ocr)?;
 
     let subject = clean_text(&rsub);
     let student = clean_text(&rstu);
-
-    // safe_imwrite("temp/debug_subject_f.png", subject_id_mat)?;
-    // safe_imwrite("temp/debug_student_f.png", student_id_mat)?;
 
     Ok((subject, student))
 }
@@ -970,101 +1023,111 @@ mod unit_tests {
         }
     }
 
-    #[test]
     #[cfg(feature = "ocr-tests")]
-    fn check_extracted_ids_ocr() -> Result<(), SheetError> {
-        setup_ocr_data();
-        let ocr = &state::init_thread_ocr().unwrap();
+    mod ocr {
+        use super::*;
 
-        for (i, path) in test_images().into_iter().take(3).enumerate() {
-            let mat = read_from_path(path).expect("Failed to read image");
-            let SplittedSheet {
-                subject_id,
-                student_id,
-                ..
-            } = prepare_answer_sheet(mat).expect("Resize failed");
-            let subject_id_written =
-                roi_range_frac(&subject_id, 0.0..=1.0, 0.0..=0.128205).unwrap();
-            let student_id_written =
-                roi_range_frac(&student_id, 0.0..=1.0, 0.0..=0.12565445).unwrap();
-            let (subject_id, student_id) = extract_subject_student_from_written_field(
-                &subject_id_written,
-                &student_id_written,
-                ocr,
-            )?;
+        use crate::state;
 
-            if i == 0 {
-                assert_eq!(subject_id, "10", "Subject ID does not match expected value");
-                assert_eq!(
-                    student_id, "65010002",
-                    "Student ID does not match expected value"
-                );
-            } else if i == 1 {
-                assert_eq!(subject_id, "10", "Subject ID does not match expected value");
-                assert_eq!(
-                    student_id, "65010003",
-                    "Student ID does not match expected value"
-                );
-            } else {
-                assert_eq!(subject_id, "10", "Subject ID does not match expected value");
-                assert_eq!(
-                    student_id, "65010004",
-                    "Student ID does not match expected value"
-                );
+        #[test]
+        fn check_extracted_ids_ocr() -> Result<(), SheetError> {
+            setup_ocr_data();
+            let ocr = &state::init_thread_ocr().unwrap();
+
+            for (i, path) in test_images().into_iter().take(3).enumerate() {
+                let mat = read_from_path(path).expect("Failed to read image");
+                let SplittedSheet {
+                    subject_id,
+                    student_id,
+                    ..
+                } = prepare_answer_sheet(mat).expect("Resize failed");
+                let subject_id_written =
+                    roi_range_frac(&subject_id, 0.0..=1.0, 0.0..=0.128205).unwrap();
+                let student_id_written =
+                    roi_range_frac(&student_id, 0.0..=1.0, 0.0..=0.12565445).unwrap();
+                let (subject_id, student_id) = extract_subject_student_from_written_field(
+                    subject_id_written,
+                    student_id_written,
+                    ocr,
+                )?;
+
+                if i == 0 {
+                    assert_eq!(subject_id, "10", "Subject ID does not match expected value");
+                    assert_eq!(
+                        student_id, "65010002",
+                        "Student ID does not match expected value"
+                    );
+                } else if i == 1 {
+                    assert_eq!(subject_id, "10", "Subject ID does not match expected value");
+                    assert_eq!(
+                        student_id, "65010003",
+                        "Student ID does not match expected value"
+                    );
+                } else {
+                    assert_eq!(subject_id, "10", "Subject ID does not match expected value");
+                    assert_eq!(
+                        student_id, "65010004",
+                        "Student ID does not match expected value"
+                    );
+                }
             }
-        }
-        Ok(())
-    }
-
-    #[test]
-    #[cfg(feature = "ocr-tests")]
-    fn check_ocr_function() -> Result<(), SheetError> {
-        setup_ocr_data();
-        let ocr = &state::init_thread_ocr().unwrap();
-
-        for (i, path) in test_images().into_iter().take(3).enumerate() {
-            println!("image #{i}");
-            let mat = read_from_path(path).expect("Failed to read image");
-            let SplittedSheet {
-                student_name,
-                subject_name,
-                exam_room,
-                exam_seat,
-                ..
-            } = prepare_answer_sheet(mat).unwrap();
-
-            let (name, subject, exam_room, seat) =
-                extract_user_information(student_name, subject_name, exam_room, exam_seat, ocr)?;
-            if i == 0 {
-                assert_eq!(name, "Elize Howells", "Name does not match expected value");
-                assert_eq!(
-                    subject, "Mathematics",
-                    "Subject does not match expected value"
-                );
-                assert_eq!(exam_room, "608", "Exam room does not match expected value");
-                assert_eq!(seat, "A02", "Seat does not match expected value");
-            } else if i == 1 {
-                assert_eq!(name, "Marcia Cole", "Name does not match expected value");
-                assert_eq!(
-                    subject, "Mathematics",
-                    "Subject does not match expected value"
-                );
-                assert_eq!(exam_room, "608", "Exam room does not match expected value");
-                assert_eq!(seat, "A03", "Seat does not match expected value");
-            } else {
-                assert_eq!(
-                    name, "Sophie-Louise Greene",
-                    "Name does not match expected value"
-                );
-                assert_eq!(
-                    subject, "Mathematics",
-                    "Subject does not match expected value"
-                );
-                assert_eq!(exam_room, "608", "Exam room does not match expected value");
-                assert_eq!(seat, "A04", "Seat does not match expected value");
-            }
+            Ok(())
         }
 
-        Ok(())
+        #[test]
+        fn check_ocr_function() -> Result<(), SheetError> {
+            setup_ocr_data();
+            let ocr = &state::init_thread_ocr().unwrap();
+
+            for (i, path) in test_images().into_iter().take(3).enumerate() {
+                println!("image #{i}");
+                let mat = read_from_path(path).expect("Failed to read image");
+                let SplittedSheet {
+                    student_name,
+                    subject_name,
+                    exam_room,
+                    exam_seat,
+                    ..
+                } = prepare_answer_sheet(mat).unwrap();
+
+                let (name, subject, exam_room, seat) = extract_user_information(
+                    student_name,
+                    subject_name,
+                    exam_room,
+                    exam_seat,
+                    ocr,
+                )?;
+                if i == 0 {
+                    assert_eq!(name, "Elize Howells", "Name does not match expected value");
+                    assert_eq!(
+                        subject, "Mathematics",
+                        "Subject does not match expected value"
+                    );
+                    assert_eq!(exam_room, "608", "Exam room does not match expected value");
+                    assert_eq!(seat, "A02", "Seat does not match expected value");
+                } else if i == 1 {
+                    assert_eq!(name, "Marcia Cole", "Name does not match expected value");
+                    assert_eq!(
+                        subject, "Mathematics",
+                        "Subject does not match expected value"
+                    );
+                    assert_eq!(exam_room, "608", "Exam room does not match expected value");
+                    assert_eq!(seat, "A03", "Seat does not match expected value");
+                } else {
+                    assert_eq!(
+                        name, "Sophie-Louise Greene",
+                        "Name does not match expected value"
+                    );
+                    assert_eq!(
+                        subject, "Mathematics",
+                        "Subject does not match expected value"
+                    );
+                    assert_eq!(exam_room, "608", "Exam room does not match expected value");
+                    assert_eq!(seat, "A04", "Seat does not match expected value");
+                }
+            }
+
+            Ok(())
+        }
     }
 }
