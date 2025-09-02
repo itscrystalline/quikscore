@@ -9,6 +9,7 @@ mod commands;
 mod download;
 mod errors;
 mod image;
+mod ocr;
 mod scoring;
 mod state;
 mod storage;

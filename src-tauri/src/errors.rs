@@ -26,8 +26,8 @@ pub enum SheetError {
     OpenCvError(#[from] opencv::Error),
     #[error("Detected less than 5 answers (this should not happen)")]
     TooLittleAnswers,
-    #[error("Anyhow error")]
-    OcrError(#[from] anyhow::Error),
+    #[error("OCR error: {0}")]
+    OcrError(#[from] OcrError),
     #[error("Incomplete markers on page")]
     MissingMarkers,
 }
@@ -92,4 +92,15 @@ pub enum DatabaseError {
     //MissingDbName(#[source] std::env::VarError),
     #[error("MongoDB error: {0}")]
     MongoDb(#[from] mongodb::error::Error),
+}
+
+/// Wrapper for Tesseract errors that happen at different stages.
+#[derive(thiserror::Error, Debug)]
+pub enum OcrError {
+    #[error("Cannot start OCR engine: {0}")]
+    Creation(opencv::Error),
+    #[error("Cannot prepare input for OCR: {0}")]
+    PreparingInput(opencv::Error),
+    #[error("Cannot run OCR: {0}")]
+    GettingText(opencv::Error),
 }
