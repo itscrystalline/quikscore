@@ -99,8 +99,6 @@ pub enum DatabaseError {
 pub enum OcrError {
     #[error("Cannot start OCR engine: {0}")]
     Creation(opencv::Error),
-    #[error("Cannot prepare input for OCR: {0}")]
-    PreparingInput(opencv::Error),
     #[error("Cannot run OCR: {0}")]
     GettingText(opencv::Error),
 }
