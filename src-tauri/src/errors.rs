@@ -97,8 +97,16 @@ pub enum DatabaseError {
 /// Wrapper for Tesseract errors that happen at different stages.
 #[derive(thiserror::Error, Debug)]
 pub enum OcrError {
-    #[error("Cannot start OCR engine: {0}")]
-    Creation(opencv::Error),
-    #[error("Cannot run OCR: {0}")]
-    GettingText(opencv::Error),
+    #[error(
+        "No `tesseract` command found in PATH. Please install tesseract first before using OCR."
+    )]
+    NoTesseract,
+    #[error("tessdata path is not unicode. somehow.")]
+    NoUnicode,
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("Invalid image size: {0}")]
+    InvalidSize(#[from] std::num::TryFromIntError),
+    #[error("Cannot encode image: {0}")]
+    InvalidImage(#[from] opencv::Error),
 }

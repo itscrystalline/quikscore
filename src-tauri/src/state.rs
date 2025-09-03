@@ -41,9 +41,24 @@ macro_rules! emit_state {
 
 pub fn init_thread_ocr() -> Option<OcrEngine> {
     let model_path = MODELS.get()?;
-    info!("Initializing thread OCR");
 
-    OcrEngine::new(model_path.to_str()?)
+    let patterns = model_path.join("tesseract.patterns");
+    if !patterns.exists() {
+        info!("Adding tesseract pattern file");
+        std::fs::write(
+            patterns,
+            r#"
+\d\d\d\d\d\d\d\d\d
+\A\d\d
+\d\d\d
+"#,
+        )
+        .inspect_err(|e| err_log!(e))
+        .ok()?;
+    }
+
+    info!("Initializing thread OCR");
+    OcrEngine::new(model_path.clone())
         .inspect_err(|e| err_log!(e))
         .ok()
 }

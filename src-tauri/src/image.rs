@@ -20,7 +20,7 @@ use tauri_plugin_dialog::FilePath;
 
 use tauri::{Emitter, Manager, Runtime};
 
-use opencv::imgcodecs::{imencode, imread, ImreadModes};
+use opencv::imgcodecs::{imencode_def, imread, ImreadModes};
 
 use crate::state::{
     Answer, AnswerSheet, AnswerUpload, AppState, KeyUpload, Options, QuestionGroup,
@@ -198,7 +198,7 @@ fn handle_upload(
 
 pub fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
     let mut buf: Vector<u8> = Vec::new().into();
-    imencode(".png", mat, &mut buf, &Vec::new().into())?;
+    imencode_def(".png", mat, &mut buf)?;
     let base64 = base64::prelude::BASE64_STANDARD.encode(&buf);
     Ok(format!("data:image/png;base64,{base64}"))
 }
@@ -463,8 +463,7 @@ fn extract_digits_for_sub_stu<M: MatTraitConst + ToInputArray>(
             roi_range_frac(&column, 0.0..=1.0, frac..=next_frac)
                 .inspect_err(|e| err_log!(e))
                 .ok()
-                .map(|mat| thresh(mat).inspect_err(|e| err_log!(e)).ok())
-                .flatten()
+                .and_then(|mat| thresh(mat).inspect_err(|e| err_log!(e)).ok())
         }))
         .find(|(_, filled)| *filled > 0.475)
         .map(|(idx, _)| idx);
@@ -629,7 +628,7 @@ impl AnswerSheetResult {
 
 fn image_to_string(mat: &Mat, ocr: &OcrEngine) -> Result<String, SheetError> {
     let bytes = mat.data_bytes()?;
-    let img_src = ImageSource::from_bytes(bytes, (mat.cols() as u32, mat.rows() as u32));
+    let img_src = ImageSource::from_bytes(bytes, (mat.cols() as u32, mat.rows() as u32))?;
     let ocr_input = ocr.prepare_input(img_src)?;
     let text = ocr.get_text(ocr_input)?;
     let rem_nl = text.lines().next().unwrap_or("").trim().to_string();
@@ -1114,7 +1113,7 @@ mod unit_tests {
                     assert_eq!(seat, "A03", "Seat does not match expected value");
                 } else {
                     assert_eq!(
-                        name, "Sophie-Louise Greene",
+                        name, "Sophie—Louise Green",
                         "Name does not match expected value"
                     );
                     assert_eq!(
