@@ -81,6 +81,7 @@ pub fn clear_sheet_images(app: AppHandle, channel: Channel<AnswerUpload>) {
     AppState::clear_answer_sheets(&app, &channel);
 }
 
+#[cfg(not(feature = "compile-tesseract"))]
 #[tauri::command]
 pub fn set_ocr(app: AppHandle, ocr: bool) -> Result<(), String> {
     let has_tess = OcrEngine::check_tesseract().map_err(|e| {
@@ -94,6 +95,13 @@ pub fn set_ocr(app: AppHandle, ocr: bool) -> Result<(), String> {
     } else {
         Err(format!("{}", OcrError::NoTesseract))
     }
+}
+#[cfg(feature = "compile-tesseract")]
+#[tauri::command]
+pub fn set_ocr(app: AppHandle, ocr: bool) -> Result<(), String> {
+    debug!("Set ocr = {ocr}");
+    AppState::set_ocr(&app, ocr);
+    Ok(())
 }
 
 #[tauri::command(async)]

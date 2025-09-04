@@ -97,6 +97,7 @@ pub enum DatabaseError {
 /// Wrapper for Tesseract errors that happen at different stages.
 #[derive(thiserror::Error, Debug)]
 pub enum OcrError {
+    #[cfg(not(feature = "compile-tesseract"))]
     #[error(
         "No `tesseract` command found in PATH. Please install tesseract first before using OCR."
     )]
@@ -109,4 +110,7 @@ pub enum OcrError {
     InvalidSize(#[from] std::num::TryFromIntError),
     #[error("Cannot encode image: {0}")]
     InvalidImage(#[from] opencv::Error),
+    #[cfg(feature = "compile-tesseract")]
+    #[error("Tesseract: {0}")]
+    Tesseract(#[from] tesseract::TesseractError),
 }
