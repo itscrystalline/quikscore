@@ -298,10 +298,10 @@ fn crop_to_markers(mat: Mat) -> Result<Mat, SheetError> {
 
 fn prepare_answer_sheet(mat: Mat) -> Result<SplittedSheet, SheetError> {
     let cropped = crop_to_markers(mat)?;
-    #[cfg(test)]
-    {
-        safe_imwrite("temp/cropped.png", &cropped)?;
-    }
+    // #[cfg(test)]
+    // {
+    //     safe_imwrite("temp/cropped.png", &cropped)?;
+    // }
     let splitted = split_into_areas(cropped)?;
     Ok(splitted)
 }
@@ -643,10 +643,10 @@ fn extract_user_information(
     exam_seat: Mat,
     ocr: &OcrEngine,
 ) -> Result<(String, String, String, String), SheetError> {
-    safe_imwrite("temp/debug_name.png", &name)?;
-    safe_imwrite("temp/debug_subject_name.png", &subject_name)?;
-    safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
-    safe_imwrite("temp/debug_exam_seat.png", &exam_seat)?;
+    // safe_imwrite("temp/debug_name.png", &name)?;
+    // safe_imwrite("temp/debug_subject_name.png", &subject_name)?;
+    // safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
+    // safe_imwrite("temp/debug_exam_seat.png", &exam_seat)?;
 
     let name_string = image_to_string(&name, ocr)?;
     let subject_string = image_to_string(&subject_name, ocr)?;
@@ -724,14 +724,14 @@ fn extract_subject_student_from_written_field(
         Ok(stitched)
     }
 
-    safe_imwrite("temp/debug_subject_f.png", &subject_id_mat)?;
-    safe_imwrite("temp/debug_student_f.png", &student_id_mat)?;
+    // safe_imwrite("temp/debug_subject_f.png", &subject_id_mat)?;
+    // safe_imwrite("temp/debug_student_f.png", &student_id_mat)?;
 
     let subject_id_mat = remove_inbetween_bars(subject_id_mat, 3)?;
     let student_id_mat = remove_inbetween_bars(student_id_mat, 9)?;
 
-    safe_imwrite("temp/debug_subject_r.png", &subject_id_mat)?;
-    safe_imwrite("temp/debug_student_r.png", &student_id_mat)?;
+    // safe_imwrite("temp/debug_subject_r.png", &subject_id_mat)?;
+    // safe_imwrite("temp/debug_student_r.png", &student_id_mat)?;
 
     let rsub = image_to_string(&subject_id_mat, ocr)?;
     let rstu = image_to_string(&student_id_mat, ocr)?;
@@ -948,8 +948,8 @@ mod unit_tests {
             student_id,
             ..
         } = prepare_answer_sheet(mat).expect("Fixing sheet failed");
-        safe_imwrite("temp/subject.png", &subject_id).unwrap();
-        safe_imwrite("temp/student.png", &student_id).unwrap();
+        // safe_imwrite("temp/subject.png", &subject_id).unwrap();
+        // safe_imwrite("temp/student.png", &student_id).unwrap();
 
         let subject_id_bubbles =
             roi_range_frac_ref(&subject_id, 0.0..=1.0, 0.128205..=1.0).unwrap();

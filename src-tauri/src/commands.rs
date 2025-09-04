@@ -1,7 +1,9 @@
 use crate::{
     download::{self, ModelDownload},
-    errors::ModelDownloadError,
+    err_log,
+    errors::{ModelDownloadError, OcrError},
     image::{upload_key_image_impl, upload_sheet_images_impl},
+    ocr::OcrEngine,
     scoring::upload_weights_impl,
     state::{AnswerUpload, CsvExport, KeyUpload},
     storage, AppState,
@@ -80,9 +82,18 @@ pub fn clear_sheet_images(app: AppHandle, channel: Channel<AnswerUpload>) {
 }
 
 #[tauri::command]
-pub fn set_ocr(app: AppHandle, ocr: bool) {
-    debug!("Set ocr = {ocr}");
-    AppState::set_ocr(&app, ocr);
+pub fn set_ocr(app: AppHandle, ocr: bool) -> Result<(), String> {
+    let has_tess = OcrEngine::check_tesseract().map_err(|e| {
+        err_log!(&e);
+        format!("{e}")
+    })?;
+    if has_tess {
+        debug!("Set ocr = {ocr}");
+        AppState::set_ocr(&app, ocr);
+        Ok(())
+    } else {
+        Err(format!("{}", OcrError::NoTesseract))
+    }
 }
 
 #[tauri::command(async)]

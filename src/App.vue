@@ -149,8 +149,13 @@ const csvExportEventHandler = (msg: CsvExport) => {
   answerProgressBar.value = undefined;
 }
 
-const ocr = ref(true);
-watch(ocr, async (new_ocr, _) => { await invoke("set_ocr", { ocr: new_ocr }) });
+const ocr = ref(false);
+const ocrStatus = ref("");
+watch(ocr, (new_ocr, _) => {
+  invoke("set_ocr", { ocr: new_ocr })
+    .then(() => ocrStatus.value = "")
+    .catch(err => ocrStatus.value = err)
+});
 
 const keyImage = ref("");
 const keyHasWeights = ref<"notUploaded" | "missingWeights" | "yes">("notUploaded");
@@ -264,8 +269,13 @@ async function exportCsv() {
     <p class="credits">KOSEN-KMITL PBL Year 3 (C14, C35, C41, C43)</p>
     <p class="instructions">Upload your key sheet and some answer sheets!</p>
     <div class="header" style="justify-content: center;">
-      <input type="checkbox" id="ocr-ck" v-model="ocr" />
-      <label for="ocr-ck" style="padding-left: 1vh;">Enable OCR (potentially high memory usage)</label>
+      <input type="checkbox" id="ocr-ck" v-model="ocr" v-bind:disabled="ocrStatus != ''" />
+      <label for="ocr-ck" class="ocr-text" v-if="ocrStatus == ''">
+        Enable OCR (Requires tesseract to be installed)
+      </label>
+      <label for="ocr-ck" class="ocr-text disabled" v-if="ocrStatus != ''">
+        OCR Disabled ({{ ocrStatus }})
+      </label>
     </div>
 
     <div class="mongo_db_information_field">
@@ -637,5 +647,14 @@ img {
 
 .key-image-container>img {
   max-width: 100%;
+}
+
+.ocr-text {
+  padding-left: 1vh;
+}
+
+.disabled {
+  color: #9399b2;
+  font-style: italic;
 }
 </style>

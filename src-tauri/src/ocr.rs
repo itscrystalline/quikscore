@@ -21,7 +21,11 @@ pub struct ImageSource(Vec<u8>);
 
 impl OcrEngine {
     pub fn check_tesseract() -> Result<bool, OcrError> {
-        let tess = Command::new("tesseract").arg("--version").status()?;
+        let tess = Command::new("tesseract")
+            .arg("--version")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()?;
         Ok(tess.success())
     }
     pub fn new(datapath: PathBuf) -> Result<OcrEngine, OcrError> {

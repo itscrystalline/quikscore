@@ -47,8 +47,7 @@ pub fn init_thread_ocr() -> Option<OcrEngine> {
         info!("Adding tesseract pattern file");
         std::fs::write(
             patterns,
-            r#"
-\d\d\d\d\d\d\d\d\d
+            r#"\d\d\d\d\d\d\d\d\d
 \A\d\d
 \d\d\d
 "#,
