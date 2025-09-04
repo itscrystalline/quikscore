@@ -1011,11 +1011,11 @@ mod unit_tests {
             let res = questions
                 .into_iter()
                 .map(|group| {
-                    let a = matches!(group.A, Some(Answer { .. }));
-                    let b = matches!(group.B, Some(Answer { .. }));
-                    let c = matches!(group.C, Some(Answer { .. }));
-                    let d = matches!(group.D, Some(Answer { .. }));
-                    let e = matches!(group.E, Some(Answer { .. }));
+                    let a = matches!(group.A, Some(_));
+                    let b = matches!(group.B, Some(_));
+                    let c = matches!(group.C, Some(_));
+                    let d = matches!(group.D, Some(_));
+                    let e = matches!(group.E, Some(_));
                     a || b || c || d || e
                 })
                 .reduce(|acc, res| acc || res);

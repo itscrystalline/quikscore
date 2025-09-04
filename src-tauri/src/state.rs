@@ -72,7 +72,7 @@ pub enum MongoDB {
     Enable {
         mongo_db_uri: String,
         mongo_db_name: String,
-    }
+    },
 }
 
 #[derive(Clone)]
@@ -82,7 +82,10 @@ pub struct Options {
 }
 impl Default for Options {
     fn default() -> Self {
-        Self { ocr: true, mongo: MongoDB::Disable, }
+        Self {
+            ocr: true,
+            mongo: MongoDB::Disable,
+        }
     }
 }
 
@@ -488,10 +491,17 @@ impl AppState {
         let state = mutex.lock().expect("poisoned");
         state.options.clone()
     }
-    pub fn set_mongodb<R: Runtime, A: Emitter<R> + Manager<R>>(app: &A, mongo_db_uri: String, mongo_db_name: String) {
+    pub fn set_mongodb<R: Runtime, A: Emitter<R> + Manager<R>>(
+        app: &A,
+        mongo_db_uri: String,
+        mongo_db_name: String,
+    ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
-        let mongo_enum = MongoDB::Enable { mongo_db_uri, mongo_db_name };
+        let mongo_enum = MongoDB::Enable {
+            mongo_db_uri,
+            mongo_db_name,
+        };
         state.options.mongo = mongo_enum;
     }
 }
@@ -554,9 +564,10 @@ impl TryFrom<Vec<Option<Answer>>> for QuestionGroup {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Answer {
-    pub num_type: Option<NumberType>,
-    pub number: u8,
+pub enum Answer {
+    Type(NumberType),
+    Number(u8),
+    Both(NumberType, u8),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
