@@ -148,7 +148,7 @@ jobs:
     - name: Group Binary Bundle
       run: |
         mkdir -p src-tauri/target/release/bin
-        mv src-tauri/target/release/* src-tauri/target/release/bin/
+        mv src-tauri/target/release/*.* src-tauri/target/release/bin/
 
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
