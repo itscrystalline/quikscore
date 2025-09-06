@@ -105,6 +105,7 @@ jobs:
         update: true
         install: >-
           mingw-w64-ucrt-x86_64-tesseract-ocr
+          mingw-w64-ucrt-x86_64-openssl
 
     - name: Install OpenCV & Other dependencies (cmake, llvm)
       run: | 
@@ -132,9 +133,26 @@ jobs:
     - name: Copy required dlls
       shell: msys2 {0}
       run: |
+        set -uo pipefail
+        shopt -s nullglob
+
         cp /ucrt64/bin/libtesseract-5.5.dll src-tauri/
-        LIBS=`ldd libtesseract-5.5.dll | grep /ucrt64 | awk '{ print $3 }'`
-        for lib in $LIBS; do cp $lib src-tauri/; done
+        echo "copied libtesseract-5.5.dll"
+        cp /ucrt64/bin/libssl-3-x64.dll src-tauri/
+        echo "copied libssl-3-x64.dll"
+        cp /ucrt64/bin/libcrypto-3-x64.dll src-tauri/
+        echo "copied libcrypto-3-x64.dll"
+        for dll in src-tauri/*.dll
+        do 
+          echo "==> $dll"
+          ldd $dll
+          deps=$(ldd "$dll" | awk '/\/ucrt64/ { print $3 }')
+          for dep in $deps
+          do 
+            cp $dep src-tauri/ 
+            echo $dep
+          done
+        done
 
     - name: Include dlls in Tauri config
       run: |
