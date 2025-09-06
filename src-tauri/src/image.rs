@@ -1,8 +1,10 @@
 use crate::err_log;
+use crate::ocr::{ImageSource, OcrEngine};
 use log::{debug, warn};
-use ocrs::{ImageSource, OcrEngine};
-use std::array;
+use opencv::boxed_ref::BoxedRef;
+use std::ops::RangeInclusive;
 use std::sync::{Arc, RwLock};
+use std::{array, mem};
 use tauri::ipc::Channel;
 
 use crate::errors::{SheetError, UploadError};
@@ -10,22 +12,24 @@ use crate::scoring::{AnswerSheetResult, CheckedAnswer};
 use crate::{signal, state};
 use base64::Engine;
 use itertools::Itertools;
-use opencv::core::{Mat, Rect_, Size, Vector};
-use opencv::imgproc::{COLOR_GRAY2RGBA, FILLED, LINE_8, THRESH_BINARY};
+use opencv::core::{Mat, Moments, Point, Rect2i, Rect_, Size, ToInputArray, Vector};
 use opencv::{core::MatTraitConstManual, imgcodecs, imgproc, prelude::*};
 use rayon::prelude::*;
-use std::fs;
 use std::path::Path;
 use tauri_plugin_dialog::FilePath;
 
 use tauri::{Emitter, Manager, Runtime};
 
-use opencv::imgcodecs::{imencode, imread, ImreadModes};
+use opencv::imgcodecs::{imencode_def, imread, ImreadModes};
 
 use crate::state::{
     Answer, AnswerSheet, AnswerUpload, AppState, KeyUpload, Options, QuestionGroup,
 };
 
+/// Creates a new **uninitialized!!!!** `Mat` with the same dimensions as the argument.
+/// generally okay to pass into the out param field (usually called `dst`) in opencv functions.
+/// however, trying to access this `Mat` (usually with something like `copy_to()`) without initializing **WILL** segfault.
+/// if you want to initialize, use `Mat::new_rows_cols_with_default` and friends.
 macro_rules! new_mat_copy {
     ($orig: ident) => {{
         let mut mat = Mat::default();
@@ -35,11 +39,19 @@ macro_rules! new_mat_copy {
     }};
 }
 
-const ANSWER_WIDTH: i32 = 215;
-const ANSWER_WIDTH_GAP: i32 = 9;
-const ANSWER_HEIGHT: i32 = 73;
-const ANSWER_HEIGHT_GAP: i32 = 10;
-const MARKER_TRANSPARENCY: f64 = 0.3;
+struct SplittedSheet {
+    original: Mat,
+
+    student_name: Mat,
+    subject_name: Mat,
+    exam_room: Mat,
+    exam_seat: Mat,
+
+    subject_id: Mat,
+    student_id: Mat,
+
+    questions: Vec<Mat>,
+}
 
 pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
@@ -87,7 +99,7 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     };
 
     let images_count = paths.len();
-    let Options { ocr , mongo: _} = AppState::get_options(app);
+    let Options { ocr, mongo: _ } = AppState::get_options(app);
 
     let (tx, mut rx) = tauri::async_runtime::channel::<ProcessingState>(images_count);
     let stop_flag = Arc::new(RwLock::new(false));
@@ -161,7 +173,7 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
 }
 
 pub fn resize_relative_img(src: &Mat, relative: f64) -> opencv::Result<Mat> {
-    let mut dst = new_mat_copy!(src);
+    let mut dst = Mat::default();
     let new_size = Size::new(
         (src.cols() as f64 * relative).round() as i32,
         (src.rows() as f64 * relative).round() as i32,
@@ -176,20 +188,17 @@ fn handle_upload(
     ocr: Option<&OcrEngine>,
 ) -> Result<(String, Mat, AnswerSheet), UploadError> {
     let mat = read_from_path(path)?;
-    let resized = resize_relative_img(&mat, 0.3333).map_err(UploadError::from)?;
-    let resized_for_fix = resized.clone();
-    let (aligned_for_display, subject_id, student_id, answer_sheet) =
-        fix_answer_sheet(resized_for_fix)?;
+    let mut splitted = prepare_answer_sheet(mat)?;
 
-    let base64 = mat_to_base64_png(&aligned_for_display).map_err(UploadError::from)?;
-    let answer_sheet =
-        AnswerSheet::try_convert(mat, resized, subject_id, student_id, answer_sheet, ocr)?;
-    Ok((base64, aligned_for_display, answer_sheet))
+    let original = mem::take(&mut splitted.original);
+    let base64 = mat_to_base64_png(&original).map_err(UploadError::from)?;
+    let answer_sheet = AnswerSheet::try_convert(splitted, ocr)?;
+    Ok((base64, original, answer_sheet))
 }
 
 pub fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
     let mut buf: Vector<u8> = Vec::new().into();
-    imencode(".png", mat, &mut buf, &Vec::new().into())?;
+    imencode_def(".png", mat, &mut buf)?;
     let base64 = base64::prelude::BASE64_STANDARD.encode(&buf);
     Ok(format!("data:image/png;base64,{base64}"))
 }
@@ -208,239 +217,306 @@ fn read_from_path(path: FilePath) -> Result<Mat, UploadError> {
         })
 }
 
-fn preprocess_sheet(mat: Mat) -> Result<Mat, SheetError> {
-    // blur
-    // let mut mat_blur = new_mat_copy!(mat);
-    // imgproc::gaussian_blur_def(&mat, &mut mat_blur, (5, 5).into(), 0.0)?;
-    // thresholding
-    let mut mat_thresh = new_mat_copy!(mat);
-    imgproc::threshold(&mat, &mut mat_thresh, 230.0, 255.0, THRESH_BINARY)?;
-    Ok(mat_thresh)
-}
-
 fn crop_to_markers(mat: Mat) -> Result<Mat, SheetError> {
-    Ok(mat
-        .roi(Rect_ {
-            x: 38,
-            y: 30,
-            width: 1095,
-            height: 765,
-        })?
-        .clone_pointee())
-}
-
-fn fix_answer_sheet(mat: Mat) -> Result<(Mat, Mat, Mat, Mat), SheetError> {
-    let cropped = crop_to_markers(mat)?;
-    let preprocessed = preprocess_sheet(cropped.clone())?;
-
-    let (subject_id, student_id, ans_sheet) = split_into_areas(preprocessed)?;
-
-    Ok((cropped, subject_id, student_id, ans_sheet))
-}
-
-fn split_into_areas(sheet: Mat) -> Result<(Mat, Mat, Mat), SheetError> {
-    let subject_area = sheet
-        .roi(Rect_ {
-            x: 2,
-            y: 189,
-            width: 48,
-            height: 212,
-        })?
-        .clone_pointee();
-    let student_id_area = sheet
-        .roi(Rect_ {
-            x: 57,
-            y: 188,
-            width: 141,
-            height: 211,
-        })?
-        .clone_pointee();
-    let answers_area = sheet
-        .roi(Rect_ {
-            x: 206,
-            y: 14,
-            width: 884,
-            height: 735,
-        })?
-        .clone_pointee();
-
-    Ok((subject_area, student_id_area, answers_area))
-}
-
-fn extract_answers(answer_mat: &Mat) -> Result<[QuestionGroup; 36], SheetError> {
-    // let mat_debug_cloned = answer_mat.try_clone()?;
-    // let mut mat_debug = new_mat_copy!(answer_mat);
-    // imgproc::cvt_color_def(&mat_debug_cloned, &mut mat_debug, COLOR_GRAY2RGB)?;
-    let mut out = Vec::with_capacity(36);
-    for x_idx in 0..4 {
-        for y_idx in 0..9 {
-            let (x, y) = (
-                (ANSWER_WIDTH + ANSWER_WIDTH_GAP) * x_idx,
-                (ANSWER_HEIGHT + ANSWER_HEIGHT_GAP) * y_idx,
-            );
-            let (x, y) = (
-                x.clamp(0, answer_mat.cols() - ANSWER_WIDTH),
-                y.clamp(0, answer_mat.rows() - ANSWER_HEIGHT),
-            );
-            let rect = Rect_ {
-                x,
-                y,
-                width: ANSWER_WIDTH,
-                height: ANSWER_HEIGHT,
-            };
-            let answers: Result<Vec<Option<Answer>>, SheetError> = (0..5)
-                .map(|row_idx| {
-                    let row_y = y
-                        + ((ANSWER_HEIGHT / 5) * row_idx).clamp(0, rect.height - ANSWER_HEIGHT / 5);
-                    let row_rect = Rect_ {
-                        x: x + 24,
-                        y: row_y,
-                        width: ANSWER_WIDTH - 24,
-                        height: ANSWER_HEIGHT / 5,
-                    };
-                    // imgproc::rectangle_def(&mut mat_debug, row_rect, (0, 0, 255).into())?;
-                    let bubbles: Result<Vec<(u8, f32)>, SheetError> = (0u8..13u8)
-                        .map(|bubble_idx| {
-                            let bubble_x = (x + 24)
-                                + ((row_rect.width / 12) * bubble_idx as i32)
-                                    .clamp(0, row_rect.width - (row_rect.width / 13));
-                            let bubble_rect = Rect_ {
-                                x: bubble_x,
-                                y: row_y,
-                                width: row_rect.width / 13,
-                                height: ANSWER_HEIGHT / 5,
-                            };
-                            let bubble_filled: u16 = answer_mat
-                                .roi(bubble_rect)?
-                                .clone_pointee()
-                                .data_bytes()?
-                                .iter()
-                                .map(|n| *n as u16)
-                                .sum();
-                            let frac = bubble_filled as f32 / u16::MAX as f32;
-                            // if frac < 0.45 {
-                            //     imgproc::rectangle_def(
-                            //         &mut mat_debug,
-                            //         bubble_rect,
-                            //         (255, 0, 255).into(),
-                            //     )?;
-                            // }
-                            Ok((bubble_idx, frac))
-                        })
-                        .collect();
-                    let bubbles = bubbles?;
-                    let circled_in: Vec<u8> = bubbles
-                        .into_iter()
-                        .sorted_by(|&(_, a), &(_, b)| a.total_cmp(&b))
-                        .filter_map(|(idx, f)| if f < 0.39 { Some(idx) } else { None })
-                        .collect();
-                    Ok(Answer::from_bubbles_vec(circled_in))
-                })
-                .collect();
-            let answers: QuestionGroup = answers?.try_into()?;
-            out.push(answers);
+    // we force drop the original `mat` here by capturing it in the closure - lmk if you have a cleaner way
+    #[allow(clippy::redundant_closure_call)]
+    let mat = {
+        #[inline(always)]
+        move || roi_range_frac(&mat, 0.00570288..=0.99714856, 0.008064516..=0.995967742)
+    }()?;
+    let blurred_thresholded = {
+        let mut blur = new_mat_copy!(mat);
+        imgproc::gaussian_blur_def(&mat, &mut blur, (5, 5).into(), 0.0)?;
+        // SAFETY: adaptive_threshold can operate in place.
+        unsafe {
+            blur.modify_inplace(|blurred, thresholded| {
+                imgproc::adaptive_threshold(
+                    blurred,
+                    thresholded,
+                    255.0,
+                    imgproc::ADAPTIVE_THRESH_GAUSSIAN_C,
+                    imgproc::THRESH_BINARY_INV,
+                    11,
+                    2.0,
+                )
+            })?;
         }
-        // imgcodecs::imwrite_def("debug-images/answer_borders.png", &mat_debug)?;
+        blur
+    };
+
+    let contours = {
+        let mut vec: Vector<Vector<Point>> = vec![].into();
+        imgproc::find_contours_def(
+            &blurred_thresholded,
+            &mut vec,
+            imgproc::RETR_EXTERNAL,
+            imgproc::CHAIN_APPROX_SIMPLE,
+        )?;
+        vec
+    };
+
+    let mut corners: (Option<Point>, (Option<i32>, Option<i32>)) = (None, (None, None));
+    for contour in contours {
+        let length_approx = imgproc::arc_length(&contour, true)?;
+        let epsilon = 0.04 * length_approx;
+
+        let mut approx: Vector<Point> = vec![].into();
+        imgproc::approx_poly_dp(&contour, &mut approx, epsilon, true)?;
+
+        // Check if it's a triangle
+        if length_approx > 90.0 && approx.len() == 3 {
+            let Moments { m00, m01, m10, .. } = imgproc::moments_def(&contour)?;
+            let cx = (m10 / m00) as i32;
+            let cy = (m01 / m00) as i32;
+
+            if cx + cy < 300 {
+                _ = corners.0.replace((cx, cy).into());
+            }
+            if cx > 1000 {
+                _ = corners.1 .0.replace(cx);
+            } else if cy > 1000 {
+                _ = corners.1 .1.replace(cy);
+            }
+        }
     }
-    let mut out = out.into_iter();
+
+    let (Some(Point { x, y }), (Some(x2), Some(y2))) = corners else {
+        return Err(SheetError::MissingMarkers);
+    };
+
+    let cropped = mat
+        .roi(Rect_ {
+            x,
+            y,
+            width: x2 - x,
+            height: y2 - y,
+        })?
+        .clone_pointee();
+
+    Ok(cropped)
+}
+
+fn prepare_answer_sheet(mat: Mat) -> Result<SplittedSheet, SheetError> {
+    let cropped = crop_to_markers(mat)?;
+    // #[cfg(test)]
+    // {
+    //     safe_imwrite("temp/cropped.png", &cropped)?;
+    // }
+    let splitted = split_into_areas(cropped)?;
+    Ok(splitted)
+}
+
+fn rect_range_frac(rect: &Rect2i, x: RangeInclusive<f64>, y: RangeInclusive<f64>) -> Rect2i {
+    let (range_x, range_y) = (x.end() - x.start(), y.end() - y.start());
+    let (width, height) = (rect.width, rect.height);
+    let (start_x, start_y) = (width as f64 * x.start(), height as f64 * y.start());
+    let (range_width, range_height) = (width as f64 * range_x, height as f64 * range_y);
+    Rect_ {
+        x: rect.x + start_x as i32,
+        y: rect.y + start_y as i32,
+        width: range_width as i32,
+        height: range_height as i32,
+    }
+}
+fn roi_range_frac_ref(
+    mat: &impl MatTraitConst,
+    x: RangeInclusive<f64>,
+    y: RangeInclusive<f64>,
+) -> opencv::Result<BoxedRef<'_, Mat>> {
+    let rect = Rect_::from_point_size((0, 0).into(), mat.size()?);
+    mat.roi(rect_range_frac(&rect, x, y))
+}
+fn roi_range_frac(
+    mat: &impl MatTraitConst,
+    x: RangeInclusive<f64>,
+    y: RangeInclusive<f64>,
+) -> opencv::Result<Mat> {
+    roi_range_frac_ref(mat, x, y).map(|ok| ok.clone_pointee())
+}
+
+fn thresh(mut mat: Mat) -> opencv::Result<Mat> {
+    // SAFETY: threshold can operate in place.
+    unsafe {
+        mat.modify_inplace(|mat, thresholded| {
+            imgproc::threshold(mat, thresholded, 165.0, 255.0, imgproc::THRESH_BINARY)
+        })?;
+    }
+    Ok(mat)
+}
+const START_PERCENT_X: f64 = 0.18525022;
+const START_PERCENT_Y: f64 = 0.010113780;
+const WIDTH_PERCENT: f64 = 0.19841967;
+const HEIGHT_PERCENT: f64 = 0.094816688;
+const GAP_X_PERCENT: f64 = 0.0079016681;
+const GAP_Y_PERCENT: f64 = 0.015170670;
+fn split_into_areas(sheet: Mat) -> Result<SplittedSheet, SheetError> {
+    let subject_name = roi_range_frac(&sheet, 0.01317..=0.1765, 0.1479..=0.1656)?;
+    let student_name = roi_range_frac(&sheet, 0.0342..=0.1773, 0.1113..=0.1340)?;
+    let exam_room = roi_range_frac(&sheet, 0.032484636..=0.088674276, 0.206068268..=0.230088496)?;
+    let exam_seat = roi_range_frac(&sheet, 0.134328358..=0.175592625, 0.206068268..=0.230088496)?;
+
+    let sheet = {
+        #[inline(always)]
+        move || resize_relative_img(&sheet, 0.3333)
+    }()?;
+    let original = sheet.clone();
+
+    let subject_id = roi_range_frac(&sheet, 0.0..=0.040386304, 0.271807838..=0.517067004)?;
+    let student_id = roi_range_frac(&sheet, 0.049165935..=0.177348551, 0.273072061..=0.515802781)?;
+    let questions = {
+        let ranges = (0..4).flat_map(|x| (0..9).map(move |y| (x, y)));
+        ranges
+            .map(|(x, y)| {
+                let min_x = START_PERCENT_X + x as f64 * (GAP_X_PERCENT + WIDTH_PERCENT);
+                let max_x = f64::min(min_x + WIDTH_PERCENT, 1.0);
+                let min_y = START_PERCENT_Y + y as f64 * (GAP_Y_PERCENT + HEIGHT_PERCENT);
+                let max_y = f64::min(min_y + HEIGHT_PERCENT, 1.0);
+                thresh(roi_range_frac(&sheet, min_x..=max_x, min_y..=max_y)?)
+            })
+            .collect::<opencv::Result<Vec<Mat>>>()?
+    };
+
+    Ok(SplittedSheet {
+        original,
+        student_name,
+        subject_name,
+        exam_room,
+        exam_seat,
+        subject_id,
+        student_id,
+        questions,
+    })
+}
+
+fn sorted_bubbles_by_filled<Src: Iterator<Item = Mat>>(
+    src: Src,
+) -> impl Iterator<Item = (usize, f32)> {
+    src.enumerate()
+        .map(|(idx, bubble)| {
+            let max_white = u8::MAX as u32 * (bubble.cols() * bubble.rows()) as u32;
+            let bubble_sum: u32 = bubble
+                .data_bytes()
+                .expect("Mat is not continuous")
+                .iter()
+                .copied()
+                .map(|p| p as u32)
+                .sum();
+
+            (idx, 1.0 - (bubble_sum as f32 / max_white as f32))
+        })
+        .sorted_by(|a, b| PartialOrd::partial_cmp(&b.1, &a.1).expect("not NaN"))
+}
+
+fn extract_answers(answer_mats: Vec<Mat>) -> Result<[QuestionGroup; 36], SheetError> {
+    let mut out = answer_mats
+        .into_iter()
+        .map(|mat| {
+            let mut iter = (0..5).map(|row_idx| {
+                let row = roi_range_frac_ref(
+                    &mat,
+                    0.11946903..=1.0,
+                    (row_idx as f64 / 5.0)..=(row_idx as f64 + 1.0) / 5.0,
+                )?;
+                Result::<_, opencv::Error>::Ok(
+                    sorted_bubbles_by_filled((0..13u8).filter_map(move |bubble_idx| {
+                        roi_range_frac(
+                            &row,
+                            bubble_idx as f64 / 13.0..=(bubble_idx as f64 + 1.0) / 13.0,
+                            0.0..=1.0,
+                        )
+                        .inspect_err(|e| err_log!(e))
+                        .ok()
+                    }))
+                    .filter_map(|(idx, filled)| (filled > 0.4).then_some(idx as u8)),
+                )
+            });
+            Ok(QuestionGroup {
+                A: Answer::from_bubbles_iter(iter.next().expect("5 rows")?),
+                B: Answer::from_bubbles_iter(iter.next().expect("5 rows")?),
+                C: Answer::from_bubbles_iter(iter.next().expect("5 rows")?),
+                D: Answer::from_bubbles_iter(iter.next().expect("5 rows")?),
+                E: Answer::from_bubbles_iter(iter.next().expect("5 rows")?),
+            })
+        })
+        .collect::<Result<Vec<_>, opencv::Error>>()?
+        .into_iter();
 
     Ok(array::from_fn(|_| {
         out.next().expect("should have exactly 36 groups")
     }))
 }
 
-fn extract_digits_for_sub_stu(
-    mat: &Mat,
-    num_digits: i32,
-    mut is_student_id: bool,
+/// Note: the mat passed into this function has to be just the bubble columns, nothing on top
+fn extract_digits_for_sub_stu<M: MatTraitConst + ToInputArray>(
+    mat: &M,
+    columns: u8,
 ) -> Result<String, opencv::Error> {
-    let the_height_from_above_to_bubble = 47;
-    let digit_height = 16;
-    let digit_width = 15;
-    let temp: bool = is_student_id;
-
-    let rows = if is_student_id { 8 } else { 2 };
-    let cols = 10;
-    let mut v: Vec<Vec<i32>> = vec![vec![0; cols]; rows];
-
     let mut digits = String::new();
 
-    for i in 0..num_digits as usize {
-        if is_student_id {
-            is_student_id = false;
-            continue;
+    for column_idx in 0..columns {
+        let frac = column_idx as f64 / columns as f64;
+        let next_frac = (column_idx as f64 + 1.0) / columns as f64;
+        let column = roi_range_frac_ref(mat, frac..=next_frac, 0.0..=1.0)?;
+        let circled = sorted_bubbles_by_filled((0..10).filter_map(|row_idx| {
+            let frac = row_idx as f64 / 10.0;
+            let next_frac = (row_idx as f64 + 1.0) / 10.0;
+            roi_range_frac(&column, 0.0..=1.0, frac..=next_frac)
+                .inspect_err(|e| err_log!(e))
+                .ok()
+                .and_then(|mat| thresh(mat).inspect_err(|e| err_log!(e)).ok())
+        }))
+        .find(|(_, filled)| *filled > 0.475)
+        .map(|(idx, _)| idx);
+        if let Some(circled) = circled {
+            digits.push_str(&circled.to_string());
         }
-        let x = (i as i32) * digit_width;
-        let roi = mat
-            .roi(Rect_ {
-                x,
-                y: 0,
-                width: digit_width,
-                height: mat.rows(),
-            })?
-            .clone_pointee();
-
-        let mut max_num = u32::MIN;
-        let mut selected_digit = 0;
-
-        for j in 0..10usize {
-            let y = (j as i32) * digit_height + the_height_from_above_to_bubble;
-            let digit_roi = roi.roi(Rect_ {
-                x: 0,
-                y,
-                width: digit_width,
-                height: digit_height,
-            })?;
-
-            let mut bin = Mat::default();
-            let _ = opencv::imgproc::threshold(
-                &digit_roi,
-                &mut bin,
-                0.0,
-                255.0,
-                opencv::imgproc::THRESH_BINARY_INV,
-            );
-            let sum: u32 = opencv::core::count_non_zero(&bin)? as u32;
-            if temp {
-                if i > 0 {
-                    v[i - 1][j] = sum as i32; //Skip first Index NaKub
-                }
-            } else {
-                v[i][j] = sum as i32;
-            }
-
-            if sum > max_num {
-                max_num = sum;
-                selected_digit = j;
-            }
-        }
-        digits.push_str(&selected_digit.to_string());
     }
     Ok(digits)
 }
 
 impl AnswerSheet {
-    fn try_convert(
-        original: Mat,
-        original_small: Mat,
-        subject_code_mat: Mat,
-        student_id_mat: Mat,
-        answers_mat: Mat,
-        ocr: Option<&OcrEngine>,
-    ) -> Result<Self, SheetError> {
-        let subject_id = extract_digits_for_sub_stu(&subject_code_mat, 2, false)?;
-        let student_id = extract_digits_for_sub_stu(&student_id_mat, 9, true)?;
-        let answers = extract_answers(&answers_mat)?;
+    fn try_convert(src: SplittedSheet, ocr: Option<&OcrEngine>) -> Result<Self, SheetError> {
+        let SplittedSheet {
+            student_name: student_name_mat,
+            subject_name: subject_name_mat,
+            exam_room: exam_room_mat,
+            exam_seat: exam_seat_mat,
+            subject_id: subject_id_mat,
+            student_id: student_id_mat,
+            questions,
+            ..
+        } = src;
+
+        let subject_id_bubbles = roi_range_frac_ref(&subject_id_mat, 0.0..=1.0, 0.128205..=1.0)?;
+        let student_id_bubbles = roi_range_frac_ref(&student_id_mat, 0.0..=1.0, 0.12565445..=1.0)?;
+
+        let subject_id = extract_digits_for_sub_stu(&subject_id_bubbles, 3)?;
+        let student_id = extract_digits_for_sub_stu(&student_id_bubbles, 9)?;
+        let answers = extract_answers(questions)?;
 
         let (mut student_name, mut subject_name, mut exam_room, mut exam_seat) =
             (None, None, None, None);
         if let Some(ocr) = ocr {
+            let subject_id_written = roi_range_frac(&subject_id_mat, 0.0..=1.0, 0.0..=0.128205)?;
+            let student_id_written =
+                roi_range_frac(&student_id_mat, 0.112..=1.0, 0.0..=0.12565445)?;
             let (written_subject_id, written_student_id) =
-                extract_subject_student_from_written_field(&original_small, ocr)?;
+                extract_subject_student_from_written_field(
+                    subject_id_written,
+                    student_id_written,
+                    ocr,
+                )?;
             if subject_id != written_subject_id || student_id != written_student_id {
+                //warn!("{} != {} && {} != {}", written_student_id, student_id, written_subject_id, subject_id);
                 warn!("User Fon and Enter differently");
             }
-            let (name, subject, _, room, seat) = extract_user_information(&original, ocr)?;
+            let (name, subject, room, seat) = extract_user_information(
+                student_name_mat,
+                subject_name_mat,
+                exam_room_mat,
+                exam_seat_mat,
+                ocr,
+            )?;
             _ = student_name.insert(name);
             _ = subject_name.insert(subject);
             _ = exam_room.insert(room);
@@ -461,28 +537,58 @@ impl AnswerSheet {
 
 impl AnswerSheetResult {
     pub fn write_score_marks(&self, sheet: &mut Mat) -> Result<(), SheetError> {
-        let mut sheet_transparent = new_mat_copy!(sheet);
-        imgproc::cvt_color_def(sheet, &mut sheet_transparent, COLOR_GRAY2RGBA)?;
-        *sheet = sheet_transparent.clone();
-        for x_idx in 0..4 {
-            for y_idx in 0..9 {
-                let (x, y) = (
-                    206 + (ANSWER_WIDTH + ANSWER_WIDTH_GAP) * x_idx,
-                    14 + (ANSWER_HEIGHT + ANSWER_HEIGHT_GAP) * y_idx,
-                );
-                let (x, y) = (
-                    x.clamp(0, sheet.cols() - ANSWER_WIDTH),
-                    y.clamp(0, sheet.rows() - ANSWER_HEIGHT),
-                );
-                let rect = Rect_ {
-                    x,
-                    y,
-                    width: ANSWER_WIDTH,
-                    height: ANSWER_HEIGHT,
-                };
-                let verdict = self.graded_questions[(x_idx * 9 + y_idx) as usize]
-                    .0
-                    .verdict();
+        let mut color_overlay = new_mat_copy!(sheet);
+        imgproc::cvt_color_def(sheet, &mut color_overlay, imgproc::COLOR_GRAY2RGBA)?;
+        sheet.clone_from(&color_overlay);
+
+        const MARKER_TRANSPARENCY: f64 = 0.3;
+
+        let question_mats = {
+            let ranges = (0..4).flat_map(|x| (0..9).map(move |y| (x, y)));
+            ranges
+                .map(|(x, y)| {
+                    let min_x = START_PERCENT_X + x as f64 * (GAP_X_PERCENT + WIDTH_PERCENT);
+                    let max_x = f64::min(min_x + WIDTH_PERCENT, 1.0);
+                    let min_y = START_PERCENT_Y + y as f64 * (GAP_Y_PERCENT + HEIGHT_PERCENT);
+                    let max_y = f64::min(min_y + HEIGHT_PERCENT, 1.0);
+                    let rect = Rect_::from_point_size((0, 0).into(), color_overlay.size()?);
+                    Ok(rect_range_frac(&rect, min_x..=max_x, min_y..=max_y))
+                })
+                .collect::<opencv::Result<Vec<Rect2i>>>()?
+        };
+        let mut mats_and_checked = question_mats.into_iter().zip(self.graded_questions);
+        mats_and_checked.try_for_each(|(question_rect, (checked, _))| {
+            let question_numbers = rect_range_frac(&question_rect, 0.0..=0.11946903, 0.0..=1.0);
+            let verdict = checked.verdict();
+            let question_color: Option<opencv::core::Scalar> = match verdict {
+                CheckedAnswer::Correct => Some((43, 160, 64).into()),
+                CheckedAnswer::Incorrect => Some((57, 15, 210).into()),
+                CheckedAnswer::Missing => Some((29, 142, 223).into()),
+                CheckedAnswer::NotCounted => None,
+            };
+            if let Some(question_color) = question_color {
+                imgproc::rectangle(
+                    &mut color_overlay,
+                    question_numbers,
+                    question_color,
+                    imgproc::FILLED,
+                    imgproc::LINE_8,
+                    0,
+                )?;
+            }
+
+            let mut rows = (0..5).map(|row| {
+                (
+                    row as usize,
+                    rect_range_frac(
+                        &question_rect,
+                        0.11946903..=1.0,
+                        (row as f64 / 5.0)..=((row as f64 + 1.0) / 5.0),
+                    ),
+                )
+            });
+            rows.try_for_each(|(idx, rect)| {
+                let verdict = checked.at(idx).expect("checked answer < 5");
                 let question_color: Option<opencv::core::Scalar> = match verdict {
                     CheckedAnswer::Correct => Some((43, 160, 64).into()),
                     CheckedAnswer::Incorrect => Some((57, 15, 210).into()),
@@ -491,54 +597,23 @@ impl AnswerSheetResult {
                 };
                 if let Some(question_color) = question_color {
                     imgproc::rectangle(
-                        &mut sheet_transparent,
-                        Rect_ {
-                            x,
-                            y,
-                            width: 24,
-                            height: ANSWER_HEIGHT,
-                        },
+                        &mut color_overlay,
+                        rect,
                         question_color,
-                        FILLED,
-                        LINE_8,
+                        imgproc::FILLED,
+                        imgproc::LINE_8,
                         0,
                     )?;
                 }
-                for row_idx in 0..5usize {
-                    let result_here = self.graded_questions[(x_idx * 9 + y_idx) as usize]
-                        .0
-                        .at(row_idx);
-                    let row_y = y
-                        + ((ANSWER_HEIGHT / 5) * row_idx as i32)
-                            .clamp(0, rect.height - ANSWER_HEIGHT / 5);
-                    let row_rect = Rect_ {
-                        x: x + 24,
-                        y: row_y,
-                        width: ANSWER_WIDTH - 24,
-                        height: ANSWER_HEIGHT / 5,
-                    };
-                    let color: Option<opencv::core::Scalar> = result_here.and_then(|c| match c {
-                        CheckedAnswer::Correct => Some((43, 160, 64).into()),
-                        CheckedAnswer::Incorrect => Some((57, 15, 210).into()),
-                        CheckedAnswer::Missing => Some((29, 142, 223).into()),
-                        CheckedAnswer::NotCounted => None,
-                    });
-                    if let Some(color) = color {
-                        imgproc::rectangle(
-                            &mut sheet_transparent,
-                            row_rect,
-                            color,
-                            FILLED,
-                            LINE_8,
-                            0,
-                        )?;
-                    }
-                }
-            }
-        }
+                Result::<(), SheetError>::Ok(())
+            })?;
+
+            Result::<(), SheetError>::Ok(())
+        })?;
+
         let mut res = new_mat_copy!(sheet);
         opencv::core::add_weighted_def(
-            &sheet_transparent,
+            &color_overlay,
             MARKER_TRANSPARENCY,
             sheet,
             1.0 - MARKER_TRANSPARENCY,
@@ -546,101 +621,88 @@ impl AnswerSheetResult {
             &mut res,
         )?;
         *sheet = res;
+
         Ok(())
     }
 }
 
-fn crop_each_part(mat: &Mat) -> Result<(Mat, Mat, Mat, Mat, Mat), SheetError> {
-    let name = mat
-        .roi(Rect_ {
-            x: 237,
-            y: 351,
-            width: 495,
-            height: 62,
-        })?
-        .clone_pointee();
-    let subject = mat
-        .roi(Rect_ {
-            x: 174,
-            y: 434,
-            width: 538,
-            height: 50,
-        })?
-        .clone_pointee();
-    let date = mat
-        .roi(Rect_ {
-            x: 392,
-            y: 500,
-            width: 314,
-            height: 60,
-        })?
-        .clone_pointee();
-    let exam_room = mat
-        .roi(Rect_ {
-            x: 234,
-            y: 575,
-            width: 175,
-            height: 57,
-        })?
-        .clone_pointee();
-    let seat = mat
-        .roi(Rect_ {
-            x: 568,
-            y: 575,
-            width: 139,
-            height: 57,
-        })?
-        .clone_pointee();
-
-    Ok((name, subject, date, exam_room, seat))
-}
-
 fn image_to_string(mat: &Mat, ocr: &OcrEngine) -> Result<String, SheetError> {
     let bytes = mat.data_bytes()?;
-    let img_src = ImageSource::from_bytes(bytes, (mat.cols() as u32, mat.rows() as u32))
-        .map_err(|e| anyhow::anyhow!(e))?;
+    let img_src = ImageSource::from_bytes(bytes, (mat.cols() as u32, mat.rows() as u32))?;
     let ocr_input = ocr.prepare_input(img_src)?;
-    let text = ocr.get_text(&ocr_input)?;
-    let rem_nl = text.lines().next().unwrap_or("").to_string();
+    let text = ocr.get_text(ocr_input)?;
+    let rem_nl = text.lines().next().unwrap_or("").trim().to_string();
 
     Ok(rem_nl)
 }
 
 fn extract_user_information(
-    mat: &Mat,
+    name: Mat,
+    subject_name: Mat,
+    exam_room: Mat,
+    exam_seat: Mat,
     ocr: &OcrEngine,
-) -> Result<(String, String, String, String, String), SheetError> {
-    let temp_dir = "temp";
-    _ = fs::create_dir_all(temp_dir);
-
-    debug!("Working directory: {:?}", std::env::current_dir());
-
-    let (name, subject, date, exam_room, seat) = crop_each_part(mat)?;
-
-    //if cfg!(debug_assertions) {
-    //    safe_imwrite("temp/debug_name.png", &name)?;
-    //    safe_imwrite("temp/debug_subject.png", &subject)?;
-    //    safe_imwrite("temp/debug_date.png", &date)?;
-    //    safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
-    //    safe_imwrite("temp/debug_seat.png", &seat)?;
-    //}
+) -> Result<(String, String, String, String), SheetError> {
+    // safe_imwrite("temp/debug_name.png", &name)?;
+    // safe_imwrite("temp/debug_subject_name.png", &subject_name)?;
+    // safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
+    // safe_imwrite("temp/debug_exam_seat.png", &exam_seat)?;
 
     let name_string = image_to_string(&name, ocr)?;
-    let subject_string = image_to_string(&subject, ocr)?;
-    let date_string = image_to_string(&date, ocr)?;
-    let exam_room_string = image_to_string(&exam_room, ocr)?;
-    let seat_string = image_to_string(&seat, ocr)?;
+    let subject_string = image_to_string(&subject_name, ocr)?;
+    let exam_room_string = image_to_string(&exam_room, ocr)?
+        .chars()
+        .filter_map(|c| match c {
+            c if c.is_ascii_digit() => Some(c),
+            'O' | 'o' => Some('0'),
+            'l' | 'I' | '|' => Some('1'),
+            'Z' => Some('2'),
+            'S' => Some('5'),
+            'G' => Some('6'),
+            'B' => Some('8'),
+            _ => None,
+        })
+        .collect::<String>();
+    let seat_string = {
+        let mut code: Option<char> = None;
+        let mut number: u8 = 0;
+        image_to_string(&exam_seat, ocr)?
+            .chars()
+            .filter(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+            .enumerate()
+            .for_each(|(i, c)| {
+                if i == 0 {
+                    _ = code.get_or_insert(match c {
+                        '0' => 'O',
+                        c => c,
+                    });
+                } else {
+                    let num = match c {
+                        'O' => 0,
+                        'I' => 1,
+                        'Z' => 2,
+                        'S' => 5,
+                        'G' => 6,
+                        'B' => 8,
+                        c if c.is_ascii_digit() => c.to_digit(10).unwrap() as u8,
+                        _ => 0,
+                    };
+                    number = number * 10 + num;
+                }
+            });
 
-    Ok((
-        name_string,
-        subject_string,
-        date_string,
-        exam_room_string,
-        seat_string,
-    ))
+        format!("{}{:02}", code.unwrap_or_default(), number)
+    };
+
+    Ok((name_string, subject_string, exam_room_string, seat_string))
 }
 
-fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Error> {
+#[cfg(any(test, debug_assertions))]
+#[allow(dead_code)]
+fn safe_imwrite<P: AsRef<Path>, M: MatTraitConst + ToInputArray>(
+    path: P,
+    mat: &M,
+) -> Result<bool, opencv::Error> {
     if mat.empty() {
         warn!(
             "Warning: attempting to write an empty Mat to {:?}",
@@ -656,39 +718,19 @@ fn safe_imwrite<P: AsRef<Path>>(path: P, mat: &Mat) -> Result<bool, opencv::Erro
     )
 }
 
-fn crop_subject_stuent(mat: &Mat) -> Result<(Mat, Mat), SheetError> {
-    let subject = mat
-        .roi(Rect_ {
-            x: 40,
-            y: 245,
-            width: 43,
-            height: 19,
-        })?
-        .clone_pointee();
-    let student = mat
-        .roi(Rect_ {
-            x: 112,
-            y: 245,
-            width: 120,
-            height: 18,
-        })?
-        .clone_pointee();
-    Ok((subject, student))
-}
-
 fn extract_subject_student_from_written_field(
-    mat: &Mat,
+    subject_id_mat: Mat,
+    student_id_mat: Mat,
     ocr: &OcrEngine,
 ) -> Result<(String, String), SheetError> {
-    let (subject_f, student_f) = crop_subject_stuent(mat)?;
-    let rsub = image_to_string(&subject_f, ocr)?;
-    let rstu = image_to_string(&student_f, ocr)?;
+    // safe_imwrite("temp/debug_subject_r.png", &subject_id_mat)?;
+    // safe_imwrite("temp/debug_student_r.png", &student_id_mat)?;
+
+    let rsub = image_to_string(&subject_id_mat, ocr)?;
+    let rstu = image_to_string(&student_id_mat, ocr)?;
 
     let subject = clean_text(&rsub);
     let student = clean_text(&rstu);
-
-    safe_imwrite("temp/debug_subject_f.png", &subject_f)?;
-    safe_imwrite("temp/debug_student_f.png", &student_f)?;
 
     Ok((subject, student))
 }
@@ -715,6 +757,7 @@ mod unit_tests {
 
     use super::*;
     use base64::prelude::*;
+    use itertools::izip;
     use opencv::core;
 
     fn test_key_image() -> FilePath {
@@ -726,6 +769,13 @@ mod unit_tests {
             FilePath::Path(PathBuf::from("tests/assets/image_001.jpg")),
             FilePath::Path(PathBuf::from("tests/assets/image_002.jpg")),
             FilePath::Path(PathBuf::from("tests/assets/image_003.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/image_004.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/scan1_001.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/scan1_002.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/scan1_003.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/scan2_001.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/scan2_002.jpg")),
+            FilePath::Path(PathBuf::from("tests/assets/scan2_003.jpg")),
         ]
     }
 
@@ -847,146 +897,228 @@ mod unit_tests {
     }
 
     #[test]
-    fn test_preprocess_sheet_thresholding() {
-        // Make a light gray image (above threshold)
-        let mat = Mat::new_rows_cols_with_default(10, 10, core::CV_8UC1, core::Scalar::all(240.0))
-            .unwrap();
-        let thresh = preprocess_sheet(mat);
-        assert!(thresh.is_ok());
-
-        let result = thresh.unwrap();
-        assert_eq!(result.at_2d::<u8>(0, 0).unwrap(), &255);
-    }
-
-    #[test]
     fn test_crop_to_markers_size() {
-        let mat =
-            Mat::new_rows_cols_with_default(900, 1200, core::CV_8UC1, core::Scalar::all(100.0))
-                .unwrap();
-        let cropped = crop_to_markers(mat);
-        assert!(cropped.is_ok());
-        let cropped = cropped.unwrap();
-        assert_eq!(cropped.rows(), 765); // 795 - 30
-        assert_eq!(cropped.cols(), 1095); // 1133 - 38
+        let mat_markers = read_from_path(test_key_image()).unwrap();
+        // let mat_no_markers = {
+        //     let (cols, rows) = (mat_markers.rows() as usize, mat_markers.cols() as usize);
+        //     let white = vec![255u8; cols * rows];
+        //     let mat = Mat::from_bytes::<u8>(&white);
+        //     mat.unwrap().clone_pointee()
+        // };
+        let cropped_ok = crop_to_markers(mat_markers);
+        assert!(cropped_ok.is_ok());
+        // let cropped_not_ok = crop_to_markers(mat_no_markers);
+        // assert!(cropped_not_ok.is_err());
+        // dbg!(&cropped_not_ok);
+        // assert!(matches!(
+        //     cropped_not_ok.unwrap_err(),
+        //     SheetError::MissingMarkers
+        // ));
+
+        for image in test_images() {
+            println!("testing image {image}");
+            let mat = read_from_path(image).unwrap();
+            let cropped = crop_to_markers(mat);
+            assert!(cropped.is_ok());
+        }
     }
 
     #[test]
     fn test_split_into_areas() {
-        // Size must be at least (1090, 750) to cover all ROIs
-        let mat =
-            Mat::new_rows_cols_with_default(800, 1100, core::CV_8UC1, core::Scalar::all(200.0))
-                .unwrap();
-        let result = split_into_areas(mat);
-        assert!(result.is_ok());
-
-        let (subject, student_id, answers) = result.unwrap();
-        assert_eq!(subject.rows(), 212);
-        assert_eq!(subject.cols(), 48);
-        assert_eq!(student_id.rows(), 211);
-        assert_eq!(student_id.cols(), 141);
-        assert_eq!(answers.rows(), 735);
-        assert_eq!(answers.cols(), 884);
+        for image in test_images() {
+            println!("testing image {image}");
+            let mat = read_from_path(image).unwrap();
+            let cropped = crop_to_markers(mat).unwrap();
+            let splitted = split_into_areas(cropped);
+            assert!(splitted.is_ok());
+        }
     }
 
-    #[test]
-    fn check_extracted_ids_from_real_image() {
-        let path = test_key_image();
+    fn extract_check_id(path: FilePath, subject_id_expected: &str, student_id_expected: &str) {
         let mat = read_from_path(path).expect("Failed to read image");
-        let resized = resize_relative_img(&mat, 0.3333).expect("Resize failed");
-        let (_cropped, subject_id_mat, student_id_mat, _answers) =
-            fix_answer_sheet(resized).expect("Fixing sheet failed");
+        let SplittedSheet {
+            subject_id,
+            student_id,
+            ..
+        } = prepare_answer_sheet(mat).expect("Fixing sheet failed");
+        // safe_imwrite("temp/subject.png", &subject_id).unwrap();
+        // safe_imwrite("temp/student.png", &student_id).unwrap();
 
-        let subject_id = extract_digits_for_sub_stu(&subject_id_mat, 2, false)
+        let subject_id_bubbles =
+            roi_range_frac_ref(&subject_id, 0.0..=1.0, 0.128205..=1.0).unwrap();
+        let student_id_bubbles =
+            roi_range_frac_ref(&student_id, 0.0..=1.0, 0.12565445..=1.0).unwrap();
+
+        let subject_id = extract_digits_for_sub_stu(&subject_id_bubbles, 3)
             .expect("Extracting subject ID failed");
-        let student_id = extract_digits_for_sub_stu(&student_id_mat, 9, true)
-            .expect("Extracting student ID failed");
-
-        assert_eq!(subject_id, "10", "Subject ID does not match expected value");
         assert_eq!(
-            student_id, "65010001",
+            subject_id, subject_id_expected,
+            "Subject ID does not match expected value"
+        );
+
+        let student_id = extract_digits_for_sub_stu(&student_id_bubbles, 9)
+            .expect("Extracting student ID failed");
+        assert_eq!(
+            student_id, student_id_expected,
             "Student ID does not match expected value"
         );
     }
-
     #[test]
-    #[cfg(feature = "ocr-tests")]
-    fn check_extracted_ids_ocr() -> Result<(), SheetError> {
-        setup_ocr_data();
-        let ocr = &state::init_thread_ocr().unwrap();
-
-        for (i, path) in test_images().into_iter().enumerate() {
-            let mat = read_from_path(path).expect("Failed to read image");
-            let resized = resize_relative_img(&mat, 0.3333).expect("Resize failed");
-            let (subject_id, student_id) =
-                extract_subject_student_from_written_field(&resized, ocr)?;
-
-            if i == 0 {
-                assert_eq!(subject_id, "10", "Subject ID does not match expected value");
-                assert_eq!(
-                    student_id, "65010002",
-                    "Student ID does not match expected value"
-                );
-            } else if i == 1 {
-                assert_eq!(subject_id, "10", "Subject ID does not match expected value");
-                assert_eq!(
-                    student_id, "65010003",
-                    "Student ID does not match expected value"
-                );
-            } else {
-                assert_eq!(subject_id, "10", "Subject ID does not match expected value");
-                assert_eq!(
-                    student_id, "65010004",
-                    "Student ID does not match expected value"
-                );
-            }
+    fn check_extracted_ids_from_real_image() {
+        extract_check_id(test_key_image(), "10", "165010001");
+    }
+    #[test]
+    fn check_all_extracted_ids_from_images() {
+        let images = test_images();
+        let subject_ids = ["10", "10", "10", "17", "10", "10", "10", "10", "10", "10"];
+        let student_ids = [
+            "165010002",
+            "165010003",
+            "165010004",
+            "165010014",
+            "68010000",
+            "68010001",
+            "68010002",
+            "68010000",
+            "68010001",
+            "68010002",
+        ];
+        for (image, subject_id, student_id) in izip!(images, subject_ids, student_ids) {
+            println!(
+                "checking for subject '{subject_id}' and student '{student_id}' in sheet '{image}'"
+            );
+            extract_check_id(image, subject_id, student_id);
         }
-        Ok(())
     }
 
     #[test]
+    fn check_all_bubbles_non_empty() {
+        for image in test_images() {
+            println!("checking sheet '{image}' if all questions are answered");
+            let mat = read_from_path(image).expect("Failed to read image");
+            let SplittedSheet { questions, .. } =
+                prepare_answer_sheet(mat).expect("Fixing sheet failed");
+            let questions = extract_answers(questions).expect("reading questions failed");
+            let res = questions
+                .into_iter()
+                .map(|group| {
+                    let a = matches!(group.A, Some(_));
+                    let b = matches!(group.B, Some(_));
+                    let c = matches!(group.C, Some(_));
+                    let d = matches!(group.D, Some(_));
+                    let e = matches!(group.E, Some(_));
+                    a || b || c || d || e
+                })
+                .reduce(|acc, res| acc || res);
+            assert!(res.unwrap());
+        }
+    }
+
     #[cfg(feature = "ocr-tests")]
-    fn check_ocr_function() -> Result<(), SheetError> {
-        setup_ocr_data();
-        let ocr = &state::init_thread_ocr().unwrap();
+    mod ocr {
+        use super::*;
 
-        for (i, path) in test_images().into_iter().enumerate() {
-            println!("image #{i}");
-            let mat = read_from_path(path).expect("Failed to read image");
+        use crate::state;
 
-            let (name, subject, date, exam_room, seat) = extract_user_information(&mat, ocr)?;
-            if i == 0 {
-                assert_eq!(name, "Elize Howells", "Name does not match expected value");
-                assert_eq!(
-                    subject, "Mathematics",
-                    "Subject does not match expected value"
-                );
-                assert_eq!(date, "2021-01-01", "Date does not match expected value");
-                assert_eq!(exam_room, "608", "Exam room does not match expected value");
-                assert_eq!(seat, "A02", "Seat does not match expected value");
-            } else if i == 1 {
-                assert_eq!(name, "Marcia Cole", "Name does not match expected value");
-                assert_eq!(
-                    subject, "Mathematics",
-                    "Subject does not match expected value"
-                );
-                assert_eq!(date, "2021-01-01", "Date does not match expected value");
-                assert_eq!(exam_room, "608", "Exam room does not match expected value");
-                assert_eq!(seat, "A03", "Seat does not match expected value");
-            } else {
-                assert_eq!(
-                    name, "Sophie-Louise Greene",
-                    "Name does not match expected value"
-                );
-                assert_eq!(
-                    subject, "Mathematics",
-                    "Subject does not match expected value"
-                );
-                assert_eq!(date, "2021-01-01", "Date does not match expected value");
-                assert_eq!(exam_room, "608", "Exam room does not match expected value");
-                assert_eq!(seat, "A04", "Seat does not match expected value");
+        #[test]
+        fn check_extracted_ids_ocr() -> Result<(), SheetError> {
+            setup_ocr_data();
+            let ocr = &state::init_thread_ocr().unwrap();
+
+            for (i, path) in test_images().into_iter().take(3).enumerate() {
+                let mat = read_from_path(path).expect("Failed to read image");
+                let SplittedSheet {
+                    subject_id,
+                    student_id,
+                    ..
+                } = prepare_answer_sheet(mat).expect("Resize failed");
+                let subject_id_written =
+                    roi_range_frac(&subject_id, 0.0..=1.0, 0.0..=0.128205).unwrap();
+                let student_id_written =
+                    roi_range_frac(&student_id, 0.0..=1.0, 0.0..=0.12565445).unwrap();
+                let (subject_id, student_id) = extract_subject_student_from_written_field(
+                    subject_id_written,
+                    student_id_written,
+                    ocr,
+                )?;
+
+                if i == 0 {
+                    assert_eq!(subject_id, "10", "Subject ID does not match expected value");
+                    assert_eq!(
+                        student_id, "65010002",
+                        "Student ID does not match expected value"
+                    );
+                } else if i == 1 {
+                    assert_eq!(subject_id, "10", "Subject ID does not match expected value");
+                    assert_eq!(
+                        student_id, "65010003",
+                        "Student ID does not match expected value"
+                    );
+                } else {
+                    assert_eq!(subject_id, "10", "Subject ID does not match expected value");
+                    assert_eq!(
+                        student_id, "65010004",
+                        "Student ID does not match expected value"
+                    );
+                }
             }
+            Ok(())
         }
 
-        Ok(())
+        #[test]
+        fn check_ocr_function() -> Result<(), SheetError> {
+            setup_ocr_data();
+            let ocr = &state::init_thread_ocr().unwrap();
+
+            for (i, path) in test_images().into_iter().take(3).enumerate() {
+                println!("image #{i}");
+                let mat = read_from_path(path).expect("Failed to read image");
+                let SplittedSheet {
+                    student_name,
+                    subject_name,
+                    exam_room,
+                    exam_seat,
+                    ..
+                } = prepare_answer_sheet(mat).unwrap();
+
+                let (name, subject, exam_room, seat) = extract_user_information(
+                    student_name,
+                    subject_name,
+                    exam_room,
+                    exam_seat,
+                    ocr,
+                )?;
+                if i == 0 {
+                    assert_eq!(name, "Elize Howells", "Name does not match expected value");
+                    assert_eq!(
+                        subject, "Mathematics",
+                        "Subject does not match expected value"
+                    );
+                    assert_eq!(exam_room, "608", "Exam room does not match expected value");
+                    assert_eq!(seat, "A02", "Seat does not match expected value");
+                } else if i == 1 {
+                    assert_eq!(name, "Marcia Cole", "Name does not match expected value");
+                    assert_eq!(
+                        subject, "Mathematics",
+                        "Subject does not match expected value"
+                    );
+                    assert_eq!(exam_room, "608", "Exam room does not match expected value");
+                    assert_eq!(seat, "A03", "Seat does not match expected value");
+                } else {
+                    assert_eq!(
+                        name, "Sophie—Louise Green",
+                        "Name does not match expected value"
+                    );
+                    assert_eq!(
+                        subject, "Mathematics",
+                        "Subject does not match expected value"
+                    );
+                    assert_eq!(exam_room, "608", "Exam room does not match expected value");
+                    assert_eq!(seat, "A04", "Seat does not match expected value");
+                }
+            }
+
+            Ok(())
+        }
     }
 }

@@ -17,6 +17,7 @@ pub struct AnswerSheetResult {
     pub correct: u32,
     pub incorrect: u32,
     pub score: u32,
+    /// Checked question, score achieved (weight if all correct/not counted, 0 for everything else)
     pub graded_questions: [(CheckedQuestionGroup, u8); 36],
 }
 
@@ -80,11 +81,11 @@ impl Answer {
             (Some(_), None) | (None, None) => CheckedAnswer::NotCounted,
         }
     }
-    pub fn from_bubbles_vec(vec: Vec<u8>) -> Option<Answer> {
+    pub fn from_bubbles_iter<I: IntoIterator<Item = u8>>(iter: I) -> Option<Answer> {
         let mut num_type: Option<NumberType> = None;
         let mut num: Option<u8> = None;
 
-        for idx in vec {
+        for idx in iter {
             if idx < 3 {
                 if num_type.is_none() {
                     num_type = Some(match idx {
@@ -103,10 +104,12 @@ impl Answer {
                 return None;
             }
         }
-        Some(Answer {
-            num_type,
-            number: num?,
-        })
+        match (num_type, num) {
+            (None, None) => None,
+            (None, Some(n)) => Some(Answer::Number(n)),
+            (Some(t), None) => Some(Answer::Type(t)),
+            (Some(t), Some(n)) => Some(Answer::Both(t, n)),
+        }
     }
 }
 
@@ -321,10 +324,7 @@ mod unit_tests {
     use crate::state::{Answer, AnswerKeySheet, AnswerSheet, NumberType, QuestionGroup};
 
     fn answer(num: u8) -> Option<Answer> {
-        Some(Answer {
-            num_type: Some(NumberType::Plus),
-            number: num,
-        })
+        Some(Answer::Number(num))
     }
 
     fn none_answer() -> Option<Answer> {
@@ -427,56 +427,38 @@ mod unit_tests {
     #[test]
     fn test_bubble_definite() {
         let bubbles = vec![3u8];
-        let ans = Answer::from_bubbles_vec(bubbles).unwrap();
+        let bubbles_plus = vec![0u8];
+        let ans = Answer::from_bubbles_iter(bubbles).unwrap();
+        let ans_plus = Answer::from_bubbles_iter(bubbles_plus).unwrap();
 
-        assert!(matches!(
-            ans,
-            Answer {
-                num_type: None,
-                number: 0u8
-            }
-        ))
+        assert!(matches!(ans, Answer::Number(0u8)));
+        assert!(matches!(ans_plus, Answer::Type(NumberType::Plus)));
     }
     #[test]
     fn test_bubble_unclear() {
         let bubbles = vec![5u8, 8u8];
-        let ans = Answer::from_bubbles_vec(bubbles);
+        let ans = Answer::from_bubbles_iter(bubbles);
         assert!(ans.is_none());
     }
     #[test]
     fn test_bubble_none() {
-        let bubbles = vec![0u8];
-        assert!(Answer::from_bubbles_vec(bubbles).is_none());
+        let bubbles = vec![];
+        assert!(Answer::from_bubbles_iter(bubbles).is_none());
     }
     #[test]
     fn test_bubble_plus_minus() {
         let bubbles_plus = vec![0u8, 5u8];
         let bubbles_minus = vec![1u8, 5u8];
         let bubbles_both = vec![2u8, 5u8];
-        let ans_plus = Answer::from_bubbles_vec(bubbles_plus).unwrap();
-        let ans_minus = Answer::from_bubbles_vec(bubbles_minus).unwrap();
-        let ans_both = Answer::from_bubbles_vec(bubbles_both).unwrap();
+        let ans_plus = Answer::from_bubbles_iter(bubbles_plus).unwrap();
+        let ans_minus = Answer::from_bubbles_iter(bubbles_minus).unwrap();
+        let ans_both = Answer::from_bubbles_iter(bubbles_both).unwrap();
 
-        assert!(matches!(
-            ans_plus,
-            Answer {
-                num_type: Some(NumberType::Plus),
-                number: 2u8
-            }
-        ));
-        assert!(matches!(
-            ans_minus,
-            Answer {
-                num_type: Some(NumberType::Minus),
-                number: 2u8
-            }
-        ));
+        assert!(matches!(ans_plus, Answer::Both(NumberType::Plus, 2u8)));
+        assert!(matches!(ans_minus, Answer::Both(NumberType::Minus, 2u8)));
         assert!(matches!(
             ans_both,
-            Answer {
-                num_type: Some(NumberType::PlusOrMinus),
-                number: 2u8
-            }
+            Answer::Both(NumberType::PlusOrMinus, 2u8)
         ));
     }
 

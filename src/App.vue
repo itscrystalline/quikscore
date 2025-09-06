@@ -37,9 +37,9 @@ listen<AppState>("state", (event) => {
 const modelDownloadEventHandler = (progressBar: Ref<undefined | ProgressBarProps>, status: Ref<string>) => (msg: ModelDownload): void => {
   switch (msg.event) {
     case "progress":
-      const { total, progressDetection, progressRecognition } = msg.data
-      progressBar.value = { type: "progress", max: total, progressTop: progressDetection, progressBottom: progressDetection + progressRecognition };
-      status.value = "Downloading " + ((progressDetection + progressRecognition) * 100 / total).toFixed(2) + "%";
+      const { total, progress } = msg.data
+      progressBar.value = { type: "progress", max: total, progressTop: 0, progressBottom: progress };
+      status.value = "Downloading " + (progress * 100 / total).toFixed(2) + "%";
       return;
     case "success":
       progressBar.value = { type: "indeterminate" };
@@ -149,8 +149,13 @@ const csvExportEventHandler = (msg: CsvExport) => {
   answerProgressBar.value = undefined;
 }
 
-const ocr = ref(true);
-watch(ocr, async (new_ocr, _) => { await invoke("set_ocr", { ocr: new_ocr }) });
+const ocr = ref(false);
+const ocrStatus = ref("");
+watch(ocr, (new_ocr, _) => {
+  invoke("set_ocr", { ocr: new_ocr })
+    .then(() => ocrStatus.value = "")
+    .catch(err => ocrStatus.value = err)
+});
 
 const keyImage = ref("");
 const keyHasWeights = ref<"notUploaded" | "missingWeights" | "yes">("notUploaded");
@@ -264,23 +269,28 @@ async function exportCsv() {
     <p class="credits">KOSEN-KMITL PBL Year 3 (C14, C35, C41, C43)</p>
     <p class="instructions">Upload your key sheet and some answer sheets!</p>
     <div class="header" style="justify-content: center;">
-      <input type="checkbox" id="ocr-ck" v-model="ocr" />
-      <label for="ocr-ck" style="padding-left: 1vh;">Enable OCR (potentially high memory usage)</label>
+      <input type="checkbox" id="ocr-ck" v-model="ocr" v-bind:disabled="ocrStatus != ''" />
+      <label for="ocr-ck" class="ocr-text" v-if="ocrStatus == ''">
+        Enable OCR (Requires tesseract to be installed)
+      </label>
+      <label for="ocr-ck" class="ocr-text disabled" v-if="ocrStatus != ''">
+        OCR Disabled ({{ ocrStatus }})
+      </label>
     </div>
 
     <div class="mongo_db_information_field">
-    <div class="form_group">
-      <div class="form_wrapper">
-        <label for="mongo_db_uri">MongoDB URI: </label>
-        <input type="text" id="mongo_db_uri" v-model="mongoDbUri" placeholder="URI...."/>
+      <div class="form_group">
+        <div class="form_wrapper">
+          <label for="mongo_db_uri">MongoDB URI: </label>
+          <input type="text" id="mongo_db_uri" v-model="mongoDbUri" placeholder="URI...." />
+        </div>
+        <div class="form_wrapper">
+          <label for="mongo_db_name">MongoDB Name: </label>
+          <input type="text" id="mongo_db_name" v-model="mongoDbName" placeholder="Name...." />
+        </div>
       </div>
-      <div class="form_wrapper">
-        <label for="mongo_db_name">MongoDB Name: </label>
-        <input type="text" id="mongo_db_name" v-model="mongoDbName" placeholder="Name...."/>
-      </div>
+      <button class="mongo_db_enter" @click="enterDatabaseInfo">Enter</button>
     </div>
-    <button class="mongo_db_enter" @click="enterDatabaseInfo">Enter</button>
-  </div>
 
 
     <div class="header">
@@ -468,14 +478,14 @@ p.credits {
 
 .mongo_db_information_field {
   display: flex;
-  align-items: center;   
-  justify-content: center;  
-  gap: 1rem;                
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
 }
 
 .form_wrapper {
   display: flex;
-  align-items: center;      
+  align-items: center;
   gap: 0.5rem;
 }
 
@@ -637,5 +647,14 @@ img {
 
 .key-image-container>img {
   max-width: 100%;
+}
+
+.ocr-text {
+  padding-left: 1vh;
+}
+
+.disabled {
+  color: #9399b2;
+  font-style: italic;
 }
 </style>

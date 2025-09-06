@@ -9,8 +9,7 @@ export type ModelDownload =
   | {
       event: "progress";
       data: {
-        progressDetection: number;
-        progressRecognition: number;
+        progress: number;
         total: number;
       };
     }

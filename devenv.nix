@@ -8,6 +8,7 @@
   libs = with pkgs; [
     opencv
     libclang.lib
+    zlib
   ];
   lib-path = lib.makeLibraryPath libs;
 in {
@@ -28,6 +29,8 @@ in {
       libllvm
       libclang
       opencv
+      tesseract
+      leptonica
       sccache
 
       cargo-tarpaulin
@@ -38,6 +41,10 @@ in {
 
       # yarn hash
       yarn-berry_4.yarn-berry-fetcher
+
+      # python
+      python313Packages.opencv4
+      python313Packages.numpy
     ]
     ++ lib.optionals pkgs.stdenv.isLinux [
       gobject-introspection
@@ -52,6 +59,7 @@ in {
       libsoup_3
       pango
       webkitgtk_4_1
+      stdenv.cc.cc.lib
     ];
   #
   # # https://devenv.sh/languages/
@@ -67,6 +75,10 @@ in {
   languages.javascript = {
     enable = true;
     corepack.enable = true;
+  };
+  languages.python = {
+    enable = true;
+    package = pkgs.python313;
   };
 
   #

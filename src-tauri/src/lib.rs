@@ -1,3 +1,5 @@
+#![feature(stmt_expr_attributes)]
+
 use crate::state::AppState;
 use std::sync::Mutex;
 use tauri::Manager;
@@ -7,6 +9,7 @@ mod commands;
 mod download;
 mod errors;
 mod image;
+mod ocr;
 mod scoring;
 mod state;
 mod storage;
