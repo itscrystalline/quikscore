@@ -698,6 +698,7 @@ fn extract_user_information(
 }
 
 #[cfg(any(test, debug_assertions))]
+#[allow(dead_code)]
 fn safe_imwrite<P: AsRef<Path>, M: MatTraitConst + ToInputArray>(
     path: P,
     mat: &M,
