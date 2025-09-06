@@ -1,6 +1,6 @@
 use crate::err_log;
+use crate::ocr::OcrEngine;
 use log::{error, info};
-use ocrs::OcrEngine;
 use rayon::iter::{IntoParallelIterator, IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -41,23 +41,25 @@ macro_rules! emit_state {
 
 pub fn init_thread_ocr() -> Option<OcrEngine> {
     let model_path = MODELS.get()?;
-    let detection_model = model_path.join("text-detection.rten");
-    let recognition_model = model_path.join("text-recognition.rten");
-    info!("Initializing thread OcrEngine");
 
-    let detection = rten::Model::load_file(detection_model)
+    let patterns = model_path.join("tesseract.patterns");
+    if !patterns.exists() {
+        info!("Adding tesseract pattern file");
+        std::fs::write(
+            patterns,
+            r#"\d\d\d\d\d\d\d\d\d
+\A\d\d
+\d\d\d
+"#,
+        )
         .inspect_err(|e| err_log!(e))
         .ok()?;
-    let recognition = rten::Model::load_file(recognition_model)
-        .inspect_err(|e| err_log!(e))
-        .ok()?;
+    }
 
-    OcrEngine::new(ocrs::OcrEngineParams {
-        detection_model: Some(detection),
-        recognition_model: Some(recognition),
-        ..Default::default()
-    })
-    .ok()
+    info!("Initializing thread OCR");
+    OcrEngine::new(model_path.clone())
+        .inspect_err(|e| err_log!(e))
+        .ok()
 }
 
 #[derive(Default)]

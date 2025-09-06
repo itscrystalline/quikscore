@@ -64,7 +64,7 @@
           env = {
             RUSTFLAGS = "-Z threads=8";
             OPENCV_LINK_PATHS = "${pkgs.opencv}/lib";
-            OPENCV_LINK_LIBS = "opencv_core,opencv_imgproc,opencv_imgcodecs,png";
+            OPENCV_LINK_LIBS = "opencv_core,opencv_imgproc,opencv_imgcodecs,png,opencv_text";
             OPENCV_INCLUDE_PATHS = "+${pkgs.opencv}/include";
           };
 
@@ -72,7 +72,6 @@
           cargoLock = {
             lockFile = finalAttrs.src + "/${finalAttrs.cargoRoot}/Cargo.lock";
           };
-          cargoBuildFeatures = ["avx512"];
 
           buildAndTestSubdir = "src-tauri";
           # useNextest = true;
@@ -88,6 +87,8 @@
               opencv
               libpng
               openssl
+              tesseract
+              leptonica
             ]);
 
           postFixup =
@@ -95,6 +96,9 @@
             then ''
               echo Patching ELF loader to a non-nix path...
               patchelf --set-interpreter ${loaderPath} $out/bin/quikscore
+
+              echo "Libraries used:"
+              ldd $out/bin/quikscore
 
               echo Adding wrapper script...
               mv $out/bin/quikscore $out/bin/.quikscore-wrapped
@@ -120,12 +124,14 @@
           postInstall =
             if stdenv.hostPlatform.isLinux
             then ''
-              echo "Bundling additional libraries (OpenCV, OpenBLAS, OpenEXR)"
+              echo "Bundling additional libraries (OpenCV, OpenBLAS, OpenEXR, Tesseract, Leptonica)"
               mkdir -p $out/lib
-              for lib in core imgproc imgcodecs ; do
+              for lib in core imgproc imgcodecs; do
                 cp "${pkgs.opencv}/lib/libopencv_$lib.so.411" "$out/lib/"
               done
               cp "${pkgs.openblas}/lib/libopenblas.so.0" "$out/lib/"
+              cp "${pkgs.tesseract}/lib/libtesseract.so.5" "$out/lib/"
+              cp "${pkgs.leptonica}/lib/libleptonica.so.6" "$out/lib/"
               echo "Bundling only needed OpenEXR libraries..."
 
               # Collect needed .so names from ldd output
@@ -168,6 +174,12 @@
               cp "${pkgs.libiconv}/lib/libiconv.2.dylib" "$frameworks/"
               chmod +w "$frameworks/libiconv.2.dylib"
               install_name_tool -id "@loader_path/../Frameworks/libiconv.2.dylib" "$frameworks/libiconv.2.dylib"
+              cp "${pkgs.tesseract}/lib/libtesseract.5.dylib" "$frameworks/"
+              chmod +w "$frameworks/libtesseract.5.dylib"
+              install_name_tool -id "@loader_path/../Frameworks/libtesseract.5.dylib" "$frameworks/libtesseract.5.dylib"
+              cp "${pkgs.leptonica}/lib/libleptonica.6.dylib" "$frameworks/"
+              chmod +w "$frameworks/libleptonica.6.dylib"
+              install_name_tool -id "@loader_path/../Frameworks/libleptonica.6.dylib" "$frameworks/libleptonica.6.dylib"
 
               # 2. Recursively copy and patch Nix-store dependencies into Frameworks
               copy_deps() {

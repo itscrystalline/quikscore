@@ -26,8 +26,8 @@ pub enum SheetError {
     OpenCvError(#[from] opencv::Error),
     #[error("Detected less than 5 answers (this should not happen)")]
     TooLittleAnswers,
-    #[error("Anyhow error")]
-    OcrError(#[from] anyhow::Error),
+    #[error("OCR error: {0}")]
+    OcrError(#[from] OcrError),
     #[error("Incomplete markers on page")]
     MissingMarkers,
 }
@@ -92,4 +92,28 @@ pub enum DatabaseError {
     //MissingDbName(#[source] std::env::VarError),
     #[error("MongoDB error: {0}")]
     MongoDb(#[from] mongodb::error::Error),
+}
+
+/// Wrapper for Tesseract errors that happen at different stages.
+#[derive(thiserror::Error, Debug)]
+pub enum OcrError {
+    #[cfg(not(feature = "compile-tesseract"))]
+    #[error(
+        "No `tesseract` command found in PATH. Please install tesseract first before using OCR."
+    )]
+    NoTesseract,
+    #[cfg(not(feature = "compile-tesseract"))]
+    #[error("tessdata path is not unicode")]
+    NoUnicode,
+
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("Invalid image size: {0}")]
+    InvalidSize(#[from] std::num::TryFromIntError),
+    #[error("Cannot encode image: {0}")]
+    InvalidImage(#[from] opencv::Error),
+
+    #[cfg(feature = "compile-tesseract")]
+    #[error("Tesseract: {0}")]
+    Tesseract(#[from] tesseract::TesseractError),
 }

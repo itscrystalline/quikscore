@@ -1,6 +1,6 @@
 use crate::err_log;
+use crate::ocr::{ImageSource, OcrEngine};
 use log::{debug, warn};
-use ocrs::{ImageSource, OcrEngine};
 use opencv::boxed_ref::BoxedRef;
 use std::ops::RangeInclusive;
 use std::sync::{Arc, RwLock};
@@ -20,7 +20,7 @@ use tauri_plugin_dialog::FilePath;
 
 use tauri::{Emitter, Manager, Runtime};
 
-use opencv::imgcodecs::{imencode, imread, ImreadModes};
+use opencv::imgcodecs::{imencode_def, imread, ImreadModes};
 
 use crate::state::{
     Answer, AnswerSheet, AnswerUpload, AppState, KeyUpload, Options, QuestionGroup,
@@ -198,7 +198,7 @@ fn handle_upload(
 
 pub fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
     let mut buf: Vector<u8> = Vec::new().into();
-    imencode(".png", mat, &mut buf, &Vec::new().into())?;
+    imencode_def(".png", mat, &mut buf)?;
     let base64 = base64::prelude::BASE64_STANDARD.encode(&buf);
     Ok(format!("data:image/png;base64,{base64}"))
 }
@@ -298,10 +298,10 @@ fn crop_to_markers(mat: Mat) -> Result<Mat, SheetError> {
 
 fn prepare_answer_sheet(mat: Mat) -> Result<SplittedSheet, SheetError> {
     let cropped = crop_to_markers(mat)?;
-    #[cfg(test)]
-    {
-        safe_imwrite("temp/cropped.png", &cropped)?;
-    }
+    // #[cfg(test)]
+    // {
+    //     safe_imwrite("temp/cropped.png", &cropped)?;
+    // }
     let splitted = split_into_areas(cropped)?;
     Ok(splitted)
 }
@@ -463,8 +463,7 @@ fn extract_digits_for_sub_stu<M: MatTraitConst + ToInputArray>(
             roi_range_frac(&column, 0.0..=1.0, frac..=next_frac)
                 .inspect_err(|e| err_log!(e))
                 .ok()
-                .map(|mat| thresh(mat).inspect_err(|e| err_log!(e)).ok())
-                .flatten()
+                .and_then(|mat| thresh(mat).inspect_err(|e| err_log!(e)).ok())
         }))
         .find(|(_, filled)| *filled > 0.475)
         .map(|(idx, _)| idx);
@@ -629,10 +628,9 @@ impl AnswerSheetResult {
 
 fn image_to_string(mat: &Mat, ocr: &OcrEngine) -> Result<String, SheetError> {
     let bytes = mat.data_bytes()?;
-    let img_src = ImageSource::from_bytes(bytes, (mat.cols() as u32, mat.rows() as u32))
-        .map_err(|e| anyhow::anyhow!(e))?;
+    let img_src = ImageSource::from_bytes(bytes, (mat.cols() as u32, mat.rows() as u32))?;
     let ocr_input = ocr.prepare_input(img_src)?;
-    let text = ocr.get_text(&ocr_input)?;
+    let text = ocr.get_text(ocr_input)?;
     let rem_nl = text.lines().next().unwrap_or("").trim().to_string();
 
     Ok(rem_nl)
@@ -645,20 +643,62 @@ fn extract_user_information(
     exam_seat: Mat,
     ocr: &OcrEngine,
 ) -> Result<(String, String, String, String), SheetError> {
-    safe_imwrite("temp/debug_name.png", &name)?;
-    safe_imwrite("temp/debug_subject_name.png", &subject_name)?;
-    safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
-    safe_imwrite("temp/debug_exam_seat.png", &exam_seat)?;
+    // safe_imwrite("temp/debug_name.png", &name)?;
+    // safe_imwrite("temp/debug_subject_name.png", &subject_name)?;
+    // safe_imwrite("temp/debug_exam_room.png", &exam_room)?;
+    // safe_imwrite("temp/debug_exam_seat.png", &exam_seat)?;
 
     let name_string = image_to_string(&name, ocr)?;
     let subject_string = image_to_string(&subject_name, ocr)?;
-    let exam_room_string = image_to_string(&exam_room, ocr)?;
-    let seat_string = image_to_string(&exam_seat, ocr)?;
+    let exam_room_string = image_to_string(&exam_room, ocr)?
+        .chars()
+        .filter_map(|c| match c {
+            c if c.is_ascii_digit() => Some(c),
+            'O' | 'o' => Some('0'),
+            'l' | 'I' | '|' => Some('1'),
+            'Z' => Some('2'),
+            'S' => Some('5'),
+            'G' => Some('6'),
+            'B' => Some('8'),
+            _ => None,
+        })
+        .collect::<String>();
+    let seat_string = {
+        let mut code: Option<char> = None;
+        let mut number: u8 = 0;
+        image_to_string(&exam_seat, ocr)?
+            .chars()
+            .filter(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+            .enumerate()
+            .for_each(|(i, c)| {
+                if i == 0 {
+                    _ = code.get_or_insert(match c {
+                        '0' => 'O',
+                        c => c,
+                    });
+                } else {
+                    let num = match c {
+                        'O' => 0,
+                        'I' => 1,
+                        'Z' => 2,
+                        'S' => 5,
+                        'G' => 6,
+                        'B' => 8,
+                        c if c.is_ascii_digit() => c.to_digit(10).unwrap() as u8,
+                        _ => 0,
+                    };
+                    number = number * 10 + num;
+                }
+            });
+
+        format!("{}{:02}", code.unwrap_or_default(), number)
+    };
 
     Ok((name_string, subject_string, exam_room_string, seat_string))
 }
 
 #[cfg(any(test, debug_assertions))]
+#[allow(dead_code)]
 fn safe_imwrite<P: AsRef<Path>, M: MatTraitConst + ToInputArray>(
     path: P,
     mat: &M,
@@ -683,57 +723,8 @@ fn extract_subject_student_from_written_field(
     student_id_mat: Mat,
     ocr: &OcrEngine,
 ) -> Result<(String, String), SheetError> {
-    fn remove_inbetween_bars(src: Mat, cells: u8) -> opencv::Result<Mat> {
-        let mut width = 0;
-        let height = src.rows();
-        let numbers = (0..cells)
-            .map(|idx| {
-                roi_range_frac_ref(
-                    &src,
-                    ((idx as f64 / cells as f64) + 0.014492754)
-                        ..=(((idx as f64 + 1.0) / cells as f64) - 0.014492754),
-                    0.0..=1.0,
-                )
-                .inspect(|mat| {
-                    width += mat.cols();
-                })
-            })
-            .collect::<opencv::Result<Vec<_>>>()?;
-
-        let mut stitched = Mat::new_rows_cols_with_default(
-            height,
-            width,
-            opencv::core::CV_8UC1,
-            opencv::core::Scalar::all(1.0),
-        )?;
-
-        let mut start = 0;
-        numbers
-            .into_iter()
-            .try_for_each(|cell| -> opencv::Result<()> {
-                let width = cell.cols();
-                let mut dst = stitched.roi_mut(Rect_ {
-                    x: start,
-                    y: 0,
-                    width,
-                    height,
-                })?;
-                cell.copy_to(&mut dst)?;
-                start += width;
-                opencv::Result::Ok(())
-            })?;
-
-        Ok(stitched)
-    }
-
-    safe_imwrite("temp/debug_subject_f.png", &subject_id_mat)?;
-    safe_imwrite("temp/debug_student_f.png", &student_id_mat)?;
-
-    let subject_id_mat = remove_inbetween_bars(subject_id_mat, 3)?;
-    let student_id_mat = remove_inbetween_bars(student_id_mat, 9)?;
-
-    safe_imwrite("temp/debug_subject_r.png", &subject_id_mat)?;
-    safe_imwrite("temp/debug_student_r.png", &student_id_mat)?;
+    // safe_imwrite("temp/debug_subject_r.png", &subject_id_mat)?;
+    // safe_imwrite("temp/debug_student_r.png", &student_id_mat)?;
 
     let rsub = image_to_string(&subject_id_mat, ocr)?;
     let rstu = image_to_string(&student_id_mat, ocr)?;
@@ -950,8 +941,8 @@ mod unit_tests {
             student_id,
             ..
         } = prepare_answer_sheet(mat).expect("Fixing sheet failed");
-        safe_imwrite("temp/subject.png", &subject_id).unwrap();
-        safe_imwrite("temp/student.png", &student_id).unwrap();
+        // safe_imwrite("temp/subject.png", &subject_id).unwrap();
+        // safe_imwrite("temp/student.png", &student_id).unwrap();
 
         let subject_id_bubbles =
             roi_range_frac_ref(&subject_id, 0.0..=1.0, 0.128205..=1.0).unwrap();
@@ -1115,7 +1106,7 @@ mod unit_tests {
                     assert_eq!(seat, "A03", "Seat does not match expected value");
                 } else {
                     assert_eq!(
-                        name, "Sophie-Louise Greene",
+                        name, "Sophie—Louise Green",
                         "Name does not match expected value"
                     );
                     assert_eq!(

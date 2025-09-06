@@ -1,7 +1,11 @@
+#[cfg(not(feature = "compile-tesseract"))]
+use crate::errors::OcrError;
 use crate::{
     download::{self, ModelDownload},
+    err_log,
     errors::ModelDownloadError,
     image::{upload_key_image_impl, upload_sheet_images_impl},
+    ocr::OcrEngine,
     scoring::upload_weights_impl,
     state::{AnswerUpload, CsvExport, KeyUpload},
     storage, AppState,
@@ -80,9 +84,26 @@ pub fn clear_sheet_images(app: AppHandle, channel: Channel<AnswerUpload>) {
 }
 
 #[tauri::command]
-pub fn set_ocr(app: AppHandle, ocr: bool) {
-    debug!("Set ocr = {ocr}");
-    AppState::set_ocr(&app, ocr);
+pub fn set_ocr(app: AppHandle, ocr: bool) -> Result<(), String> {
+    let has_tess = OcrEngine::check_tesseract().map_err(|e| {
+        err_log!(&e);
+        format!("{e}")
+    })?;
+    if has_tess {
+        debug!("Set ocr = {ocr}");
+        AppState::set_ocr(&app, ocr);
+        Ok(())
+    } else {
+        #[cfg(not(feature = "compile-tesseract"))]
+        {
+            Err(format!("{}", OcrError::NoTesseract))
+        }
+        #[cfg(feature = "compile-tesseract")]
+        {
+            // with `compile-tesseract`, `OcrEngine::check_tesseract()` always returns true
+            unreachable!()
+        }
+    }
 }
 
 #[tauri::command(async)]

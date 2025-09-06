@@ -29,6 +29,8 @@ in {
       libllvm
       libclang
       opencv
+      tesseract
+      leptonica
       sccache
 
       cargo-tarpaulin
@@ -41,10 +43,7 @@ in {
       yarn-berry_4.yarn-berry-fetcher
 
       # python
-      (python313Packages.opencv4.override {
-        enableGtk3 = true;
-        enablePython = true;
-      })
+      python313Packages.opencv4
       python313Packages.numpy
     ]
     ++ lib.optionals pkgs.stdenv.isLinux [
