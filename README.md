@@ -10,13 +10,14 @@ prebuilt versions of `quikscore` built by our CI are available
 [here](https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main?preview)
 or in the table below.
 
-| Version                  | Explaination                       | Link                                                                                              |
-| ------------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------- |
-| quikscore-linux-aarch64  | for Linux on 64-bit ARM Devices    | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-linux-aarch64.zip  |
-| quikscore-linux-x86_64   | for Linux on 64-bit x86 Devices    | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-linux-x86_64.zip   |
-| quikscore-macos-aarch64  | for macOS on Apple Silicon Devices | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-macos-aarch64.zip  |
-| quikscore-macos-x86_64   | for macOS on 64-bit Intel Devices  | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-macos-x86_64.zip   |
-| quikscore-windows-x86_64 | for Windows on 64-bit x86 Devices  | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-windows-x86_64.zip |
+| Version                             | Explaination                                 | Link                                                                                                         |
+| ----------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| quikscore-linux-aarch64             | for Linux on 64-bit ARM Devices              | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-linux-aarch64.zip             |
+| quikscore-linux-x86_64              | for Linux on 64-bit x86 Devices              | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-linux-x86_64.zip              |
+| quikscore-macos-aarch64             | for macOS on Apple Silicon Devices           | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-macos-aarch64.zip             |
+| quikscore-macos-x86_64              | for macOS on 64-bit Intel Devices            | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-macos-x86_64.zip              |
+| quikscore-windows-x86_64            | for Windows on 64-bit x86 Devices            | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-windows-x86_64.zip            |
+| quikscore-windows-x86_64-installers | Installers for Windows on 64-bit x86 Devices | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-windows-x86_64-installers.zip |
 
 ## Environment setup
 
