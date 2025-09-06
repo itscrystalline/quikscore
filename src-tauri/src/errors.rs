@@ -102,14 +102,17 @@ pub enum OcrError {
         "No `tesseract` command found in PATH. Please install tesseract first before using OCR."
     )]
     NoTesseract,
-    #[error("tessdata path is not unicode. somehow.")]
+    #[cfg(not(feature = "compile-tesseract"))]
+    #[error("tessdata path is not unicode")]
     NoUnicode,
+
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
     #[error("Invalid image size: {0}")]
     InvalidSize(#[from] std::num::TryFromIntError),
     #[error("Cannot encode image: {0}")]
     InvalidImage(#[from] opencv::Error),
+
     #[cfg(feature = "compile-tesseract")]
     #[error("Tesseract: {0}")]
     Tesseract(#[from] tesseract::TesseractError),

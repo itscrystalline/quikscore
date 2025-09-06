@@ -650,8 +650,49 @@ fn extract_user_information(
 
     let name_string = image_to_string(&name, ocr)?;
     let subject_string = image_to_string(&subject_name, ocr)?;
-    let exam_room_string = image_to_string(&exam_room, ocr)?;
-    let seat_string = image_to_string(&exam_seat, ocr)?;
+    let exam_room_string = image_to_string(&exam_room, ocr)?
+        .chars()
+        .filter_map(|c| match c {
+            c if c.is_ascii_digit() => Some(c),
+            'O' | 'o' => Some('0'),
+            'l' | 'I' | '|' => Some('1'),
+            'Z' => Some('2'),
+            'S' => Some('5'),
+            'G' => Some('6'),
+            'B' => Some('8'),
+            _ => None,
+        })
+        .collect::<String>();
+    let seat_string = {
+        let mut code: Option<char> = None;
+        let mut number: u8 = 0;
+        image_to_string(&exam_seat, ocr)?
+            .chars()
+            .filter(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+            .enumerate()
+            .for_each(|(i, c)| {
+                if i == 0 {
+                    _ = code.get_or_insert(match c {
+                        '0' => 'O',
+                        c => c,
+                    });
+                } else {
+                    let num = match c {
+                        'O' => 0,
+                        'I' => 1,
+                        'Z' => 2,
+                        'S' => 5,
+                        'G' => 6,
+                        'B' => 8,
+                        c if c.is_ascii_digit() => c.to_digit(10).unwrap() as u8,
+                        _ => 0,
+                    };
+                    number = number * 10 + num;
+                }
+            });
+
+        format!("{}{:02}", code.unwrap_or_default(), number)
+    };
 
     Ok((name_string, subject_string, exam_room_string, seat_string))
 }
@@ -681,55 +722,6 @@ fn extract_subject_student_from_written_field(
     student_id_mat: Mat,
     ocr: &OcrEngine,
 ) -> Result<(String, String), SheetError> {
-    fn remove_inbetween_bars(src: Mat, cells: u8) -> opencv::Result<Mat> {
-        let mut width = 0;
-        let height = src.rows();
-        let numbers = (0..cells)
-            .map(|idx| {
-                roi_range_frac_ref(
-                    &src,
-                    ((idx as f64 / cells as f64) + 0.014492754)
-                        ..=(((idx as f64 + 1.0) / cells as f64) - 0.014492754),
-                    0.0..=1.0,
-                )
-                .inspect(|mat| {
-                    width += mat.cols();
-                })
-            })
-            .collect::<opencv::Result<Vec<_>>>()?;
-
-        let mut stitched = Mat::new_rows_cols_with_default(
-            height,
-            width,
-            opencv::core::CV_8UC1,
-            opencv::core::Scalar::all(1.0),
-        )?;
-
-        let mut start = 0;
-        numbers
-            .into_iter()
-            .try_for_each(|cell| -> opencv::Result<()> {
-                let width = cell.cols();
-                let mut dst = stitched.roi_mut(Rect_ {
-                    x: start,
-                    y: 0,
-                    width,
-                    height,
-                })?;
-                cell.copy_to(&mut dst)?;
-                start += width;
-                opencv::Result::Ok(())
-            })?;
-
-        Ok(stitched)
-    }
-
-    // safe_imwrite("temp/debug_subject_f.png", &subject_id_mat)?;
-    // safe_imwrite("temp/debug_student_f.png", &student_id_mat)?;
-
-    let subject_id_mat = remove_inbetween_bars(subject_id_mat, 3)?;
-    let student_id_mat = remove_inbetween_bars(student_id_mat, 9)?;
-
     // safe_imwrite("temp/debug_subject_r.png", &subject_id_mat)?;
     // safe_imwrite("temp/debug_student_r.png", &student_id_mat)?;
 
