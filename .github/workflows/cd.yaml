@@ -129,14 +129,22 @@ jobs:
         echo "TESSERACT_DLL_PATH=$env:MSYS2\ucrt64\bin" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
         echo "TESSERACT_LINK_LIBS=tesseract" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
+    - name: Copy required dlls
+      shell: msys2 {0}
+      run: |
+        cp /ucrt64/bin/libtesseract-5.5.dll src-tauri/
+        LIBS=`ldd libtesseract-5.5.dll | grep /ucrt64 | awk '{ print $3 }'`
+        for lib in $LIBS; do cp $lib src-tauri/; done
+
     - name: Include dlls in Tauri config
       run: |
         $jsonPath = "src-tauri/tauri.conf.json"
         $json = Get-Content $jsonPath -Raw | ConvertFrom-Json
 
+        $dlls = Get-ChildItem -Path src-tauri -Filter *.dll -File
+        $json.bundle.resources += $dlls.Name
+
         $json.bundle.resources += "opencv_world4110.dll"
-        $json.bundle.resources += "libleptonica-6.dll"
-        $json.bundle.resources += "libtesseract-5.5.dll"
 
         $json | ConvertTo-Json -Depth 10 | Set-Content $jsonPath
 
@@ -148,12 +156,19 @@ jobs:
     - name: Group Binary Bundle
       run: |
         mkdir -p src-tauri/target/release/bin
-        mv src-tauri/target/release/*.* src-tauri/target/release/bin/
+        mv src-tauri/target/release/*.dll src-tauri/target/release/bin/
+        mv src-tauri/target/release/quikscore.exe src-tauri/target/release/bin/
 
-    - name: Upload Windows artifact
+    - name: Upload Windows artifact (Binary bundle)
       uses: actions/upload-artifact@v4
       with:
         name: quikscore-windows-x86_64
         path: |
           src-tauri/target/release/bin
+
+    - name: Upload Windows artifact (Installers)
+      uses: actions/upload-artifact@v4
+      with:
+        name: quikscore-windows-x86_64-installers
+        path: |
           src-tauri/target/release/bundle
