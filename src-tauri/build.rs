@@ -1,24 +1,45 @@
+#[cfg(windows)]
+use std::path::PathBuf;
+
 fn main() {
     #[allow(unused_mut)]
     let mut attributes = tauri_build::Attributes::new();
 
     #[cfg(windows)]
     {
-        let opencv_dll = std::env::current_dir()
-            .unwrap()
-            .join("opencv_world4110.dll");
-        if !std::fs::exists(&opencv_dll).is_ok_and(|f| f) {
-            println!("opencv_world4110.dll not found in src-tauri/, searching PATH...");
-            match which::which_all("opencv_world4110.dll")
-                .ok()
-                .and_then(|mut iter| iter.next())
-            {
-                Some(path) => {
-                    println!("found opencv_world4110.dll in {}.", path.display());
-                    std::fs::copy(path, opencv_dll).expect("should be able to copy");
-                }
-                None => {
-                    panic!("opencv_world4110.dll not found in either `src-tauri` or PATH. Provide one in `src-tauri` or add a path that contains it to PATH.");
+        let dlls = [
+            "opencv_world4110.dll",
+            "libleptonica-6.dll",
+            "libtesseract-5.5.dll",
+        ];
+        let src_dirs_env = [
+            "OPENCV_DLL_PATH",
+            "LEPTONICA_DLL_PATH",
+            "TESSERACT_DLL_PATH",
+        ];
+
+        for (env, dll) in src_dirs_env.into_iter().zip(dlls) {
+            let dll_path = std::env::current_dir().unwrap().join(dll);
+            if !std::fs::exists(&dll_path).is_ok_and(|f| f) {
+                println!("{dll} not found in src-tauri/, searching in {env}...");
+                let dir = PathBuf::from(std::env::var(env).expect("can resolve path")).join(dll);
+                if dir.exists() {
+                    println!("found {dll} in {}.", dir.display());
+                    std::fs::copy(dir, dll_path).expect("should be able to copy");
+                } else {
+                    println!(
+                        "{dll} not found in {}/, searching in PATH...",
+                        dir.display()
+                    );
+                    match which::which_all(dll).ok().and_then(|mut iter| iter.next()) {
+                        Some(path) => {
+                            println!("found {dll} in {}.", path.display());
+                            std::fs::copy(path, dll_path).expect("should be able to copy");
+                        }
+                        None => {
+                            panic!("{dll} not found in any of `src-tauri` or {env} or PATH. Provide one in `src-tauri` or add a path that contains it to {env}/PATH.");
+                        }
+                    }
                 }
             }
         }

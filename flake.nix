@@ -72,7 +72,6 @@
           cargoLock = {
             lockFile = finalAttrs.src + "/${finalAttrs.cargoRoot}/Cargo.lock";
           };
-          cargoBuildFeatures = ["avx512"];
 
           buildAndTestSubdir = "src-tauri";
           # useNextest = true;

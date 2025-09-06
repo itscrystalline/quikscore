@@ -82,7 +82,6 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
-
     - name: Set up Corepack 
       uses: actions/setup-node@v4
       with:
@@ -98,41 +97,58 @@ jobs:
       with: 
         toolchain: nightly-2025-06-08
 
+    - name: Install MSYS2 & Tesseract/Leptonica
+      uses: msys2/setup-msys2@v2
+      id: msys2
+      with:
+        msystem: UCRT64
+        update: true
+        install: >-
+          mingw-w64-ucrt-x86_64-tesseract-ocr
+
     - name: Install OpenCV & Other dependencies (cmake, llvm)
       run: | 
         choco install opencv cmake -y
         choco install llvm --version=19.1.7 --force
 
     - name: Set up Environment variables
+      env:
+        MSYS2: ${{ steps.msys2.outputs.msys2-location }}
       run: |
         echo "RUSTFLAGS=-Z threads=8" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
         echo "OPENCV_INCLUDE_PATHS=C:\tools\opencv\build\include" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-        echo "OPENCV_LINK_LIBS=+opencv_world4110" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
-        echo "OPENCV_LINK_PATHS=+C:\tools\opencv\build\x64\vc16\lib" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "OPENCV_LINK_PATHS=C:\tools\opencv\build\x64\vc16\lib" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "OPENCV_DLL_PATH=C:\tools\opencv\build\x64\vc16\bin" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "OPENCV_LINK_LIBS=opencv_world4110" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "LEPTONICA_INCLUDE_PATH=$env:MSYS2\ucrt64\include" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "LEPTONICA_LINK_PATHS=$env:MSYS2\ucrt64\lib" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "LEPTONICA_DLL_PATH=$env:MSYS2\ucrt64\bin" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "LEPTONICA_LINK_LIBS=leptonica" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "TESSERACT_INCLUDE_PATHS=$env:MSYS2\ucrt64\include" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "TESSERACT_LINK_PATHS=$env:MSYS2\ucrt64\lib" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "TESSERACT_DLL_PATH=$env:MSYS2\ucrt64\bin" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+        echo "TESSERACT_LINK_LIBS=tesseract" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
-    - name: Include OpenCV dll in Tauri config
+    - name: Include dlls in Tauri config
       run: |
-        cp C:\tools\opencv\build\x64\vc16\bin\opencv_world4110.dll src-tauri\opencv_world4110.dll
-
         $jsonPath = "src-tauri/tauri.conf.json"
         $json = Get-Content $jsonPath -Raw | ConvertFrom-Json
 
-        # Add item to the list
         $json.bundle.resources += "opencv_world4110.dll"
+        $json.bundle.resources += "libleptonica-6.dll"
+        $json.bundle.resources += "libtesseract-5.5.dll"
 
-        # Write the modified object back to the file as JSON
         $json | ConvertTo-Json -Depth 10 | Set-Content $jsonPath
 
     - name: Build Tauri app
       run: |
         yarn install
-        yarn tauri build --features avx512
+        yarn tauri build
 
     - name: Group Binary Bundle
       run: |
         mkdir -p src-tauri/target/release/bin
-        mv src-tauri/target/release/opencv_world4110.dll src-tauri/target/release/bin/opencv_world4110.dll
-        mv src-tauri/target/release/quikscore.exe src-tauri/target/release/bin/quikscore.exe
+        mv src-tauri/target/release/* src-tauri/target/release/bin/
 
     - name: Upload Windows artifact
       uses: actions/upload-artifact@v4
