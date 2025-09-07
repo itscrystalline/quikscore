@@ -10,13 +10,14 @@ prebuilt versions of `quikscore` built by our CI are available
 [here](https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main?preview)
 or in the table below.
 
-| Version                  | Explaination                       | Link                                                                                              |
-| ------------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------- |
-| quikscore-linux-aarch64  | for Linux on 64-bit ARM Devices    | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-linux-aarch64.zip  |
-| quikscore-linux-x86_64   | for Linux on 64-bit x86 Devices    | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-linux-x86_64.zip   |
-| quikscore-macos-aarch64  | for macOS on Apple Silicon Devices | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-macos-aarch64.zip  |
-| quikscore-macos-x86_64   | for macOS on 64-bit Intel Devices  | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-macos-x86_64.zip   |
-| quikscore-windows-x86_64 | for Windows on 64-bit x86 Devices  | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-windows-x86_64.zip |
+| Version                             | Explaination                                 | Link                                                                                                         |
+| ----------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| quikscore-linux-aarch64             | for Linux on 64-bit ARM Devices              | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-linux-aarch64.zip             |
+| quikscore-linux-x86_64              | for Linux on 64-bit x86 Devices              | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-linux-x86_64.zip              |
+| quikscore-macos-aarch64             | for macOS on Apple Silicon Devices           | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-macos-aarch64.zip             |
+| quikscore-macos-x86_64              | for macOS on 64-bit Intel Devices            | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-macos-x86_64.zip              |
+| quikscore-windows-x86_64            | for Windows on 64-bit x86 Devices            | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-windows-x86_64.zip            |
+| quikscore-windows-x86_64-installers | Installers for Windows on 64-bit x86 Devices | https://nightly.link/itscrystalline/quikscore/workflows/cd.yaml/main/quikscore-windows-x86_64-installers.zip |
 
 ## Environment setup
 
@@ -59,6 +60,18 @@ next, install [msys2](https://www.msys2.org/).
 > [direct link for x64 windows](https://github.com/msys2/msys2-installer/releases/download/nightly-x86_64/msys2-x86_64-latest.exe)
 >
 > if you use `winget`, get it from `winget install MSYS2.MSYS2`.
+
+next, open the **UCRT64** version of msys2. it's the yellow icon. when you open it up, somewhere in the shell should day `UCRT64`.
+
+then, run the following to update the system and install the dependencies.
+
+```shell
+pacman -Syy
+pacman -Syu
+pacman -Syu # just to make sure everything is updated
+pacman -S mingw-w64-ucrt-x86_64-tesseract-ocr mingw-w64-ucrt-x86_64-openssl
+```
+when pacman asks to confirm, press `enter`.
 
 after that, you need to define 12 environment variables. if you use powershell,
 paste the script below. if not, create them manually.
