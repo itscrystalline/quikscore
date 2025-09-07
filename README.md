@@ -61,6 +61,18 @@ next, install [msys2](https://www.msys2.org/).
 >
 > if you use `winget`, get it from `winget install MSYS2.MSYS2`.
 
+next, open the **UCRT64** version of msys2. it's the yellow icon. when you open it up, somewhere in the shell should day `UCRT64`.
+
+then, run the following to update the system and install the dependencies.
+
+```shell
+pacman -Syy
+pacman -Syu
+pacman -Syu # just to make sure everything is updated
+pacman -S mingw-w64-ucrt-x86_64-tesseract-ocr mingw-w64-ucrt-x86_64-openssl
+```
+when pacman asks to confirm, press `enter`.
+
 after that, you need to define 12 environment variables. if you use powershell,
 paste the script below. if not, create them manually.
 
