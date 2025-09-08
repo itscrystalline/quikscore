@@ -10,6 +10,7 @@ use crate::{
     state::{AnswerUpload, CsvExport, KeyUpload, LoginRequest, LoginResponse},
     storage, AppState,
 };
+use anyhow::Ok;
 use log::{debug, info};
 use reqwest::Client;
 
@@ -136,7 +137,6 @@ pub fn enter_database_information(app: AppHandle, uri: String, name: String) {
 #[tauri::command]
 async fn login<R: Runtime>(app: tauri::AppHandle<R>, username: String, password: String) -> Result<bool, String> {
     let client = Client::new();
-
     let res = client
         .post("http://localhost:5000/login")
         .json(&LoginRequest { username, password })
@@ -144,11 +144,6 @@ async fn login<R: Runtime>(app: tauri::AppHandle<R>, username: String, password:
         .await
         .map_err(|e| e.to_string())?;
 
-    if !res.status().is_success() {
-        return Err(format!("Server error: {}", res.status()));
-    }
-
     let body: LoginResponse = res.json().await.map_err(|e| e.to_string())?;
-
     Ok(body.success)
 }
