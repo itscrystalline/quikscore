@@ -135,7 +135,7 @@ pub fn enter_database_information(app: AppHandle, uri: String, name: String) {
 }
 
 #[tauri::command]
-async fn login<R: Runtime>(app: tauri::AppHandle<R>, username: String, password: String) -> Result<bool, String> {
+pub async fn login(app: AppHandle, username: String, password: String) -> Result<bool, String> {
     let client = Client::new();
     let res = client
         .post("http://localhost:5000/login")
