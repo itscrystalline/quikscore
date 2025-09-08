@@ -7,6 +7,11 @@ fn main() {
 
     #[cfg(windows)]
     {
+        // bindgen args
+        println!("cargo:rustc-env=TARGET=x86_64-pc-windows-gnu");
+        println!("cargo:rustc-env=BINDGEN_EXTRA_CLANG_ARGS=-target x86_64-pc-windows-gnu");
+
+        // copy dlls
         let dlls = [
             "opencv_world4110.dll",
             "libleptonica-6.dll",
