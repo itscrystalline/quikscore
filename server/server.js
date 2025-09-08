@@ -16,10 +16,10 @@ app.post("/login", (req, res) => {
     const { username, password } = req.body;
 
     if(username == ADMIN_USERNAME && password == ADMIN_PASSWORD) {
-        res.json({success: true, message: "SUCCESS!"});
+        res.status(200).json({success: true, message: "SUCCESS!"});
         return;
     }
-    res.json({success: false, message: "Invalid Credentials, please contact admin"});
+    res.status(400).json({success: false, message: "Invalid Credentials, please contact admin"});
 })
 
 app.listen(PORT, () => {
