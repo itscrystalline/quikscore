@@ -129,6 +129,18 @@ impl Display for AppStatePipeline {
     }
 }
 
+#[derive(Serialize)]
+pub struct LoginRequest {
+    pub username: String,
+    pub password: String,
+}
+
+#[derive(Deserialize)]
+pub struct LoginResponse {
+    pub success: bool,
+    pub error: Option<String>,
+}
+
 impl AppState {
     pub fn get_scored_answers<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,

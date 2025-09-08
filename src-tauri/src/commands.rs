@@ -7,10 +7,11 @@ use crate::{
     image::{upload_key_image_impl, upload_sheet_images_impl},
     ocr::OcrEngine,
     scoring::upload_weights_impl,
-    state::{AnswerUpload, CsvExport, KeyUpload},
+    state::{AnswerUpload, CsvExport, KeyUpload, LoginRequest, LoginResponse},
     storage, AppState,
 };
 use log::{debug, info};
+use reqwest::Client;
 
 use tauri::{ipc::Channel, WebviewWindowBuilder};
 use tauri::{AppHandle, Manager};
@@ -130,4 +131,24 @@ pub fn export_csv(app: AppHandle, channel: Channel<CsvExport>) {
 pub fn enter_database_information(app: AppHandle, uri: String, name: String) {
     info!("Enter Database Information");
     AppState::set_mongodb(&app, uri, name);
+}
+
+#[tauri::command]
+async fn login<R: Runtime>(app: tauri::AppHandle<R>, username: String, password: String) -> Result<bool, String> {
+    let client = Client::new();
+
+    let res = client
+        .post("http://localhost:5000/login")
+        .json(&LoginRequest { username, password })
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !res.status().is_success() {
+        return Err(format!("Server error: {}", res.status()));
+    }
+
+    let body: LoginResponse = res.json().await.map_err(|e| e.to_string())?;
+
+    Ok(body.success)
 }
