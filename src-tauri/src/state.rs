@@ -516,7 +516,7 @@ impl AppState {
         if let AppStatePipeline::Scored { answer_sheets, .. } = &state.state {
             answer_sheets
                 .get(&id)
-                .and_then(|(mat, _, _)| image::mat_to_base64_png(mat).ok())
+                .and_then(|(mat, _, _)| image::mat_to_base64_webp(mat).ok())
         } else {
             None
         }

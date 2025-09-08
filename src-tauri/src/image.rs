@@ -198,9 +198,20 @@ fn handle_upload(
 
 pub fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
     let mut buf: Vector<u8> = Vec::new().into();
-    imencode_def(".png", mat, &mut buf)?;
+    imgcodecs::imencode_def(".png", mat, &mut buf)?;
     let base64 = base64::prelude::BASE64_STANDARD.encode(&buf);
     Ok(format!("data:image/png;base64,{base64}"))
+}
+pub fn mat_to_base64_webp(mat: &Mat) -> Result<String, opencv::Error> {
+    let mut buf: Vector<u8> = Vec::new().into();
+    imgcodecs::imencode(
+        ".webp",
+        mat,
+        &mut buf,
+        &vec![imgcodecs::IMWRITE_WEBP_QUALITY, 80].into(),
+    )?;
+    let base64 = base64::prelude::BASE64_STANDARD.encode(&buf);
+    Ok(format!("data:image/webp;base64,{base64}"))
 }
 
 fn read_from_path(path: FilePath) -> Result<Mat, UploadError> {
