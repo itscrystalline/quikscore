@@ -506,6 +506,21 @@ impl AppState {
         };
         state.options.mongo = mongo_enum;
     }
+
+    pub fn get_base64_for_id<R: Runtime, A: Emitter<R> + Manager<R>>(
+        app: &A,
+        id: String,
+    ) -> Option<String> {
+        let mutex = app.state::<StateMutex>();
+        let state = mutex.lock().expect("poisoned");
+        if let AppStatePipeline::Scored { answer_sheets, .. } = &state.state {
+            answer_sheets
+                .get(&id)
+                .and_then(|(mat, _, _)| image::mat_to_base64_png(mat).ok())
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, Clone)]

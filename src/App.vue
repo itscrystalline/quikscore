@@ -10,6 +10,7 @@ import {
   AppState,
 } from "./types";
 import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
+import ImagePreview from "./components/ImagePreview.vue";
 import { listen } from "@tauri-apps/api/event";
 
 type TimeElapsed = | "notCounting" | number;
@@ -183,6 +184,8 @@ const elapsed = ref<TimeElapsed>("notCounting");
 const mongoDbUri = ref("");
 const mongoDbName = ref("");
 
+const previewingImage = ref<string | undefined>(undefined);
+
 async function enterDatabaseInfo() {
   try {
     await invoke("enter_database_information", { uri: mongoDbUri.value, name: mongoDbName.value });
@@ -258,10 +261,21 @@ async function exportCsv() {
   csvExportChannel.onmessage = csvExportEventHandler;
   await invoke("export_csv", { channel: csvExportChannel });
 }
+
+async function image_from_id(id: string) {
+  const img: string | undefined = await invoke("image_of", { id });
+  if (!img) {
+    console.error(`image for ${id} could not be found.`)
+  }
+  // FIXME: this leaks memory aparrently 😭
+  previewingImage.value = img;
+}
 </script>
 
 <template>
   <main class="container">
+    <ImagePreview :id="previewingImage" />
+
     <div class="logo">
       <img class="logonana" src="/src/assets/logo_fit.png" alt="Quikscore logo">
       <span class="logo-text"><span class="q-letter"></span>uikscore</span>
@@ -355,7 +369,7 @@ async function exportCsv() {
     <div class="card">
       <div v-for="{ result, data } in answerImages" class="pad">
         <div v-if="result == 'ok'" class="result">
-          <img :src="data.base64"></img>
+          <img :src="data.base64" @click="image_from_id(data.studentId)"></img>
           <div class="stats">
             <p>ID {{ data.studentId }}</p>
             <p>score: {{ data.score }}/{{ data.maxScore }}</p>
