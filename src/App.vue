@@ -2,12 +2,13 @@
 import { Ref, ref, watch } from "vue";
 import { invoke, Channel } from "@tauri-apps/api/core";
 import {
-  AnswerScoreResult,
   AnswerUpload,
   KeyUpload,
   CsvExport,
   ModelDownload,
   AppState,
+  BlobbedAnswerScoreResult,
+  AnswerScoreResult,
 } from "./types";
 import StackedProgressBar, { ProgressBarProps } from "./components/StackedProgressBar.vue";
 import ImagePreview from "./components/ImagePreview.vue";
@@ -55,6 +56,7 @@ const keyEventHandler = (msg: KeyUpload): void => {
       break;
 
     case "clearImage":
+      URL.revokeObjectURL(keyImage.value);
       keyImage.value = "";
       keyStatus.value = "";
       keyProgressBar.value = undefined;
@@ -66,7 +68,7 @@ const keyEventHandler = (msg: KeyUpload): void => {
       break;
 
     case "image":
-      keyImage.value = msg.data.base64;
+      keyImage.value = bytesToBlobUrl(msg.data.bytes);
       keyStatus.value = "";
       keyProgressBar.value = undefined;
       break;
@@ -90,6 +92,40 @@ const keyEventHandler = (msg: KeyUpload): void => {
   }
 }
 const answerEventHandler = (msg: AnswerUpload): void => {
+  const blobify = (old: AnswerScoreResult[]): BlobbedAnswerScoreResult[] => {
+    return old.map(o => {
+      switch (o.result) {
+        case "ok":
+          return {
+            result: "ok",
+            data: {
+              studentId: o.data.studentId,
+              blobUrl: bytesToBlobUrl(o.data.bytes),
+              score: o.data.score,
+              maxScore: o.data.maxScore,
+              correct: o.data.correct,
+              incorrect: o.data.incorrect,
+            },
+          };
+
+        case "error":
+          return {
+            result: "error",
+            data: {
+              error: o.data.error
+            }
+          };
+      }
+    });
+  };
+  const clearBlobs = (old: BlobbedAnswerScoreResult[]): void => {
+    old.forEach(o => {
+      if (o.result == "ok") {
+        URL.revokeObjectURL(o.data.blobUrl);
+      }
+    });
+  }
+
   switch (msg.event) {
     case "cancelled":
       answerStatus.value = "User cancelled upload";
@@ -98,6 +134,8 @@ const answerEventHandler = (msg: AnswerUpload): void => {
       break;
     case "clear":
       answerStatus.value = "";
+      clearBlobs(answerImages.value);
+      clearIdMappings()
       answerImages.value = [];
       answerProgressBar.value = undefined;
       elapsed.value = "notCounting";
@@ -122,7 +160,7 @@ const answerEventHandler = (msg: AnswerUpload): void => {
       break;
     case "done":
       answerStatus.value = "";
-      answerImages.value = msg.data.uploaded;
+      answerImages.value = blobify(msg.data.uploaded);
       answerProgressBar.value = undefined;
       elapsed.value = "notCounting";
       break;
@@ -175,7 +213,7 @@ const canCancelSheetUpload = () => appState.value == "Scoring";
 const canClearSheets = () => appState.value == "Scored";
 const canExportCsv = () => appState.value == "Scored";
 
-const answerImages = ref<AnswerScoreResult[]>([]);
+const answerImages = ref<BlobbedAnswerScoreResult[]>([]);
 const answerStatus = ref("");
 const answerProgressBar = ref<undefined | ProgressBarProps>(undefined);
 
@@ -262,19 +300,37 @@ async function exportCsv() {
   await invoke("export_csv", { channel: csvExportChannel });
 }
 
+const idToPreview = new Map<string, string>();
 async function image_from_id(id: string) {
-  const img: string | undefined = await invoke("image_of", { id });
-  if (!img) {
-    console.error(`image for ${id} could not be found.`)
+  const url = idToPreview.get(id);
+  if (url) {
+    previewingImage.value = url;
+  } else {
+    const img: number[] | undefined = await invoke("image_of", { id });
+    if (!img) {
+      console.error(`image for ${id} could not be found.`)
+      return;
+    }
+    const blobUrl = bytesToBlobUrl(img);
+    idToPreview.set(id, blobUrl);
+
+    previewingImage.value = blobUrl;
   }
-  // FIXME: this leaks memory aparrently 😭
-  previewingImage.value = img;
+}
+function clearIdMappings() {
+  idToPreview.forEach((v, _k, _m) => URL.revokeObjectURL(v));
+  idToPreview.clear();
+}
+
+function bytesToBlobUrl(bytes: number[]): string {
+  const blob = new Blob([new Uint8Array(bytes)], { type: "image/webp" });
+  return URL.createObjectURL(blob);
 }
 </script>
 
 <template>
   <main class="container">
-    <ImagePreview :id="previewingImage" />
+    <ImagePreview :id="previewingImage" @close="previewingImage = undefined" />
 
     <div class="logo">
       <img class="logonana" src="/src/assets/logo_fit.png" alt="Quikscore logo">
@@ -369,7 +425,7 @@ async function image_from_id(id: string) {
     <div class="card">
       <div v-for="{ result, data } in answerImages" class="pad">
         <div v-if="result == 'ok'" class="result">
-          <img :src="data.base64" @click="image_from_id(data.studentId)"></img>
+          <img :src="data.blobUrl" @click="image_from_id(data.studentId)"></img>
           <div class="stats">
             <p>ID {{ data.studentId }}</p>
             <p>score: {{ data.score }}/{{ data.maxScore }}</p>

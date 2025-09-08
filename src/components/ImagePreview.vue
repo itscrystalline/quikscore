@@ -1,9 +1,10 @@
 <script setup lang="ts">
 const props = defineProps<{ id: string | undefined }>();
+const emit = defineEmits<{ (e: "close"): void }>();
 </script>
 
 <template>
-  <div class="background" v-if="props.id">
+  <div class="background" v-if="props.id" @click="$emit('close')">
     <img :src="props.id" />
   </div>
 

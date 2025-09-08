@@ -143,7 +143,7 @@ impl AppState {
     pub fn upload_key<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,
         channel: Channel<KeyUpload>,
-        base64_image: String,
+        base64_image: Vec<u8>,
         image: Mat,
         key: AnswerKeySheet,
     ) {
@@ -158,7 +158,7 @@ impl AppState {
                 signal!(
                     channel,
                     KeyUpload::Image {
-                        base64: base64_image
+                        bytes: base64_image
                     }
                 );
             }
@@ -179,7 +179,7 @@ impl AppState {
                 signal!(
                     channel,
                     KeyUpload::Image {
-                        base64: base64_image
+                        bytes: base64_image
                     }
                 );
             }
@@ -359,7 +359,7 @@ impl AppState {
     pub fn upload_answer_sheets<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,
         channel: &Channel<AnswerUpload>,
-        result: Vec<Result<(String, Mat, AnswerSheet), UploadError>>,
+        result: Vec<Result<(Vec<u8>, Mat, AnswerSheet), UploadError>>,
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");
@@ -371,9 +371,9 @@ impl AppState {
                 ..
             } => {
                 signal!(channel, AnswerUpload::AlmostDone);
-                type Base64MatSheetResultMaxScore =
-                    (String, Mat, AnswerSheet, AnswerSheetResult, u32);
-                let scored: Vec<Result<Base64MatSheetResultMaxScore, UploadError>> = result
+                type ImageMatSheetResultMaxScore =
+                    (Vec<u8>, Mat, AnswerSheet, AnswerSheetResult, u32);
+                let scored: Vec<Result<ImageMatSheetResultMaxScore, UploadError>> = result
                     .into_par_iter()
                     .map(|r| {
                         r.and_then(|t| {
@@ -405,11 +405,11 @@ impl AppState {
                             max_score,
                         )) => {
                             let img_small = image::resize_relative_img(mat, 0.4)
-                                .and_then(|m| image::mat_to_base64_png(&m));
+                                .and_then(|m| image::mat_to_webp(&m));
                             match img_small {
-                                Ok(base64) => AnswerScoreResult::Ok {
+                                Ok(bytes) => AnswerScoreResult::Ok {
                                     student_id: student_id.clone(),
-                                    base64,
+                                    bytes,
                                     score: *score,
                                     max_score: *max_score - weights.max_score_deduction(key),
                                     correct: *correct,
@@ -510,13 +510,13 @@ impl AppState {
     pub fn get_base64_for_id<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,
         id: String,
-    ) -> Option<String> {
+    ) -> Option<Vec<u8>> {
         let mutex = app.state::<StateMutex>();
         let state = mutex.lock().expect("poisoned");
         if let AppStatePipeline::Scored { answer_sheets, .. } = &state.state {
             answer_sheets
                 .get(&id)
-                .and_then(|(mat, _, _)| image::mat_to_base64_webp(mat).ok())
+                .and_then(|(mat, _, _)| image::mat_to_webp(mat).ok())
         } else {
             None
         }
@@ -607,7 +607,7 @@ pub enum KeyUpload {
     ClearWeights,
     UploadedWeights,
     MissingWeights,
-    Image { base64: String },
+    Image { bytes: Vec<u8> },
     Error { error: String },
 }
 #[derive(Clone, Serialize, Deserialize, Debug)]
@@ -656,7 +656,7 @@ pub enum CsvExport {
 pub enum AnswerScoreResult {
     Ok {
         student_id: String,
-        base64: String,
+        bytes: Vec<u8>,
         score: u32,
         max_score: u32,
         correct: u32,

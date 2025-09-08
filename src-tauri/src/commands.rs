@@ -133,6 +133,6 @@ pub fn enter_database_information(app: AppHandle, uri: String, name: String) {
 }
 
 #[tauri::command]
-pub fn image_of(app: AppHandle, id: String) -> Option<String> {
+pub fn image_of(app: AppHandle, id: String) -> Option<Vec<u8>> {
     AppState::get_base64_for_id(&app, id)
 }
