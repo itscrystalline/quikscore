@@ -425,7 +425,7 @@ function bytesToBlobUrl(bytes: number[]): string {
     <div class="card">
       <div v-for="{ result, data } in answerImages" class="pad">
         <div v-if="result == 'ok'" class="result">
-          <img :src="data.blobUrl" @click="image_from_id(data.studentId)"></img>
+          <img :src="data.blobUrl" @click="image_from_id(data.studentId)" title="Click to Preview Image"></img>
           <div class="stats">
             <p>ID {{ data.studentId }}</p>
             <p>score: {{ data.score }}/{{ data.maxScore }}</p>
@@ -563,6 +563,10 @@ p.credits {
 .result {
   display: flex;
   align-items: start;
+}
+
+.result>img {
+  cursor: zoom-in;
 }
 
 .stats {
