@@ -1,18 +1,36 @@
+
+
 <template>
   <header>
     <img class="logo" src="/src/assets/logo_fit.png" alt="quikscore logo">
     <span class="logo_text">uikscore</span>
   </header>
   <main class="container">
-    <ul id="red_cups" class="red_cup" ref="redCupRef" :class="{ 'move-down': move }">
-      <li v-for="(left, index) in cups" :key="index" class="cup" :class="{ 'cup-raised': raisedCups[index] }"
-        :style="{ left: left + 'px' }" @click="handleCupClick(index)">
-        <img class="element" src="/src/assets/red_cup.png" alt="cup">
-      </li>
-    </ul>
-    <button v-if="showLoginButton" id="login_button" class="button" @click="handleLoginClick" :style="buttonStyle">
-      Login
-    </button>
+    <form class="login_form" @submit.prevent="handleLogin">
+      <div class="form_group">
+        <label for="username">Username</label>
+        <input 
+          v-model="username" 
+          type="text" 
+          id="username" 
+          placeholder="Enter username"
+          required 
+        />
+      </div>
+
+      <div class="form_group">
+        <label for="password">Password</label>
+        <input 
+          v-model="password" 
+          type="password" 
+          id="password" 
+          placeholder="Enter password"
+          required 
+        />
+      </div>
+
+      <button type="submit" class="button">Login</button>
+    </form>
   </main>
 </template>
 
@@ -20,15 +38,12 @@
 :root {
   font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
   font-size: 19px;
-  line-height: 60px;
+  line-height: 1.5;
   font-weight: 400;
-  animation-duration: 0.1s;
 
   color: #cdd6f4;
   background-color: #111827;
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
@@ -68,125 +83,77 @@ header {
   padding-left: 75px;
 }
 
-.red_cup {
-  justify-content: center;
-  width: 360px;
-  height: 200px;
+.login_form {
   display: flex;
-  padding: 0;
-  position: relative;
-  top: -500px;
-  transition: top 0.5s ease;
-  z-index: 2;
-  list-style: none;
-  align-items: center;
+  flex-direction: column;
+  background: #1e293b;
+  padding: 2em;
+  border-radius: 1rem;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+  width: 300px;
+  gap: 1.2em;
 }
 
-.cup {
-  position: absolute;
-  transition: left 0.3s ease, top 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  top: 0;
+.form_group {
+  display: flex;
+  flex-direction: column;
 }
 
-.cup-raised {
-  top: -150px;
-  z-index: 3;
+label {
+  margin-bottom: 0.4em;
+  font-weight: 500;
+  font-size: 0.9em;
+  color: #cdd6f4;
 }
 
-.element {
-  width: 100px;
-  height: auto;
+input {
+  padding: 0.6em;
+  border-radius: 0.5em;
+  border: 1px solid #334155;
+  background: #0f172a;
+  color: #cdd6f4;
+  font-size: 1em;
 }
 
-.red_cup.move-down {
-  top: 5px;
+input:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79,70,229,0.5);
 }
 
 .button {
-  position: absolute;
-  z-index: 1;
+  padding: 0.8em;
+  border: none;
+  border-radius: 0.8em;
+  background: #4f46e5;
+  color: white;
+  font-weight: 600;
+  font-size: 1em;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.button:hover {
+  background: #4338ca;
 }
 </style>
 
 <script setup>
-//fix at w:380px h:480px
-//import { appWindow, LogicalSize } from '@tauri-apps/api/window'
+import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { ref, onMounted, computed } from 'vue'
-//appWindow.setResizable(false)
-//appWindow.setSize({ width: 380, height: 480 })
 
-const move = ref(false)
-const cups = ref([0, 130, 260])
-const isShuffling = ref(false)
-const targetCupIndex = ref(1)
-const isRevealed = ref(false)
-const result = ref("")
-const buttonZIndex = ref(1)
-const showLoginButton = ref(true)
-const raisedCups = ref([false, false, false])
-let buttonStyle = computed(() => {
-  // Only follow the cup after shuffle is done and button is visible
-  const left = (move.value && showLoginButton.value) ? (cups.value[1] + 35) + 'px' : "145px";
-  const top = '320px';
-  return { left, top, position: 'absolute', zIndex: buttonZIndex.value };
-});
+const username = ref("")
+const password = ref("")
 
-async function authenticate() {
-  await invoke("auth_pass");
-}
-
-const shufflePositions = () => {
-  const newPositions = [...cups.value]
-  for (let i = newPositions.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-      ;[newPositions[i], newPositions[j]] = [newPositions[j], newPositions[i]]
-  }
-  cups.value = newPositions
-  raisedCups.value = Array(cups.value.length).fill(false)
-}
-
-const startShuffle = async (times = 5, delay = 300) => {
-  isShuffling.value = true
-  showLoginButton.value = false 
-  buttonZIndex.value = 1 
-  for (let i = 0; i < times; i++) {
-    shufflePositions()
-    await new Promise(resolve => setTimeout(resolve, delay))
-  }
-  isShuffling.value = false
-  showLoginButton.value = true 
-}
-
-const handleLoginClick = async () => {
-  if (isShuffling.value) return
-  if (result.value == "Yeah") { await authenticate(); return; }
-  showLoginButton.value = false
-  move.value = true
-  isRevealed.value = false
-  result.value = ""
-
-  targetCupIndex.value = Math.floor(Math.random() * 3)
-  await new Promise(resolve => setTimeout(resolve, 500))
-
-  console.log("Start shuffle")
-  startShuffle(6, 300)
-}
-
-const handleCupClick = (clickedIndex) => {
-  if (isShuffling.value || isRevealed.value) return
-
-  isRevealed.value = true
-  raisedCups.value = cups.value.map((_, idx) => idx === clickedIndex)
-
-  if (clickedIndex === targetCupIndex.value) {
-    result.value = "Yeah"
-    showLoginButton.value = true
-    buttonZIndex.value = 10
+async function handleLogin() {
+  let success  = await invoke("login", {
+    username: username.value,
+    password: password.value
+  });
+  if(success) {
+    window.location.href = "/#/"
   } else {
-    result.value = "No"
-    showLoginButton.value = false
+    alert("Invalid username or password")
   }
 }
-
 </script>
