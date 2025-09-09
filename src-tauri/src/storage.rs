@@ -257,8 +257,8 @@ mod unit_tests {
     use std::array;
 
     use crate::{
-        scoring::{CheckedAnswer, CheckedQuestionGroup, ScoreWeights},
-        state::{self, AnswerKeySheet, AppStatePipeline, QuestionGroup},
+        scoring::{CheckedAnswer, CheckedQuestionGroup},
+        state::QuestionGroup,
     };
 
     use super::*;

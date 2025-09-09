@@ -35,6 +35,7 @@ pub fn run() {
             commands::export_csv,
             commands::enter_database_information,
             commands::login,
+            commands::image_of,
         ])
         .setup(|app| {
             app.manage(Mutex::new(AppState::default()));

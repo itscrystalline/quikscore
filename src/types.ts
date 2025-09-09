@@ -33,7 +33,7 @@ export type KeyUpload =
   | {
       event: "image";
       data: {
-        base64: string;
+        bytes: number[];
       };
     }
   | {
@@ -75,7 +75,24 @@ export type AnswerScoreResult =
       result: "ok";
       data: {
         studentId: string;
-        base64: string;
+        bytes: number[];
+        score: number;
+        maxScore: number;
+        correct: number;
+        incorrect: number;
+      };
+    }
+  | {
+      result: "error";
+      data: { error: string };
+    };
+
+export type BlobbedAnswerScoreResult =
+  | {
+      result: "ok";
+      data: {
+        studentId: string;
+        blobUrl: string;
         score: number;
         maxScore: number;
         correct: number;

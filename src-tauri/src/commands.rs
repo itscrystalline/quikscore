@@ -147,3 +147,8 @@ pub async fn login(app: AppHandle, username: String, password: String) -> Result
     let body: LoginResponse = res.json().await.map_err(|e| e.to_string())?;
     Ok(body.success)
 }
+
+#[tauri::command]
+pub fn image_of(app: AppHandle, id: String) -> Option<Vec<u8>> {
+    AppState::get_base64_for_id(&app, id)
+}
