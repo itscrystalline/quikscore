@@ -359,7 +359,7 @@ impl AppState {
     pub fn upload_answer_sheets<R: Runtime, A: Emitter<R> + Manager<R>>(
         app: &A,
         channel: &Channel<AnswerUpload>,
-        result: Vec<Result<(Vec<u8>, Mat, AnswerSheet), UploadError>>,
+        result: Vec<image::ResultOfImageMatSheet>,
     ) {
         let mutex = app.state::<StateMutex>();
         let mut state = mutex.lock().expect("poisoned");

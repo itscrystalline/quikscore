@@ -81,7 +81,7 @@ pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     }
 }
 
-type ResultOfImageMatSheet = Result<(Vec<u8>, Mat, AnswerSheet), UploadError>;
+pub type ResultOfImageMatSheet = Result<(Vec<u8>, Mat, AnswerSheet), UploadError>;
 
 pub enum ProcessingState {
     Starting,
