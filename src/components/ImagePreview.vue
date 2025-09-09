@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const props = defineProps<{ id: string | undefined }>();
-const emit = defineEmits<{ (e: "close"): void }>();
+defineEmits<{ (e: "close"): void }>();
 </script>
 
 <template>

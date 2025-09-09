@@ -542,9 +542,13 @@ impl AnswerSheet {
 
 impl AnswerSheetResult {
     pub fn write_score_marks(&self, sheet: &mut Mat) -> Result<(), SheetError> {
-        let mut color_overlay = new_mat_copy!(sheet);
-        imgproc::cvt_color_def(sheet, &mut color_overlay, imgproc::COLOR_GRAY2RGBA)?;
-        sheet.clone_from(&color_overlay);
+        // SAFETY: `cvt_color_def` can be done in place.
+        unsafe {
+            sheet.modify_inplace(|i, out| {
+                imgproc::cvt_color_def(i, out, imgproc::COLOR_GRAY2RGBA)
+            })?;
+        }
+        let mut color_overlay = sheet.clone();
 
         const MARKER_TRANSPARENCY: f64 = 0.3;
 
@@ -625,7 +629,7 @@ impl AnswerSheetResult {
             0.0,
             &mut res,
         )?;
-        *sheet = res;
+        imgproc::cvt_color_def(&res, sheet, imgproc::COLOR_RGBA2RGB)?;
 
         Ok(())
     }
