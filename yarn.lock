@@ -30,6 +30,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@babel/types@npm:^7.22.5":
+  version: 7.28.4
+  resolution: "@babel/types@npm:7.28.4"
+  dependencies:
+    "@babel/helper-string-parser": "npm:^7.27.1"
+    "@babel/helper-validator-identifier": "npm:^7.27.1"
+  checksum: 10c0/ac6f909d6191319e08c80efbfac7bd9a25f80cc83b43cd6d82e7233f7a6b9d6e7b90236f3af7400a3f83b576895bcab9188a22b584eb0f224e80e6d4e95f4517
+  languageName: node
+  linkType: hard
+
 "@babel/types@npm:^7.28.0":
   version: 7.28.2
   resolution: "@babel/types@npm:7.28.2"
@@ -1837,6 +1847,7 @@ __metadata:
     vue: "npm:^3.5.13"
     vue-router: "npm:^4.5.1"
     vue-tsc: "npm:^2.1.10"
+    vue-zoomable: "npm:^1.2.8"
   languageName: unknown
   linkType: soft
 
@@ -2396,6 +2407,17 @@ __metadata:
   bin:
     vue-tsc: ./bin/vue-tsc.js
   checksum: 10c0/6c5159c064bc0a8628510bea1f55083a9ad03de35150e1d9ba5811b4e2c3fbc2a4c4d55fbe2d62fcad25c48771f62656e1b47ea5b072386914945707f97d7d65
+  languageName: node
+  linkType: hard
+
+"vue-zoomable@npm:^1.2.8":
+  version: 1.2.8
+  resolution: "vue-zoomable@npm:1.2.8"
+  dependencies:
+    "@babel/types": "npm:^7.22.5"
+  peerDependencies:
+    vue: ^3.2
+  checksum: 10c0/696c9fcff19a945a3e1c1e02c460ad1ccd137620e45d5a1c9eb2cab37de1d0992fcfc0b17d05cede81a626ec0cf73fc2b626e68a40a01248b632f84416ff7902
   languageName: node
   linkType: hard
 

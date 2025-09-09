@@ -1,7 +1,6 @@
 use crate::err_log;
 use crate::ocr::{ImageSource, OcrEngine};
 use log::{debug, warn};
-use opencv::boxed_ref::BoxedRef;
 use std::ops::RangeInclusive;
 use std::sync::{Arc, RwLock};
 use std::{array, mem};
@@ -10,17 +9,19 @@ use tauri::ipc::Channel;
 use crate::errors::{SheetError, UploadError};
 use crate::scoring::{AnswerSheetResult, CheckedAnswer};
 use crate::{signal, state};
-use base64::Engine;
 use itertools::Itertools;
-use opencv::core::{Mat, Moments, Point, Rect2i, Rect_, Size, ToInputArray, Vector};
-use opencv::{core::MatTraitConstManual, imgcodecs, imgproc, prelude::*};
+use opencv::{
+    boxed_ref::BoxedRef,
+    core::{Mat, MatTraitConstManual, Moments, Point, Rect2i, Rect_, Size, ToInputArray, Vector},
+    imgcodecs::{self, imread, ImreadModes},
+    imgproc,
+    prelude::*,
+};
 use rayon::prelude::*;
 use std::path::Path;
 use tauri_plugin_dialog::FilePath;
 
 use tauri::{Emitter, Manager, Runtime};
-
-use opencv::imgcodecs::{imencode_def, imread, ImreadModes};
 
 use crate::state::{
     Answer, AnswerSheet, AnswerUpload, AppState, KeyUpload, Options, QuestionGroup,
@@ -67,9 +68,7 @@ pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
         file_path,
         ocr.then(state::init_thread_ocr).flatten().as_ref(),
     ) {
-        Ok((base64_image, mat, key)) => {
-            AppState::upload_key(app, channel, base64_image, mat, key.into())
-        }
+        Ok((image, mat, key)) => AppState::upload_key(app, channel, image, mat, key.into()),
         Err(e) => {
             err_log!(&e);
             signal!(
@@ -82,11 +81,13 @@ pub fn upload_key_image_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     }
 }
 
+pub type ResultOfImageMatSheet = Result<(Vec<u8>, Mat, AnswerSheet), UploadError>;
+
 pub enum ProcessingState {
     Starting,
     Finishing,
     Cancel,
-    Done(Vec<Result<(String, Mat, AnswerSheet), UploadError>>),
+    Done(Vec<ResultOfImageMatSheet>),
 }
 pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
     app: &A,
@@ -108,7 +109,7 @@ pub fn upload_sheet_images_impl<R: Runtime, A: Emitter<R> + Manager<R>>(
 
     let stop_moved = Arc::clone(&stop_flag);
     let processing_thread = tauri::async_runtime::spawn(async move {
-        let base64_list: Vec<Result<(String, Mat, AnswerSheet), UploadError>> = paths
+        let base64_list: Vec<ResultOfImageMatSheet> = paths
             .into_par_iter()
             .map_init(
                 || {
@@ -186,21 +187,25 @@ pub fn resize_relative_img(src: &Mat, relative: f64) -> opencv::Result<Mat> {
 fn handle_upload(
     path: FilePath,
     ocr: Option<&OcrEngine>,
-) -> Result<(String, Mat, AnswerSheet), UploadError> {
+) -> Result<(Vec<u8>, Mat, AnswerSheet), UploadError> {
     let mat = read_from_path(path)?;
     let mut splitted = prepare_answer_sheet(mat)?;
 
     let original = mem::take(&mut splitted.original);
-    let base64 = mat_to_base64_png(&original).map_err(UploadError::from)?;
+    let bytes = mat_to_webp(&original).map_err(UploadError::from)?;
     let answer_sheet = AnswerSheet::try_convert(splitted, ocr)?;
-    Ok((base64, original, answer_sheet))
+    Ok((bytes, original, answer_sheet))
 }
 
-pub fn mat_to_base64_png(mat: &Mat) -> Result<String, opencv::Error> {
+pub fn mat_to_webp(mat: &Mat) -> opencv::Result<Vec<u8>> {
     let mut buf: Vector<u8> = Vec::new().into();
-    imencode_def(".png", mat, &mut buf)?;
-    let base64 = base64::prelude::BASE64_STANDARD.encode(&buf);
-    Ok(format!("data:image/png;base64,{base64}"))
+    imgcodecs::imencode(
+        ".webp",
+        mat,
+        &mut buf,
+        &vec![imgcodecs::IMWRITE_WEBP_QUALITY, 80].into(),
+    )?;
+    Ok(buf.into())
 }
 
 fn read_from_path(path: FilePath) -> Result<Mat, UploadError> {
@@ -537,9 +542,13 @@ impl AnswerSheet {
 
 impl AnswerSheetResult {
     pub fn write_score_marks(&self, sheet: &mut Mat) -> Result<(), SheetError> {
-        let mut color_overlay = new_mat_copy!(sheet);
-        imgproc::cvt_color_def(sheet, &mut color_overlay, imgproc::COLOR_GRAY2RGBA)?;
-        sheet.clone_from(&color_overlay);
+        // SAFETY: `cvt_color_def` can be done in place.
+        unsafe {
+            sheet.modify_inplace(|i, out| {
+                imgproc::cvt_color_def(i, out, imgproc::COLOR_GRAY2RGBA)
+            })?;
+        }
+        let mut color_overlay = sheet.clone();
 
         const MARKER_TRANSPARENCY: f64 = 0.3;
 
@@ -620,7 +629,7 @@ impl AnswerSheetResult {
             0.0,
             &mut res,
         )?;
-        *sheet = res;
+        imgproc::cvt_color_def(&res, sheet, imgproc::COLOR_RGBA2RGB)?;
 
         Ok(())
     }
@@ -756,7 +765,6 @@ mod unit_tests {
     use crate::state;
 
     use super::*;
-    use base64::prelude::*;
     use itertools::izip;
     use opencv::core;
 
@@ -793,25 +801,21 @@ mod unit_tests {
         let mat =
             Mat::new_rows_cols_with_default(2, 2, core::CV_8UC3, core::Scalar::all(0.0)).unwrap();
 
-        let result = mat_to_base64_png(&mat);
+        let result = mat_to_webp(&mat);
         assert!(result.is_ok());
 
-        let data_url = result.unwrap();
-        assert!(data_url.starts_with("data:image/png;base64,"));
+        let data = result.unwrap();
 
-        // Check PNG signature after decoding base64
-        let b64_data = data_url.strip_prefix("data:image/png;base64,").unwrap();
-        let decoded_bytes = BASE64_STANDARD.decode(b64_data).unwrap();
-        // PNG signature bytes
-        let png_signature = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
-        assert_eq!(&decoded_bytes[0..8], &png_signature);
+        // WEBP signature bytes
+        assert_eq!(&data[0..4], b"RIFF");
+        assert_eq!(&data[8..12], b"WEBP");
     }
 
     #[test]
     fn test_empty_mat_should_fail() {
         // Create an empty Mat
         let mat = Mat::default();
-        let result = mat_to_base64_png(&mat);
+        let result = mat_to_webp(&mat);
         assert!(result.is_err());
     }
 
@@ -859,8 +863,7 @@ mod unit_tests {
         );
         assert!(result.is_ok());
 
-        let (base64_string, mat, _answer_sheet) = result.unwrap();
-        assert!(base64_string.starts_with("data:image/png;base64,"));
+        let (_image, mat, _answer_sheet) = result.unwrap();
         assert!(!mat.empty());
     }
 
@@ -1002,11 +1005,11 @@ mod unit_tests {
             let res = questions
                 .into_iter()
                 .map(|group| {
-                    let a = matches!(group.A, Some(_));
-                    let b = matches!(group.B, Some(_));
-                    let c = matches!(group.C, Some(_));
-                    let d = matches!(group.D, Some(_));
-                    let e = matches!(group.E, Some(_));
+                    let a = group.A.is_some();
+                    let b = group.B.is_some();
+                    let c = group.C.is_some();
+                    let d = group.D.is_some();
+                    let e = group.E.is_some();
                     a || b || c || d || e
                 })
                 .reduce(|acc, res| acc || res);

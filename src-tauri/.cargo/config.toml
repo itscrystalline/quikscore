@@ -1,8 +1,8 @@
-# [unstable]
-# codegen-backend = true
-#
-# [profile.dev]
-# codegen-backend = "cranelift"
+[unstable]
+codegen-backend = true
+
+[profile.dev]
+codegen-backend = "cranelift"
 
 [env]
 __TAURI_WORKSPACE__ = "true" 
