@@ -75,6 +75,9 @@ export type AnswerScoreResult =
       result: "ok";
       data: {
         studentId: string;
+        studentName: string | undefined;
+        examRoom: string | undefined;
+        examSeat: string | undefined;
         bytes: number[];
         score: number;
         maxScore: number;
@@ -92,6 +95,9 @@ export type BlobbedAnswerScoreResult =
       result: "ok";
       data: {
         studentId: string;
+        studentName: string | undefined;
+        examRoom: string | undefined;
+        examSeat: string | undefined;
         blobUrl: string;
         score: number;
         maxScore: number;

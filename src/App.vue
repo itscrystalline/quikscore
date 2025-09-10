@@ -100,6 +100,9 @@ const answerEventHandler = (msg: AnswerUpload): void => {
             result: "ok",
             data: {
               studentId: o.data.studentId,
+              studentName: o.data.studentName,
+              examRoom: o.data.examRoom,
+              examSeat: o.data.examSeat,
               blobUrl: bytesToBlobUrl(o.data.bytes),
               score: o.data.score,
               maxScore: o.data.maxScore,
@@ -427,7 +430,10 @@ function bytesToBlobUrl(bytes: number[]): string {
         <div v-if="result == 'ok'" class="result">
           <img :src="data.blobUrl" @click="image_from_id(data.studentId)" title="Click to Preview Image"></img>
           <div class="stats">
+            <p v-if="data.studentName">{{ data.studentName }}</p>
             <p>ID {{ data.studentId }}</p>
+            <p v-if="data.examRoom">{{ data.examRoom }}</p>
+            <p v-if="data.examSeat">{{ data.examSeat }}</p>
             <p>score: {{ data.score }}/{{ data.maxScore }}</p>
           </div>
         </div>
