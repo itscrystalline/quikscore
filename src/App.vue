@@ -100,6 +100,9 @@ const answerEventHandler = (msg: AnswerUpload): void => {
             result: "ok",
             data: {
               studentId: o.data.studentId,
+              studentName: o.data.studentName,
+              examRoom: o.data.examRoom,
+              examSeat: o.data.examSeat,
               blobUrl: bytesToBlobUrl(o.data.bytes),
               score: o.data.score,
               maxScore: o.data.maxScore,
@@ -146,6 +149,12 @@ const answerEventHandler = (msg: AnswerUpload): void => {
       elapsed.value = "notCounting";
       break;
     case "processing":
+      if (answerImages.value.length != 0) {
+        clearBlobs(answerImages.value);
+        clearIdMappings()
+        answerImages.value = [];
+      }
+
       const { total, started, finished } = msg.data;
       var secsPerImage = -1;
       if (elapsed.value == "notCounting") {
@@ -326,6 +335,14 @@ function bytesToBlobUrl(bytes: number[]): string {
   const blob = new Blob([new Uint8Array(bytes)], { type: "image/webp" });
   return URL.createObjectURL(blob);
 }
+
+function avgMinMax(result: BlobbedAnswerScoreResult[]): { avg: number, min: number, max: number } {
+  const scores: number[] = result.filter(v => v.result == "ok").map(v => v.data.score);
+  const avg = Math.round((scores.reduce((l, r) => l + r) / scores.length) * 100) / 100;
+  const min = Math.min(...scores);
+  const max = Math.max(...scores);
+  return { avg, min, max };
+}
 </script>
 
 <template>
@@ -423,22 +440,55 @@ function bytesToBlobUrl(bytes: number[]): string {
     </div>
     <!-- 📦 Result Placeholder -->
     <div class="card">
+      <p class="placeholder" v-if="answerImages.length === 0 || answerStatus">
+        {{ answerStatus === "" ? "Upload files to see results here" : answerStatus }}
+      </p>
+      <StackedProgressBar v-if="answerProgressBar" v-bind="answerProgressBar" />
+
+      <div v-if="answerImages.length != 0">
+        <p> Average: {{ avgMinMax(answerImages).avg }} </p>
+        <p> Minimum Score: {{ avgMinMax(answerImages).min }} </p>
+        <p> Maximum Score: {{ avgMinMax(answerImages).max }} </p>
+      </div>
       <div v-for="{ result, data } in answerImages" class="pad">
         <div v-if="result == 'ok'" class="result">
           <img :src="data.blobUrl" @click="image_from_id(data.studentId)" title="Click to Preview Image"></img>
           <div class="stats">
-            <p>ID {{ data.studentId }}</p>
-            <p>score: {{ data.score }}/{{ data.maxScore }}</p>
+            <div>
+              <p v-if="data.studentName">{{ data.studentName }}</p>
+              <code>({{ data.studentId }})</code>
+            </div>
+            <div>
+              <p v-if="data.examRoom">Room {{ data.examRoom }}</p>
+              <p v-if="data.examSeat">Seat {{ data.examSeat }}</p>
+            </div>
+            <p>{{ data.score }}/{{ data.maxScore }}</p>
+            <div class="score-wrap" :title="`${data.score} / ${data.maxScore}`">
+              <div class="score-bar" role="progressbar" :aria-valuenow="data.score" aria-valuemin="0"
+                :aria-valuemax="data.maxScore"
+                :aria-valuetext="data.maxScore ? `${Math.round((data.score / data.maxScore) * 100)}% correct` : 'no max score'">
+                <div class="segment correct" :style="{
+                  width: Math.max(0, Math.min(100, data.maxScore ? (data.score / data.maxScore) * 100 : 0)) + '%'
+                }"></div>
+
+                <div class="segment wrong" :style="{
+                  width: Math.max(
+                    0,
+                    Math.min(
+                      100,
+                      data.maxScore ? 100 - (data.score / data.maxScore) * 100 : 100
+                    )
+                  ) + '%'
+                }"></div>
+              </div>
+
+            </div>
           </div>
         </div>
         <p v-else>
           {{ data.error }}
         </p>
       </div>
-      <p class="placeholder" v-if="answerImages.length === 0 || answerStatus">
-        {{ answerStatus === "" ? "Upload files to see results here" : answerStatus }}
-      </p>
-      <StackedProgressBar v-if="answerProgressBar" v-bind="answerProgressBar" />
     </div>
   </main>
 </template>
@@ -566,12 +616,90 @@ p.credits {
 }
 
 .result>img {
+  object-fit: cover;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgba(16, 24, 40, 0.06);
   cursor: zoom-in;
+  transition: transform .16s ease, box-shadow .16s ease;
+}
+
+.result>img:hover,
+.result>img:focus {
+  transform: scale(1.03);
+  box-shadow: 0 8px 20px rgba(16, 24, 40, 0.12);
+  outline: none;
+}
+
+.result>img:focus {
+  outline: 3px solid rgba(59, 130, 246, 0.18);
+  outline-offset: 2px;
 }
 
 .stats {
   text-align: left;
   margin-left: 3vh;
+  width: 100%;
+}
+
+.stats>div {
+  display: flex;
+  flex-direction: row;
+  align-items: start;
+  gap: 1vh;
+}
+
+/* score progress UI */
+.score-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 140px;
+  max-width: 100%;
+}
+
+/* outer rail */
+.score-bar {
+  display: flex;
+  width: 100%;
+  height: 12px;
+  background: #445165;
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(15, 23, 42, 0.03);
+}
+
+/* segments (green for correct, red for wrong) */
+.segment {
+  height: 100%;
+  transition: width .28s ease;
+  flex-shrink: 0;
+  will-change: width;
+}
+
+/* correct = green gradient */
+.segment.correct {
+  background: linear-gradient(90deg, #a6e3a1, #a6da95);
+}
+
+/* wrong = red gradient */
+.segment.wrong {
+  background: linear-gradient(90deg, #ed8796, #f38ba8);
+}
+
+/* numeric label to the right */
+.score-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  margin-left: 6px;
+}
+
+/* hide zero-width segments cleanly (avoids tiny anti-alias artifacts) */
+.segment[style*="width: 0%"] {
+  width: 0 !important;
+  min-width: 0 !important;
 }
 
 .pad:not(:last-child) {

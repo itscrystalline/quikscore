@@ -395,7 +395,13 @@ impl AppState {
                         Ok((
                             _,
                             mat,
-                            AnswerSheet { student_id, .. },
+                            AnswerSheet {
+                                student_id,
+                                student_name,
+                                exam_room,
+                                exam_seat,
+                                ..
+                            },
                             AnswerSheetResult {
                                 correct,
                                 incorrect,
@@ -409,6 +415,9 @@ impl AppState {
                             match img_small {
                                 Ok(bytes) => AnswerScoreResult::Ok {
                                     student_id: student_id.clone(),
+                                    student_name: student_name.clone(),
+                                    exam_room: exam_room.clone(),
+                                    exam_seat: exam_seat.clone(),
                                     bytes,
                                     score: *score,
                                     max_score: *max_score - weights.max_score_deduction(key),
@@ -656,6 +665,9 @@ pub enum CsvExport {
 pub enum AnswerScoreResult {
     Ok {
         student_id: String,
+        student_name: Option<String>,
+        exam_room: Option<String>,
+        exam_seat: Option<String>,
         bytes: Vec<u8>,
         score: u32,
         max_score: u32,
