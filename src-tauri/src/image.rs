@@ -513,9 +513,6 @@ impl AnswerSheet {
                 )?;
             if subject_id != written_subject_id || student_id != written_student_id {
                 //warn!("{} != {} && {} != {}", written_student_id, student_id, written_subject_id, subject_id);
-                if subject_id.len() != 8 && written_subject_id.len() == 8 {
-                    subject_id = written_subject_id;
-                }
                 if student_id.len() != 8 && written_student_id.len() == 8 {
                     student_id = written_student_id;
                 }
