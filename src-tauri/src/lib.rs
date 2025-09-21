@@ -34,6 +34,7 @@ pub fn run() {
             commands::ensure_models,
             commands::export_csv,
             commands::enter_database_information,
+            commands::login,
             commands::image_of,
         ])
         .setup(|app| {

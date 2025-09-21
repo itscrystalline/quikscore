@@ -368,7 +368,7 @@ fn split_into_areas(sheet: Mat) -> Result<SplittedSheet, SheetError> {
 
     let subject_id = roi_range_frac(&sheet, 0.0..=0.040386304, 0.271807838..=0.517067004)?;
     let student_id = roi_range_frac(&sheet, 0.049165935..=0.177348551, 0.273072061..=0.515802781)?;
-    let questions = {
+    let questions: Vec<Mat> = {
         let ranges = (0..4).flat_map(|x| (0..9).map(move |y| (x, y)));
         ranges
             .map(|(x, y)| {
@@ -496,7 +496,7 @@ impl AnswerSheet {
         let student_id_bubbles = roi_range_frac_ref(&student_id_mat, 0.0..=1.0, 0.12565445..=1.0)?;
 
         let subject_id = extract_digits_for_sub_stu(&subject_id_bubbles, 3)?;
-        let student_id = extract_digits_for_sub_stu(&student_id_bubbles, 9)?;
+        let mut student_id = extract_digits_for_sub_stu(&student_id_bubbles, 9)?;
         let answers = extract_answers(questions)?;
 
         let (mut student_name, mut subject_name, mut exam_room, mut exam_seat) =
@@ -513,6 +513,9 @@ impl AnswerSheet {
                 )?;
             if subject_id != written_subject_id || student_id != written_student_id {
                 //warn!("{} != {} && {} != {}", written_student_id, student_id, written_subject_id, subject_id);
+                if student_id.len() != 8 && written_student_id.len() == 8 {
+                    student_id = written_student_id;
+                }
                 warn!("User Fon and Enter differently");
             }
             let (name, subject, room, seat) = extract_user_information(

@@ -55,6 +55,7 @@ result*
 src-tauri/opencv_world4110.dll
 
 .venv*
+.env
 
 playground/*
 !playground/*.py
