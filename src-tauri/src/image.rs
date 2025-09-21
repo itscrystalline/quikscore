@@ -495,7 +495,7 @@ impl AnswerSheet {
         let subject_id_bubbles = roi_range_frac_ref(&subject_id_mat, 0.0..=1.0, 0.128205..=1.0)?;
         let student_id_bubbles = roi_range_frac_ref(&student_id_mat, 0.0..=1.0, 0.12565445..=1.0)?;
 
-        let mut subject_id = extract_digits_for_sub_stu(&subject_id_bubbles, 3)?;
+        let subject_id = extract_digits_for_sub_stu(&subject_id_bubbles, 3)?;
         let mut student_id = extract_digits_for_sub_stu(&student_id_bubbles, 9)?;
         let answers = extract_answers(questions)?;
 

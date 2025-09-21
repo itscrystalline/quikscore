@@ -10,7 +10,6 @@ use crate::{
     state::{AnswerUpload, CsvExport, KeyUpload, LoginRequest, LoginResponse},
     storage, AppState,
 };
-use anyhow::Ok;
 use log::{debug, info};
 use reqwest::Client;
 
