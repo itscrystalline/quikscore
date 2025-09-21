@@ -136,9 +136,10 @@ pub struct LoginRequest {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub struct LoginResponse {
     pub success: bool,
-    pub error: Option<String>,
+    pub message: String,
 }
 
 impl AppState {
