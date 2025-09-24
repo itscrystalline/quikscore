@@ -511,7 +511,7 @@ impl AnswerSheet {
                     student_id_written,
                     ocr,
                 )?;
-            if subject_id != written_subject_id || student_id != written_student_id {
+            if student_id != written_student_id {
                 //warn!("{} != {} && {} != {}", written_student_id, student_id, written_subject_id, subject_id);
                 if student_id.len() != 8 && written_student_id.len() == 8 {
                     student_id = written_student_id;
@@ -661,7 +661,10 @@ fn extract_user_information(
     // safe_imwrite("temp/debug_exam_seat.png", &exam_seat)?;
 
     let name_string = image_to_string(&name, ocr)?;
-    let subject_string = image_to_string(&subject_name, ocr)?;
+    let subject_string = image_to_string(&subject_name, ocr)?
+        .chars()
+        .filter(|c| c.is_alphabetic() || *c == ' ')
+        .collect::<String>();
     let exam_room_string = image_to_string(&exam_room, ocr)?
         .chars()
         .filter_map(|c| match c {
