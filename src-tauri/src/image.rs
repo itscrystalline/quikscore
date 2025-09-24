@@ -511,6 +511,11 @@ impl AnswerSheet {
                     student_id_written,
                     ocr,
                 )?;
+
+            if student_id.len() == 9 && student_id.starts_with('1') {
+                student_id.remove(0);
+            }
+            
             if student_id != written_student_id {
                 //warn!("{} != {} && {} != {}", written_student_id, student_id, written_subject_id, subject_id);
                 if student_id.len() != 8 && written_student_id.len() == 8 {
