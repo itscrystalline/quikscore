@@ -610,17 +610,18 @@ p.credits {
 }
 
 .text-box {
-  padding: 0.25rem;           
-  border-radius: 50px;        
+  padding: 0.5rem;           
+  border-radius: 25px;        
   border: 1px solid #1e293b;    
   width: 300px;                         
-  background-color: #1e293b 
+  background-color: #1e293b;
+  color: #ffffff;
 }
 
 .mongo_db_enter {
-  border-radius: 25px;
+  border-radius: 20px;
   border: 1px solid transparent;
-  padding: 0.6em 1.2em;
+  padding: 1.0em 1.2em;
   padding: 1vh;
   margin-right: 1vh;
   font-size: 1em;
