@@ -505,7 +505,7 @@ impl AnswerSheet {
             let subject_id_written = roi_range_frac(&subject_id_mat, 0.0..=1.0, 0.0..=0.128205)?;
             let student_id_written =
                 roi_range_frac(&student_id_mat, 0.112..=1.0, 0.0..=0.12565445)?;
-            let (written_subject_id, written_student_id) =
+            let (_written_subject_id, written_student_id) =
                 extract_subject_student_from_written_field(
                     subject_id_written,
                     student_id_written,
