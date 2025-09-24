@@ -369,14 +369,14 @@ function avgMinMax(result: BlobbedAnswerScoreResult[]): { avg: number, min: numb
       <div class="form_group">
         <div class="form_wrapper">
           <label for="mongo_db_uri">MongoDB URI: </label>
-          <input type="text" id="mongo_db_uri" class="text-box" v-model="mongoDbUri" placeholder="URI...." />
+          <input type="text" id="mongo_db_uri" class="text-box" v-model="mongoDbUri" placeholder="URI...."/>
         </div>
         <div class="form_wrapper">
           <label for="mongo_db_name">MongoDB Name: </label>
-          <input type="text" id="mongo_db_name" class="text-box" v-model="mongoDbName" placeholder="Name...." />
+          <input type="text" id="mongo_db_name" class="text-box" v-model="mongoDbName" placeholder="Name...."/>
         </div>
+        <button class="mongo_db_enter" @click="enterDatabaseInfo">Enter</button>
       </div>
-      <button class="mongo_db_enter" @click="enterDatabaseInfo">Enter</button>
     </div>
 
 
