@@ -146,14 +146,9 @@ const username = ref("")
 const password = ref("")
 
 async function handleLogin() {
-  let success  = await invoke("login", {
+  await invoke("login", {
     username: username.value,
     password: password.value
   });
-  if(success) {
-    window.location.href = "/#/"
-  } else {
-    alert("Invalid username or password")
-  }
 }
 </script>

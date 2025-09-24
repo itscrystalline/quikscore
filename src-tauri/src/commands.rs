@@ -134,7 +134,7 @@ pub fn enter_database_information(app: AppHandle, uri: String, name: String) {
 }
 
 #[tauri::command]
-pub async fn login(username: String, password: String) -> Result<bool, String> {
+pub async fn login(app: AppHandle, username: String, password: String) -> Result<(), String> {
     let client = Client::new();
     let res = client
         .post("https://quikscore-kccqexl2j-poomparit-promdontees-projects.vercel.app/api/login")
@@ -144,7 +144,36 @@ pub async fn login(username: String, password: String) -> Result<bool, String> {
         .map_err(|e| e.to_string())?;
 
     let body: LoginResponse = res.json().await.map_err(|e| e.to_string())?;
-    Ok(body.success)
+    if body.success {
+        info!("Authentication Passed!");
+        WebviewWindowBuilder::from_config(
+            &app,
+            app.config()
+                .app
+                .windows
+                .first()
+                .ok_or("the main window is not present in the config".to_string())?,
+        )
+        .map_err(|e| {
+            err_log!(&e);
+            "cannot create main window".to_string()
+        })?
+        .build()
+        .map_err(|e| {
+            err_log!(&e);
+            "cannot create main window".to_string()
+        })?;
+        app.webview_windows()
+            .get("auth")
+            .ok_or("missing auth window".to_string())?
+            .close()
+            .map_err(|e| {
+                err_log!(&e);
+                "cannot close auth window".to_string()
+            })
+    } else {
+        Err("Invalid username or password".to_string())
+    }
 }
 
 #[tauri::command]

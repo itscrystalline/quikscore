@@ -13,16 +13,16 @@
     "windows": [
       {
         "title": "Quikscore",
-        "width": 800,
-        "height": 600,
+        "width": 1280,
+        "height": 720,
         "create": false
       },
       {
         "title": "Quikscore Authentication",
         "url": "auth.html",
         "label": "auth",
-        "width": 380,
-        "height": 480,
+        "width": 540,
+        "height": 640,
         "create": true,
         "resizable": false
       }
