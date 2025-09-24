@@ -505,13 +505,18 @@ impl AnswerSheet {
             let subject_id_written = roi_range_frac(&subject_id_mat, 0.0..=1.0, 0.0..=0.128205)?;
             let student_id_written =
                 roi_range_frac(&student_id_mat, 0.112..=1.0, 0.0..=0.12565445)?;
-            let (written_subject_id, written_student_id) =
+            let (_written_subject_id, written_student_id) =
                 extract_subject_student_from_written_field(
                     subject_id_written,
                     student_id_written,
                     ocr,
                 )?;
-            if subject_id != written_subject_id || student_id != written_student_id {
+
+            if student_id.len() == 9 && student_id.starts_with('1') {
+                student_id.remove(0);
+            }
+            
+            if student_id != written_student_id {
                 //warn!("{} != {} && {} != {}", written_student_id, student_id, written_subject_id, subject_id);
                 if student_id.len() != 8 && written_student_id.len() == 8 {
                     student_id = written_student_id;
@@ -661,7 +666,10 @@ fn extract_user_information(
     // safe_imwrite("temp/debug_exam_seat.png", &exam_seat)?;
 
     let name_string = image_to_string(&name, ocr)?;
-    let subject_string = image_to_string(&subject_name, ocr)?;
+    let subject_string = image_to_string(&subject_name, ocr)?
+        .chars()
+        .filter(|c| c.is_alphabetic() || *c == ' ')
+        .collect::<String>();
     let exam_room_string = image_to_string(&exam_room, ocr)?
         .chars()
         .filter_map(|c| match c {
