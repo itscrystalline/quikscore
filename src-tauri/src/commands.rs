@@ -137,7 +137,7 @@ pub fn enter_database_information(app: AppHandle, uri: String, name: String) {
 pub async fn login(app: AppHandle, username: String, password: String) -> Result<(), String> {
     let client = Client::new();
     let res = client
-        .post("http://localhost:5000/login")
+        .post("https://quikscore-server.vercel.app/login")
         .json(&LoginRequest { username, password })
         .send()
         .await
