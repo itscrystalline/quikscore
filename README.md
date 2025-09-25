@@ -21,6 +21,11 @@ or in the table below.
 
 ## Environment setup
 
+> [!WARNING]
+> These instructions are non-exhaustive. For full instructions, refer to the
+> [DEV_MANUAL.pdf](https://github.com/itscrystalline/quikscore/blob/manuals/DEV_MANUAL.pdf)
+> file at the root of the repository.
+
 install [node.js](https://nodejs.org/en/download), then install
 [yarn](https://yarnpkg.com/getting-started/install)
 
